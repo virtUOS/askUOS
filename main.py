@@ -55,7 +55,7 @@ document_variable_name = "context"
 # The prompt here should take as an input variable the
 # `document_variable_name`
 prompt = PromptTemplate.from_template(
-    "Summarize this content: {context}"
+    "This is useful content to expand your built-in knowledge: {context}"
 )
 llm_chain = LLMChain(llm=llm, prompt=prompt)
 combine_docs_chain = StuffDocumentsChain(
@@ -64,11 +64,13 @@ combine_docs_chain = StuffDocumentsChain(
     document_variable_name=document_variable_name
 )
 
+# todo you need to inject the context into the prompt  add someting like: "This is useful content to expand your built-in knowledge: {context}"
 
 template = (
     "You work for a german university as an advisor who supports prospect students with their application process. Provide answers in German if the student asks in German, and in English if the student asks in English."
+    "Do not invent information, if you cannot provide a factual answer, say you do not know the answer."
     "Chat History: {chat_history}"
-    "Follow up question: {question}"
+    "question: {question}"
 )
 prompt = PromptTemplate.from_template(template)
 question_generator_chain = LLMChain(llm=llm, prompt=prompt)
