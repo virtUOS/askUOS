@@ -4,9 +4,10 @@ from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 
 # Load the document, split it into chunks, embed each chunk and load it into the vector store.
+# todo create a funtion that iterates over all files in a directory and loads them into the vector store
 raw_documents = TextLoader('./data/application.txt').load()
 text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-# chunks
+# chunks returns a list of documents, where each element of the list is of type 'langchain_core.documents.base.Document'
 documents = text_splitter.split_documents(raw_documents)
 db = Chroma.from_documents(documents, embeddings)
 
