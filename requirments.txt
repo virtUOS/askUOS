@@ -1,1 +1,3 @@
 chromadb
+beautifulsoup4
+langchain_experimental
