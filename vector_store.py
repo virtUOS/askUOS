@@ -1,77 +1,128 @@
-from embedding import embeddings
-from langchain.text_splitter import CharacterTextSplitter, RecursiveCharacterTextSplitter
+from langchain.text_splitter import  RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.embeddings.sentence_transformer import (
+    SentenceTransformerEmbeddings,
+)
+import pickle
 from langchain_community.vectorstores import Chroma
+import os
+import torch
 
-EXTRACT_FROM_WEBSITE = True
+EXTRACT_FROM_WEBSITE = False
 
-# Load the document, split it into chunks, embed each chunk and load it into the vector store.
-# todo create a funtion that iterates over all files in a directory and loads them into the vector store
-# raw_documents = TextLoader('./data/application.txt').load()
-# text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-# # chunks returns a list of documents, where each element of the list is of type 'langchain_core.documents.base.Document'
-# documents = text_splitter.split_documents(raw_documents)
-# db = Chroma.from_documents(documents, embeddings)
+'''
+"T-Systems-onsite/cross-en-de-roberta-sentence-transformer" --> parameters: 278043648
+'''
 
-# save db to disk
-#db = Chroma.from_documents(documents, embeddings, persist_directory="./data/chroma_index")
+# todo try out this embedding model embaas/sentence-transformers-e5-large-v2 --> https://huggingface.co/embaas/sentence-transformers-e5-large-v2
+# create the open-source embedding function
+# Number of parameters: 335141888 for embaas/sentence-transformers-e5-large-v2
+# embeddings = SentenceTransformerEmbeddings(model_name='T-Systems-onsite/cross-en-de-roberta-sentence-transformer')
+embeddings = SentenceTransformerEmbeddings(model_name='embaas/sentence-transformers-e5-large-v2')
 
-
-# # load from disk
-# db = Chroma(persist_directory="./data/chroma_index", embedding_function=embeddings)
-
+# embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
 
-# you can define a threshold for the similarity search
+def get_links_from_pickle (path_to_pickle):
+    with open(path_to_pickle, 'rb') as f:
+        links = pickle.load(f)
+    return set(links)
 
 
-# Input—> string query; output—> list of documents
-#retriever.get_relevant_documents(" Wo finde ich die Informationen zum Studienangebot")
-
-
-
-# # save to disk
-# db2 = Chroma.from_documents(docs, embedding_function, persist_directory="./chroma_db")
-# docs = db2.similarity_search(query)
-#
-# # load from disk
-# db3 = Chroma(persist_directory="./chroma_db", embedding_function=embedding_function)
-# docs = db3.similarity_search(query)
-# print(docs[0].page_content)
-
-
-def split_embed_to_db():
+def split_embed_to_db(links=None, path_doc=None):
     '''
     create a vector store from a text file or a website
     '''
-
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=3000, chunk_overlap=0)
     if EXTRACT_FROM_WEBSITE:
-        from langchain_community.document_loaders import WebBaseLoader
+        from langchain_community.document_loaders import AsyncChromiumLoader
+        from langchain_community.document_transformers import BeautifulSoupTransformer
 
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=0)
-        loader = WebBaseLoader("https://www.virtuos.uni-osnabrueck.de/campus_management.html/")
-        data = loader.load()
+        try:
+            with open('data/transformed_data.pickle', 'rb') as f:
+                documents = pickle.load(f)
+        except FileNotFoundError:
+            # Load
+            print('Loading html content from website')
+            try:
+                with open('data/html.pickle', 'rb') as f:
+                    html = pickle.load(f)
+            except FileNotFoundError:
 
+                loader = AsyncChromiumLoader(links)
+                html = loader.load()
+                # save html to pickle file`
+                with open('data/html.pickle', 'wb') as f:
+                    pickle.dump(html, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+                print('html content extracted and saved to pickle file')
+
+            # Transform
+            bs_transformer = BeautifulSoupTransformer()
+            documents = bs_transformer.transform_documents(
+                html, tags_to_extract=["p", "li", "div", "a"]
+            )
+            # save transformed files to pickle file
+            with open('data/transformed_data.pickle', 'wb') as f:
+                pickle.dump(documents, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+            print('html content transformed and saved to pickle file')
 
     else:
         from langchain_community.document_loaders import TextLoader
 
-        text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=0)
-        loader = TextLoader('./data/application.txt')
-        data = loader.load()
+
+        if path_doc.lower().endswith('.pdf'):
+            loader = PyPDFLoader(path_doc)
+            documents = loader.load_and_split()
+        else:
+            try:
+                loader = TextLoader(path_doc)
+                data = loader.load()
+                documents = text_splitter.split_documents(data)
+            except Exception as e:
+                print(f'----------Error-----------------: {e}')
+                documents = None
 
 
 
-    all_splits = text_splitter.split_documents(data)
-    documents = text_splitter.split_documents(all_splits)
-    db = Chroma.from_documents(documents, embeddings, persist_directory="./data/chroma_index")
+    # all_splits = text_splitter.split_documents(data)
 
-    return db
+    print('Documents created')
 
 
+    return documents
 
-try: # try to load the db from disk
-    db = Chroma(persist_directory="./data/chroma_index", embedding_function=embeddings)
-except:
-    db = split_embed_to_db()
+# load or create db
+db = Chroma(persist_directory="./data/chroma_index", embedding_function=embeddings)
 
+# prepare documents for embedding
+if __name__ == "__main__":
+
+    if EXTRACT_FROM_WEBSITE:
+            links = get_links_from_pickle('data/links.pickle')
+            documents = split_embed_to_db(links=list(links))
+            print(f'embedding model: {embeddings}')
+            if documents:
+                db.add_documents(documents)
+    else:
+            for filename in os.listdir('data/documents/'):
+                print(f'embedding model: {embeddings}')
+                file_path = os.path.join('data/documents/', filename)
+                if os.path.isfile(file_path):
+                    print(f'embedding: {filename}')
+                    documents = split_embed_to_db(path_doc=file_path)
+                    if documents:
+                        db.add_documents(documents)
+
+    print('DB created')
+
+
+# db = Chroma.from_documents(documents, embeddings, persist_directory="./data/chroma_index")
+
+
+# todo set the threshold for the similarity search. Too manny unrelated documents are returned
 retriever = db.as_retriever(search_type='similarity', search_kwargs={'k': 2})
+print('Retriever created')
+
+# langchain_chroma._collection.count()

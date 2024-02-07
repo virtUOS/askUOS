@@ -1,0 +1,13 @@
+---
+- hosts: all
+  gather_facts: no
+  tasks:
+    - name: Generate SSH key for user (see hosts)
+      community.crypto.openssh_keypair:
+        path: "/{{ user }}/.ssh/id_rsa"
+        size: 2048
+        state: "present"
+    - name: Fetch root user's public key
+      slurp: src="/{{ user }}/.ssh/id_rsa.pub"
+      register: public_key
+    - debug: msg="{{ public_key['content'] | b64decode }}"

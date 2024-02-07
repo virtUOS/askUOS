@@ -1,0 +1,10 @@
+chromadb
+beautifulsoup4
+langchain
+langchain-community
+langchain_experimental
+gradio
+playwright
+sentence-transformers
+tk
+pypdf

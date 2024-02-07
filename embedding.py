@@ -3,7 +3,7 @@
 
 from langchain_community.embeddings import OllamaEmbeddings
 
-embeddings = OllamaEmbeddings(model="llama2")
+embeddings = OllamaEmbeddings(model="llama2:13b-chat")
 
 
 if __name__ == "__main__":

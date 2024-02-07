@@ -169,4 +169,6 @@ db.png
 # Mac
 .DS_Store
 
+# data
+data/
 
