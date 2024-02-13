@@ -22,3 +22,5 @@
        - postgresql-client
     - name: Run apt-get update
       command: sudo apt-get update
+
+# todo install ollama used for the embeddings

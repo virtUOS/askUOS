@@ -1,14 +1,17 @@
 all:
     hosts:
         chatbot
-   vars:
-    repo_url: ssh:git@github.com:yesidc/chatbot.git
-    code_repository_url: https://github.com/yesidc/chatbot.git
-    user: aivirtuos
-    repo: chatbot
-    branch: main
-    home_dir: "/home/{{ user }}"
-    repo_dir: "{{ home_dir }}/{{ repo }}"
-    venv_dir: "{{ home_dir }}/envs/{{repo }}"
-    venv_python: '{{ venv_dir }}/bin/python3'
+    vars:
+        repo_url: ssh:git@github.com:yesidc/chatbot.git
+        code_repository_url: https://github.com/yesidc/chatbot.git
+        user: aivirtuos
+        repo: chatbot
+        branch: main
+        home_dir: "/home/{{ user }}"
+        repo_dir: "{{ home_dir }}/{{ repo }}"
+        venv_dir: "{{ home_dir }}/envs/{{repo }}"
+        venv_python: '{{ venv_dir }}/bin/python3'
+
+
+
 

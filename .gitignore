@@ -172,3 +172,5 @@ db.png
 # data
 data/
 
+.env
+

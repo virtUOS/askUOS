@@ -8,3 +8,4 @@ playwright
 sentence-transformers
 tk
 pypdf
+langchain-openai

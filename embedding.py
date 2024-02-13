@@ -1,9 +1,10 @@
 # text emebedding should run  asynchronusly. The mdoel is needed at all times to embed the user input/query.
 # see https://python.langchain.com/docs/integrations/text_embedding/ollama
+# to download the model using ollama run-->  ollama run llama2:13b
 
 from langchain_community.embeddings import OllamaEmbeddings
 
-embeddings = OllamaEmbeddings(model="llama2:13b-chat")
+embeddings = OllamaEmbeddings(model="llama2:13b", show_progress=True)
 
 
 if __name__ == "__main__":

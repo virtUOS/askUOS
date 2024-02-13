@@ -3,10 +3,12 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.embeddings.sentence_transformer import (
     SentenceTransformerEmbeddings,
 )
+from langchain_community.embeddings import OllamaEmbeddings
 import pickle
 from langchain_community.vectorstores import Chroma
 import os
 import torch
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 
 EXTRACT_FROM_WEBSITE = False
 
@@ -18,9 +20,17 @@ EXTRACT_FROM_WEBSITE = False
 # create the open-source embedding function
 # Number of parameters: 335141888 for embaas/sentence-transformers-e5-large-v2
 # embeddings = SentenceTransformerEmbeddings(model_name='T-Systems-onsite/cross-en-de-roberta-sentence-transformer')
-embeddings = SentenceTransformerEmbeddings(model_name='embaas/sentence-transformers-e5-large-v2')
+# embeddings = SentenceTransformerEmbeddings(model_name='embaas/sentence-transformers-e5-large-v2')
 
 # embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+
+# Embedding using allama model
+
+# embeddings = OllamaEmbeddings(model="llama2:13b", show_progress=True)
+#https://python.langchain.com/docs/integrations/text_embedding/fastembed
+embeddings = FastEmbedEmbeddings(
+    model_name='intfloat/multilingual-e5-large'
+)
 
 
 def get_links_from_pickle (path_to_pickle):
@@ -33,7 +43,7 @@ def split_embed_to_db(links=None, path_doc=None):
     '''
     create a vector store from a text file or a website
     '''
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=3000, chunk_overlap=0)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
     if EXTRACT_FROM_WEBSITE:
         from langchain_community.document_loaders import AsyncChromiumLoader
         from langchain_community.document_transformers import BeautifulSoupTransformer
@@ -118,7 +128,7 @@ if __name__ == "__main__":
     print('DB created')
 
 
-# db = Chroma.from_documents(documents, embeddings, persist_directory="./data/chroma_index")
+
 
 
 # todo set the threshold for the similarity search. Too manny unrelated documents are returned
