@@ -7,7 +7,7 @@ def filter_links(original_list, prefix):
 
 
 # load links from pickle file
-with open('data/links.pickle', 'rb') as f:
+with open('../data/links.pickle', 'rb') as f:
     links = pickle.load(f)
 
 

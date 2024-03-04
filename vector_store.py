@@ -7,7 +7,6 @@ from langchain_community.embeddings import OllamaEmbeddings
 import pickle
 from langchain_community.vectorstores import Chroma
 import os
-import torch
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 
 EXTRACT_FROM_WEBSITE = False
@@ -132,7 +131,7 @@ if __name__ == "__main__":
 
 
 # todo set the threshold for the similarity search. Too manny unrelated documents are returned
-retriever = db.as_retriever(search_type='similarity', search_kwargs={'k': 2})
-print('Retriever created')
+retriever = db.as_retriever(search_type='similarity', search_kwargs={'k': 7})
+print('Retriever created/loaded')
 
 # langchain_chroma._collection.count()

@@ -27,7 +27,7 @@ for link in soup.find_all('a'):
 
 # save list to pickle file
 
-with open('data/links.pickle', 'wb') as f:
+with open('../data/links.pickle', 'wb') as f:
     pickle.dump(links, f)
 
 
