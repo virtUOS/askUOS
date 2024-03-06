@@ -1,4 +1,3 @@
-import requests
 import re
 import urllib.parse
 from selenium import webdriver
@@ -8,33 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.prompts import PromptTemplate
-# r = requests.get(url, headers=headers)
 
-
-# from langchain_community.document_loaders import SeleniumURLLoader
-# loader = SeleniumURLLoader(urls=[url])
-#
-# data = loader.load()
-
-
-# from bs4 import BeautifulSoup
-#
-# def extract_website_content(url):
-#     response = requests.get(url)
-#     if response.status_code == 200:
-#         soup = BeautifulSoup(response.content, 'html.parser')
-#         # Example: Extract the title and all paragraphs from the webpage
-#         title = soup.title.string
-#         paragraphs = soup.find_all('p')
-#         content = '\n'.join([p.get_text() for p in paragraphs])
-#         return title, content
-#     else:
-#         return None, None
-#
-#   # Replace with the URL of the website you want to extract content from
-# title, content = extract_website_content(url)
-# print('Title:', title)
-# print('Content:', content)
 
 import dotenv
 dotenv.load_dotenv()
@@ -100,7 +73,7 @@ def extract_and_visit_links(html_code):
             else:
                 contents.append('Failed to fetch content')
         # only visit the first two links
-        if len(visited_links) == 2:
+        if len(visited_links) == 1:
             break
     # todo search result needs to be summerized. There is a limitation from the OpenAI end to receive only 4000 tokens in the request.
     visited_links = list(visited_links)
@@ -130,12 +103,13 @@ def search_uni_web(query):
         driver.quit()
 
         search_result_text = extract_and_visit_links(rendered_html)
-        if len(search_result_text) > 4000:
-            summary_result_text = summarise_content(search_result_text, query)
-            return summary_result_text
-        else:
-
-            return search_result_text
+        # if len(search_result_text) > 4000:
+        #     summary_result_text = summarise_content(search_result_text, query)
+        #     return summary_result_text
+        # else:
+        #
+        #     return search_result_text
+        return search_result_text
 
     except Exception as e:
         print('Error:', e)

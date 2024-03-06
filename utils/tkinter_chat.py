@@ -1,5 +1,5 @@
 from tkinter import *
-from llama2_chat import chain, get_docs, GetAnswer
+from chain_chatbots.llama2_chat import GetAnswer
 
 
 # GUI --> https://www.geeksforgeeks.org/gui-chat-application-using-tkinter-in-python/

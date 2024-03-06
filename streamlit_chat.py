@@ -3,7 +3,7 @@
 
 import streamlit as st
 from retrieval_agent import agent
-from gpt_chat import GetAnswer
+
 # App title
 st.set_page_config(page_title="🤗💬 Campus Management Chatbot", page_icon="🤖", layout="centered", initial_sidebar_state="auto")
 
@@ -37,10 +37,13 @@ if prompt := st.chat_input():
 if st.session_state.messages[-1]["role"] != "assistant":
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            response = agent.run({"input": prompt})
-            # st.write(response["output"])
-            st.write(response)
-    message = {"role": "assistant", "content": response}
+            response = agent.invoke({"input": prompt})
+            # response = agent.invoke({"input": prompt}, config={"configurable": {"session_id": "<message_history>"}},)
+            # response = agent.run({"input": prompt})
+
+            st.write(response["output"])
+            # st.write(response)
+    message = {"role": "assistant", "content": response["output"]}
     st.session_state.messages.append(message)
 
 # Generate a new response if last message is not from assistant
