@@ -11,6 +11,7 @@ from langchain.prompts import PromptTemplate
 
 import dotenv
 dotenv.load_dotenv()
+from settings import SERVICE
 from langchain_openai import ChatOpenAI
 from langchain.chains.summarize import load_summarize_chain
 from langchain_core.tools import ToolException
@@ -95,7 +96,7 @@ def search_uni_web(query):
 
         firefox_options = Options()
         firefox_options.add_argument("--headless")  # Run Firefox in headless mode
-        service = Service('/Users/yesidcano/Downloads/geckodriver')  # Replace with the actual path to geckodriver
+        service = Service(SERVICE)  # Replace with the actual path to geckodriver
         driver = webdriver.Firefox(service=service, options=firefox_options)
 
         driver.get(url)
