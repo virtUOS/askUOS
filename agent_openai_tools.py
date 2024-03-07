@@ -18,6 +18,7 @@ if "selected_language" in st.session_state:
 else:
     from utils.prompt_text import prompt_text_english as prompt_text
 
+
 llm = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0)
 
 retriever_tool = create_retriever_tool(
@@ -51,7 +52,7 @@ agent = create_openai_tools_agent(llm, tools, prompt)
 
 agent_executor = AgentExecutor(agent=agent,
                                tools=tools,
-                               verbose=True,
+                               # verbose=True,
                                memory=memory,
                                handle_parsing_errors=True)
 

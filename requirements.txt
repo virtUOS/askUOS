@@ -9,3 +9,4 @@ sentence-transformers
 tk
 pypdf
 langchain-openai
+selenium==4.18.1
