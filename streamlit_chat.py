@@ -2,7 +2,8 @@
 
 
 import streamlit as st
-from retrieval_agent import agent
+# from retrieval_agent import agent
+from agent_openai_tools import agent_executor
 
 # App title
 st.set_page_config(page_title="🤗💬 Campus Management Chatbot", page_icon="🤖", layout="centered", initial_sidebar_state="auto")
@@ -37,7 +38,9 @@ if prompt := st.chat_input():
 if st.session_state.messages[-1]["role"] != "assistant":
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            response = agent.invoke({"input": prompt})
+            response = agent_executor.invoke({"input": prompt})
+            # response = agent.invoke({"input": prompt})
+
             # response = agent.invoke({"input": prompt}, config={"configurable": {"session_id": "<message_history>"}},)
             # response = agent.run({"input": prompt})
 
