@@ -49,11 +49,13 @@ memory = ConversationBufferMemory(memory_key="chat_history", return_messages=Tru
 agent = create_openai_tools_agent(llm, tools, prompt)
 
 # todo hangle errors, specially when the characters exceed the limit allowed by the API
-
+# Agent stops after 15 seconds
 agent_executor = AgentExecutor(agent=agent,
                                tools=tools,
-                               # verbose=True,
+                               verbose=True,
                                memory=memory,
-                               handle_parsing_errors=True)
+                               handle_parsing_errors=True,
+
+                               max_execution_time=15,)
 
 
