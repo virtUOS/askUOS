@@ -172,5 +172,6 @@ db.png
 # data
 data/
 
-.env
+geckodriver
+
 
