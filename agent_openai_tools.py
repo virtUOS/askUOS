@@ -58,4 +58,11 @@ agent_executor = AgentExecutor(agent=agent,
 
                                max_execution_time=15,)
 
+if __name__ == "__main__":
+    response = agent_executor.invoke({"input": 'what can I study at the university'})
+    response =agent_executor.invoke({"input": 'where is the university'})
+    response = agent_executor.invoke({"input": 'what is the application process'})
+    response = agent_executor.invoke({"input": 'what is the application deadline'})
+    response = agent_executor.invoke({"input": 'how much does it cost?'})
+    print()
 

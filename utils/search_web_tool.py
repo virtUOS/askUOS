@@ -88,10 +88,63 @@ def extract_and_visit_links(html_code):
     return search_result_text
 
 
+
+def decode_string(query):
+    """
+    Decode the query string to a format that can be used by the university website. Ex. wo+ist+der+universität
+    :param query: string to be decoded
+    :return: decoded string in this format: wo+ist+der+universität
+    """
+
+
+    # Regular expressions for checking different types of encoding
+    utf8_pattern = re.compile(b'[\xc0-\xdf][\x80-\xbf]|[\xe0-\xef][\x80-\xbf]{2}|[\xf0-\xf7][\x80-\xbf]{3}')
+    url_encoding_pattern = re.compile(r'%[0-9a-fA-F]{2}')
+    unicode_escape_pattern = re.compile(r'\\u[0-9a-fA-F]{4}')
+
+    # Check for UTF-8 encoding
+    if utf8_pattern.search(query.encode('latin1')):
+        try:
+            decoded_utf8 = query.encode('latin1').decode('utf-8')
+            print(f'This is the query used by the University website: {decoded_utf8}')
+            return decoded_utf8.replace(' ', '+')
+        except Exception as e:
+            pass
+
+    # Check for URL encoding
+    if url_encoding_pattern.search(query):
+        try:
+            decoded_url = urllib.parse.unquote(query)
+            print(f'This is the query used by the University website: {decoded_url}')
+            return decoded_url.replace(' ', '+')
+        except Exception as e:
+            pass
+
+    # Check for Unicode escape sequences
+    if unicode_escape_pattern.search(query):
+        try:
+            decoded_unicode = query.encode('latin1').decode('unicode-escape')
+            print(f'This is the query used by the University website: {decoded_unicode}')
+            return decoded_unicode.replace(' ', '+')
+        except Exception as e:
+            pass
+
+    query = query.replace(' ', '+')
+    print(f'This is the query used by the University website: {query}')
+
+    return query  # Return the original string if no decoding is needed
+
+
+
+
 def search_uni_web(query):
     # encode string into URL encoding
     try:
-        query_url = urllib.parse.quote_plus(query)
+
+        # query_url = urllib.parse.quote_plus(query)
+        # todo need to check if the query is in german, if not then translate it to german
+        query_url = decode_string(query)
+
         url = f"https://www.uni-osnabrueck.de/universitaet/organisation/zentrale-verwaltung/google-suche/?q={query_url}"
 
         firefox_options = Options()
