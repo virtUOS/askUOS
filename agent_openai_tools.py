@@ -7,7 +7,7 @@ from langchain_openai import ChatOpenAI
 from utils.search_web_tool import search_uni_web
 from langchain.memory import ConversationBufferMemory
 import streamlit as st
-
+from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 # Define the prompt text based on the selected language
 
 if "selected_language" in st.session_state:
@@ -43,7 +43,23 @@ tools = [retriever_tool,
 
 print(f"------------------------------description_university_web_search description: {prompt_text['description_university_web_search']}")
 
-memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+"""
+TODO 
+ConversationBufferMemory stores every message sent by the agent and the user (this is not optimal)
+we should store only the messages that are relevant to the conversation --> ConversationSummaryMemory. The downside of this 
+approach is that it uses an LLM to summarize the conversation which can be more expensive (when using the OpenAI API).
+A solution could be to provide a local model for the summarization. 
+ConversationBufferWindowMemory --> this allows to define a K parameter, where K is the number of interactions to remember.
+the thing is that a small K could lead to the agent not being able to remember the context of the conversation.
+"""
+
+
+
+#memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+
+memory = ConversationBufferWindowMemory(memory_key="chat_history", return_messages=True, k=5)
+
+
 
 # Construct the OpenAI Tools agent
 agent = create_openai_tools_agent(llm, tools, prompt)
@@ -55,8 +71,7 @@ agent_executor = AgentExecutor(agent=agent,
                                verbose=True,
                                memory=memory,
                                handle_parsing_errors=True,
-
-                               max_execution_time=15,)
+                               max_execution_time=25,)
 
 if __name__ == "__main__":
     response = agent_executor.invoke({"input": 'what can I study at the university'})
