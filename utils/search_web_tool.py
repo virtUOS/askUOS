@@ -8,30 +8,31 @@ from bs4 import BeautifulSoup
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.prompts import PromptTemplate
 
-
 import dotenv
+
 dotenv.load_dotenv()
 from settings import SERVICE
 from langchain_openai import ChatOpenAI
 from langchain.chains.summarize import load_summarize_chain
 from langchain_core.tools import ToolException
+
 llm = ChatOpenAI(
     model="gpt-3.5-turbo-1106",
     temperature=0.3,
 )
 
 
-
-
-def summarise_content(content, query):
-    print('---------------------------------------------------------summarising content...---------------------------------------------------------')
+# todo summarize  the content when it + the prompt +chat_history exceed the number of openai allow tokens (16385 tokens)
+def summarise_content(text, question):
+    print(
+        '---------------------------------------------------------summarising content...---------------------------------------------------------')
     llm = ChatOpenAI(temperature=0)
     text_splitter = RecursiveCharacterTextSplitter(
         separators=["\n\n", "\n"], chunk_size=3500, chunk_overlap=300)
-    docs = text_splitter.create_documents([content])
+    docs = text_splitter.create_documents([text])
 
     reduce_template_string = """I will act as a text summarizer to help create a concise summary of the text provided, with a focus on addressing the given query. 
-    The summary can be up to 12 sentences in length, capturing the key points and concepts from the original text without adding interpretations. The summary should keep the links found in the text. 
+    The summary can be up to 20 sentences in length, capturing the key points and concepts from the original text without adding interpretations. The summary should keep the links found in the text. 
     Irrelevant details not related to the question will be excluded from the summary.
 
    Summarize this text:
@@ -49,9 +50,9 @@ def summarise_content(content, query):
         combine_prompt=reduce_template,
         verbose=True
     )
-    return chain.run(input_documents=docs, question=query)
-
-
+    summary_result_text = chain.run(input_documents=docs, question=question)
+    # return chain.run(input_documents=docs, question=question)
+    return summary_result_text
 
 def extract_and_visit_links(html_code):
     contents = []
@@ -78,15 +79,17 @@ def extract_and_visit_links(html_code):
             break
     # todo search result needs to be summerized. There is a limitation from the OpenAI end to receive only 4000 tokens in the request.
     visited_links = list(visited_links)
-    if len(visited_links) ==2:
-        search_result_text = visited_links[0]+'\n' + contents[0] + '\n\n' + visited_links[1] + '\n' + contents[1]
+    # append the link where the information was found, so that the AI can use as a reference when answering the question.
+    taken_from = 'Information taken from:  '
+    if len(visited_links) == 2:
+        search_result_text = taken_from + visited_links[0] + '\n' + contents[0] + '\n\n' + taken_from + visited_links[
+            1] + '\n' + contents[1]
     elif len(visited_links) == 1:
-        search_result_text = visited_links[0] + '\n' + contents[0]
+        search_result_text = taken_from + visited_links[0] + '\n' + contents[0]
     else:
         search_result_text = ''
 
     return search_result_text
-
 
 
 def decode_string(query):
@@ -95,7 +98,6 @@ def decode_string(query):
     :param query: string to be decoded
     :return: decoded string in this format: wo+ist+der+universität
     """
-
 
     # Regular expressions for checking different types of encoding
     utf8_pattern = re.compile(b'[\xc0-\xdf][\x80-\xbf]|[\xe0-\xef][\x80-\xbf]{2}|[\xf0-\xf7][\x80-\xbf]{3}')
@@ -135,8 +137,6 @@ def decode_string(query):
     return query  # Return the original string if no decoding is needed
 
 
-
-
 def search_uni_web(query):
     # encode string into URL encoding
     try:
@@ -157,22 +157,37 @@ def search_uni_web(query):
         driver.quit()
 
         search_result_text = extract_and_visit_links(rendered_html)
-        # if len(search_result_text) > 4000:
+        # todo use algorithm form my thesis to compute exact number of tokens given length of the search result text
+        # if len(search_result_text) > 15000:
         #     summary_result_text = summarise_content(search_result_text, query)
+        #     print(
+        #         f'-------------------------------length of the search result text (summary_result_text)-------------------------: {len(summary_result_text)}')
         #     return summary_result_text
         # else:
-        #
+        #     print(
+        #         f'-------------------------------length of the search result text-------------------------: {len(search_result_text)}')
         #     return search_result_text
+
+        # truncate the search result text to 15000 tokens
+        if len(search_result_text) > 15000:
+            print(f'-------------------------------Truncate. length of the original search result text-------------------------: {len(search_result_text)}')
+            search_result_text = search_result_text[:15000]
+        print(
+                f'-------------------------------length of the search result text-------------------------: {len(search_result_text)}')
         return search_result_text
+
+
+
+
+        # return search_result_text
 
     except Exception as e:
         print('Error:', e)
         raise ToolException('Error while searching the web')
+
 
 if __name__ == "__main__":
     query = 'Was kann ich an der Universität studieren?'
     rendered_html = search_uni_web(query)
 
     print()
-
-

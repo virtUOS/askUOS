@@ -27,4 +27,4 @@ template_messages = [
 prompt = ChatPromptTemplate.from_messages(template_messages)
 
 
-print(f'------------------------------SystemMessagePromptTemplate: {prompt}')
+# print(f'------------------------------SystemMessagePromptTemplate: {prompt}')
