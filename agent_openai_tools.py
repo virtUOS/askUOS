@@ -27,7 +27,7 @@ retriever_tool = create_retriever_tool(
     prompt_text['description_technical_troubleshooting'],
 )
 
-print(f"------------------------------retriever_tool description: {prompt_text['description_technical_troubleshooting']}")
+# print(f"------------------------------retriever_tool description: {prompt_text['description_technical_troubleshooting']}")
 
 
 
@@ -41,7 +41,7 @@ tools = [retriever_tool,
          )]
 
 
-print(f"------------------------------description_university_web_search description: {prompt_text['description_university_web_search']}")
+# print(f"------------------------------description_university_web_search description: {prompt_text['description_university_web_search']}")
 
 """
 TODO 
@@ -64,17 +64,34 @@ memory = ConversationBufferWindowMemory(memory_key="chat_history", return_messag
 # Construct the OpenAI Tools agent
 agent = create_openai_tools_agent(llm, tools, prompt)
 
-# todo hangle errors, specially when the characters exceed the limit allowed by the API
+# todo handle errors, specially when the characters exceed the limit allowed by the API
 # Agent stops after 15 seconds
 agent_executor = AgentExecutor(agent=agent,
                                tools=tools,
                                verbose=True,
                                memory=memory,
                                handle_parsing_errors=True,
-                               max_execution_time=25,)
+                               max_execution_time=20,
+                               )
+# todo, to solve the character limit override the invoke method of the Chain class form which
+# the AgentExecutor inherits from
 
 if __name__ == "__main__":
-    response = agent_executor.invoke({"input": 'what can I study at the university'})
+
+    from langchain.callbacks import get_openai_callback
+
+
+    def count_tokens(agent_ex, input):
+        with get_openai_callback() as cb:
+            result = agent_ex.invoke({'input':input})
+            print(f'Spent a total of {cb.total_tokens} tokens')
+
+        return result
+
+
+
+    response = agent_executor.invoke({"input": 'Abschlussnote Psychologiestudium Osnabrueck'})
+    response = count_tokens(agent_executor, 'muss ich das Einverständnis meiner Eltern haben?')
     response =agent_executor.invoke({"input": 'where is the university'})
     response = agent_executor.invoke({"input": 'what is the application process'})
     response = agent_executor.invoke({"input": 'what is the application deadline'})
