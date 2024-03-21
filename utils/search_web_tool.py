@@ -7,7 +7,8 @@ import requests
 from bs4 import BeautifulSoup
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.prompts import PromptTemplate
-
+from PyPDF2 import PdfReader
+import io
 import dotenv
 
 dotenv.load_dotenv()
@@ -54,10 +55,33 @@ def summarise_content(text, question):
     # return chain.run(input_documents=docs, question=question)
     return summary_result_text
 
+def read_pdf_from_url(response, num_pages=7):
+    """
+    Read the content of a pdf file from a given response object
+    :param response: response object from the request
+    :param num_pages: number of pages to process. If None, process all pages
+    """
+    pdf_stream = io.BytesIO(response.content)
+
+    pdf_text = ''
+    with pdf_stream as f:
+        reader = PdfReader(f)
+        if num_pages is None:
+            num_pages = len(reader.pages)
+        else:
+            num_pages = min(num_pages, len(reader.pages))
+
+        for page_num in range(num_pages):
+            page = reader.pages[page_num]
+            pdf_text += page.extract_text()
+
+    return pdf_text
+
 def extract_and_visit_links(html_code):
     contents = []
     visited_links = set()
     soup = BeautifulSoup(html_code, 'html.parser')
+    # 'gs-title' is the class of the anchor tag that contains the search result (University website search result page)
     anchor_tags = soup.find_all('a', class_='gs-title')
     for tag in anchor_tags:
         href = tag.get('href')
@@ -65,15 +89,25 @@ def extract_and_visit_links(html_code):
             visited_links.add(href)
             response = requests.get(href)
             if response.status_code == 200:
-                link_soup = BeautifulSoup(response.content, 'html.parser')
-                div_content = link_soup.find('div', class_='eb2')
-                if div_content:
-                    text = re.sub(r'\n+', '\n', div_content.text.strip())
+                # if the link is a pdf file
+                if href.endswith('.pdf'):
+                    text = read_pdf_from_url(response)
+                    text = re.sub(r'(\n\s*|\n\s+\n\s+)', '\n', text.strip()) # remove extra spaces
                     contents.append(text)
+                    print(f'Information extracted from pdf file: {href}')
                 else:
-                    contents.append('Content not found')
+
+                    link_soup = BeautifulSoup(response.content, 'html.parser')
+                    # 'eb2' is the class of the div tag that contains the content of the search result (University website)
+                    div_content = link_soup.find('div', class_='eb2')
+                    if div_content:
+                        text = re.sub(r'\n+', '\n', div_content.text.strip())
+                        contents.append(text)
+                    else:
+                        contents.append('Content not found')
             else:
                 contents.append('Failed to fetch content')
+        
         # only visit the first two links
         if len(visited_links) == 1:
             break

@@ -18,7 +18,7 @@ if "selected_language" in st.session_state:
 else:
     from utils.prompt_text import prompt_text_english as prompt_text
 
-
+# TODO change model to gpt-3.5-turbo
 llm = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0)
 
 retriever_tool = create_retriever_tool(
@@ -87,9 +87,8 @@ if __name__ == "__main__":
             print(f'Spent a total of {cb.total_tokens} tokens')
 
         return result
-
-
-
+    
+    response = agent_executor.invoke({"input": 'Richtlinie der Universität Osnabrück für die Vergabe von Deutschlandstipendien'}) # should return the pdf
     response = agent_executor.invoke({"input": 'Abschlussnote Psychologiestudium Osnabrueck'})
     response = count_tokens(agent_executor, 'muss ich das Einverständnis meiner Eltern haben?')
     response =agent_executor.invoke({"input": 'where is the university'})
