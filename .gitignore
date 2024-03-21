@@ -175,3 +175,5 @@ data/
 geckodriver
 
 
+log.csv
+.vscode/

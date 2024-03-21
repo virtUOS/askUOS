@@ -7,8 +7,10 @@ import requests
 from bs4 import BeautifulSoup
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.prompts import PromptTemplate
-
+from PyPDF2 import PdfReader
+import io
 import dotenv
+from chatbot_log.chatbot_logger import logger
 
 dotenv.load_dotenv()
 from settings import SERVICE
@@ -54,10 +56,33 @@ def summarise_content(text, question):
     # return chain.run(input_documents=docs, question=question)
     return summary_result_text
 
+def read_pdf_from_url(response, num_pages=7):
+    """
+    Read the content of a pdf file from a given response object
+    :param response: response object from the request
+    :param num_pages: number of pages to process. If None, process all pages
+    """
+    pdf_stream = io.BytesIO(response.content)
+
+    pdf_text = ''
+    with pdf_stream as f:
+        reader = PdfReader(f)
+        if num_pages is None:
+            num_pages = len(reader.pages)
+        else:
+            num_pages = min(num_pages, len(reader.pages))
+
+        for page_num in range(num_pages):
+            page = reader.pages[page_num]
+            pdf_text += page.extract_text()
+
+    return pdf_text
+
 def extract_and_visit_links(html_code):
     contents = []
     visited_links = set()
     soup = BeautifulSoup(html_code, 'html.parser')
+    # 'gs-title' is the class of the anchor tag that contains the search result (University website search result page)
     anchor_tags = soup.find_all('a', class_='gs-title')
     for tag in anchor_tags:
         href = tag.get('href')
@@ -65,15 +90,26 @@ def extract_and_visit_links(html_code):
             visited_links.add(href)
             response = requests.get(href)
             if response.status_code == 200:
-                link_soup = BeautifulSoup(response.content, 'html.parser')
-                div_content = link_soup.find('div', class_='eb2')
-                if div_content:
-                    text = re.sub(r'\n+', '\n', div_content.text.strip())
+                # if the link is a pdf file
+                if href.endswith('.pdf'):
+                    text = read_pdf_from_url(response)
+                    text = re.sub(r'(\n\s*|\n\s+\n\s+)', '\n', text.strip()) # remove extra spaces
                     contents.append(text)
+                    logger.info(f'Information extracted from pdf file: {href}')
+                    
                 else:
-                    contents.append('Content not found')
+
+                    link_soup = BeautifulSoup(response.content, 'html.parser')
+                    # 'eb2' is the class of the div tag that contains the content of the search result (University website)
+                    div_content = link_soup.find('div', class_='eb2')
+                    if div_content:
+                        text = re.sub(r'\n+', '\n', div_content.text.strip())
+                        contents.append(text)
+                    else:
+                        contents.append('Content not found')
             else:
                 contents.append('Failed to fetch content')
+        
         # only visit the first two links
         if len(visited_links) == 1:
             break
@@ -108,7 +144,8 @@ def decode_string(query):
     if utf8_pattern.search(query.encode('latin1')):
         try:
             decoded_utf8 = query.encode('latin1').decode('utf-8')
-            print(f'This is the query used by the University website: {decoded_utf8}')
+            logger.info(f'This is the query used by the University website: {decoded_utf8}')
+           
             return decoded_utf8.replace(' ', '+')
         except Exception as e:
             pass
@@ -117,7 +154,8 @@ def decode_string(query):
     if url_encoding_pattern.search(query):
         try:
             decoded_url = urllib.parse.unquote(query)
-            print(f'This is the query used by the University website: {decoded_url}')
+            logger.info(f'This is the query used by the University website: {decoded_url}')
+           
             return decoded_url.replace(' ', '+')
         except Exception as e:
             pass
@@ -126,13 +164,15 @@ def decode_string(query):
     if unicode_escape_pattern.search(query):
         try:
             decoded_unicode = query.encode('latin1').decode('unicode-escape')
-            print(f'This is the query used by the University website: {decoded_unicode}')
+            logger.info(f'This is the query used by the University website: {decoded_unicode}')
+         
             return decoded_unicode.replace(' ', '+')
         except Exception as e:
             pass
 
     query = query.replace(' ', '+')
-    print(f'This is the query used by the University website: {query}')
+    logger.info(f'This is the query used by the University website: {query}')
+
 
     return query  # Return the original string if no decoding is needed
 
@@ -157,6 +197,7 @@ def search_uni_web(query):
         driver.quit()
 
         search_result_text = extract_and_visit_links(rendered_html)
+        logger.info(f'Length of the search result text: {len(search_result_text)}')
         # todo use algorithm form my thesis to compute exact number of tokens given length of the search result text
         # if len(search_result_text) > 15000:
         #     summary_result_text = summarise_content(search_result_text, query)
@@ -182,7 +223,7 @@ def search_uni_web(query):
         # return search_result_text
 
     except Exception as e:
-        print('Error:', e)
+        logger.error(f'Error while searching the web: {e}')
         raise ToolException('Error while searching the web')
 
 
