@@ -10,6 +10,7 @@ from langchain.prompts import PromptTemplate
 from PyPDF2 import PdfReader
 import io
 import dotenv
+from chatbot_log.chatbot_logger import logger
 
 dotenv.load_dotenv()
 from settings import SERVICE
@@ -94,7 +95,8 @@ def extract_and_visit_links(html_code):
                     text = read_pdf_from_url(response)
                     text = re.sub(r'(\n\s*|\n\s+\n\s+)', '\n', text.strip()) # remove extra spaces
                     contents.append(text)
-                    print(f'Information extracted from pdf file: {href}')
+                    logger.info(f'Information extracted from pdf file: {href}')
+                    
                 else:
 
                     link_soup = BeautifulSoup(response.content, 'html.parser')
@@ -142,7 +144,8 @@ def decode_string(query):
     if utf8_pattern.search(query.encode('latin1')):
         try:
             decoded_utf8 = query.encode('latin1').decode('utf-8')
-            print(f'This is the query used by the University website: {decoded_utf8}')
+            logger.info(f'This is the query used by the University website: {decoded_utf8}')
+           
             return decoded_utf8.replace(' ', '+')
         except Exception as e:
             pass
@@ -151,7 +154,8 @@ def decode_string(query):
     if url_encoding_pattern.search(query):
         try:
             decoded_url = urllib.parse.unquote(query)
-            print(f'This is the query used by the University website: {decoded_url}')
+            logger.info(f'This is the query used by the University website: {decoded_url}')
+           
             return decoded_url.replace(' ', '+')
         except Exception as e:
             pass
@@ -160,13 +164,15 @@ def decode_string(query):
     if unicode_escape_pattern.search(query):
         try:
             decoded_unicode = query.encode('latin1').decode('unicode-escape')
-            print(f'This is the query used by the University website: {decoded_unicode}')
+            logger.info(f'This is the query used by the University website: {decoded_unicode}')
+         
             return decoded_unicode.replace(' ', '+')
         except Exception as e:
             pass
 
     query = query.replace(' ', '+')
-    print(f'This is the query used by the University website: {query}')
+    logger.info(f'This is the query used by the University website: {query}')
+
 
     return query  # Return the original string if no decoding is needed
 
@@ -191,6 +197,7 @@ def search_uni_web(query):
         driver.quit()
 
         search_result_text = extract_and_visit_links(rendered_html)
+        logger.info(f'Length of the search result text: {len(search_result_text)}')
         # todo use algorithm form my thesis to compute exact number of tokens given length of the search result text
         # if len(search_result_text) > 15000:
         #     summary_result_text = summarise_content(search_result_text, query)
@@ -216,7 +223,7 @@ def search_uni_web(query):
         # return search_result_text
 
     except Exception as e:
-        print('Error:', e)
+        logger.error(f'Error while searching the web: {e}')
         raise ToolException('Error while searching the web')
 
 
