@@ -130,7 +130,7 @@ if __name__ == "__main__":
 
 
 
-# todo set the threshold for the similarity search. Too manny unrelated documents are returned
+# todo set the threshold for the similarity search. Too many unrelated documents are returned
 retriever = db.as_retriever(search_type='similarity', search_kwargs={'k': 7})
 print('Retriever created/loaded')
 

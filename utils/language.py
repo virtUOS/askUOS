@@ -32,7 +32,6 @@ def initialize_language():
 
 
 
-
 def set_language(language) -> None:
     """
     Add the language to the query parameters based on the selected language.
@@ -42,3 +41,21 @@ def set_language(language) -> None:
         st.query_params["lang"] = "en"
     elif language == 'de':
         st.query_params["lang"] = "de"
+
+
+def prompt_language():
+    '''
+     Define the prompt text based on the selected language
+     return: prompt_text, a dictionary containing the prompt text
+    '''
+   
+
+    if "selected_language" in st.session_state:
+        if st.session_state["selected_language"] == 'English':
+            from utils.prompt_text import prompt_text_english as prompt_text
+        elif st.session_state["selected_language"] == 'Deutsch':
+            from utils.prompt_text import prompt_text_deutsch as prompt_text
+    else:
+        from utils.prompt_text import prompt_text_english as prompt_text
+    
+    return prompt_text

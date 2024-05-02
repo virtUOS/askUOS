@@ -4,44 +4,37 @@ from vector_store import retriever
 from langchain.tools import Tool
 from utils.prompt import prompt
 from langchain_openai import ChatOpenAI
-from utils.search_web_tool import search_uni_web
+from utils.search_web_tool import  SearchUniWeb
 from langchain.memory import ConversationBufferMemory
 import streamlit as st
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
-# Define the prompt text based on the selected language
+from utils.language import prompt_language
+from settings import SERVICE
 
-if "selected_language" in st.session_state:
-    if st.session_state["selected_language"] == 'English':
-        from utils.prompt_text import prompt_text_english as prompt_text
-    elif st.session_state["selected_language"] == 'Deutsch':
-        from utils.prompt_text import prompt_text_deutsch as prompt_text
-else:
-    from utils.prompt_text import prompt_text_english as prompt_text
+
+
 
 # TODO change model to gpt-3.5-turbo
 llm = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0)
 
+# create tools
+
 retriever_tool = create_retriever_tool(
     retriever,
     "technical_troubleshooting_questions",
-    prompt_text['description_technical_troubleshooting'],
+    prompt_language()['description_technical_troubleshooting'],
 )
 
-# print(f"------------------------------retriever_tool description: {prompt_text['description_technical_troubleshooting']}")
+search_uni_web_tool = Tool(
+    name='custom_university_web_search',
+    func=SearchUniWeb.run(SERVICE),
+    description=prompt_language()['description_university_web_search'],
+    handle_tool_errors=True
+)
+
+tools = [retriever_tool, search_uni_web_tool]
 
 
-
-tools = [retriever_tool,
-
-         Tool(
-             name='custom_university_web_search',
-             func=search_uni_web,
-             description=prompt_text['description_university_web_search'],
-             handle_tool_errors=True
-         )]
-
-
-# print(f"------------------------------description_university_web_search description: {prompt_text['description_university_web_search']}")
 
 """
 TODO 
@@ -64,14 +57,15 @@ memory = ConversationBufferWindowMemory(memory_key="chat_history", return_messag
 # Construct the OpenAI Tools agent
 agent = create_openai_tools_agent(llm, tools, prompt)
 
-# todo handle errors, specially when the characters exceed the limit allowed by the API
-# Agent stops after 15 seconds
+# TODO handle errors, specially when the characters exceed the limit allowed by the API
+
+
 agent_executor = AgentExecutor(agent=agent,
                                tools=tools,
                                verbose=True,
                                memory=memory,
                                handle_parsing_errors=True,
-                               max_execution_time=20,
+                               max_execution_time=20, # Agent stops after 20 seconds
                                )
 # todo, to solve the character limit override the invoke method of the Chain class form which
 # the AgentExecutor inherits from
