@@ -19,20 +19,36 @@ llm = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0)
 
 # create tools
 
-retriever_tool = create_retriever_tool(
+# retriever_tool = create_retriever_tool(
+#     retriever,
+#     "technical_troubleshooting_questions",
+#     prompt_language()['description_technical_troubleshooting'],
+# )
+
+# search_uni_web_tool = Tool(
+#     name='custom_university_web_search',
+#     func=SearchUniWeb.run(SERVICE),
+#     description=prompt_language()['description_university_web_search'],
+#     handle_tool_errors=True
+# )
+
+
+tools = [
+    create_retriever_tool(
     retriever,
     "technical_troubleshooting_questions",
     prompt_language()['description_technical_troubleshooting'],
-)
-
-search_uni_web_tool = Tool(
+), 
+Tool(
     name='custom_university_web_search',
     func=SearchUniWeb.run(SERVICE),
     description=prompt_language()['description_university_web_search'],
     handle_tool_errors=True
-)
+),
 
-tools = [retriever_tool, search_uni_web_tool]
+]
+
+# tools = [retriever_tool, search_uni_web_tool]
 
 
 

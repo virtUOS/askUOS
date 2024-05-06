@@ -174,6 +174,7 @@ class SearchUniWeb(DecodeStringMixin, ExtractAndVisitLinksMixin):
 
     def __init__(self, service_path):
 
+        # path to the geckodriver
         self._service_path = service_path
 
         @property
@@ -182,8 +183,7 @@ class SearchUniWeb(DecodeStringMixin, ExtractAndVisitLinksMixin):
         
         @service_path.setter
         def service_path(self, value):
-            # check that the geckodriver is in the right path and exist
-            # tdo check that the geckodriver is not corrupted
+            # TODO check that the geckodriver is not corrupted
             if os.path.exists(value):
                 self._service_path = value
 
@@ -198,7 +198,7 @@ class SearchUniWeb(DecodeStringMixin, ExtractAndVisitLinksMixin):
 
     @classmethod
     def run(cls,service_path):
-        # todo check that the geckodriver is in the right path and exist, if so return the search_uni_web method
+       
         return cls(service_path)
     
     def __call__(self, query):
