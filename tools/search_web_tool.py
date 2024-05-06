@@ -249,11 +249,3 @@ class SearchUniWeb(DecodeStringMixin, ExtractAndVisitLinksMixin):
             logger.error(f'Error while searching the web: {e}')
             raise ToolException('Error while searching the web')
     
-
-
-
-
-
-if __name__ == "__main__":
-    query = 'Was kann ich an der Universität studieren?'
-    rendered_html = search_uni_web(query)

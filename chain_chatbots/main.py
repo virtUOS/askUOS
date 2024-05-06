@@ -4,7 +4,7 @@ from langchain_community.llms import Ollama
 import gradio as gr
 from langchain_core.messages import SystemMessage
 
-from vector_store import retriever
+from db.vector_store import retriever
 from langchain.prompts.prompt import PromptTemplate
 from langchain.chains import ConversationChain
 from langchain.memory import ConversationBufferMemory

@@ -1,10 +1,10 @@
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain.tools.retriever import create_retriever_tool
-from vector_store import retriever
+from db.vector_store import retriever
 from langchain.tools import Tool
 from utils.prompt import prompt
 from langchain_openai import ChatOpenAI
-from utils.search_web_tool import  SearchUniWeb
+from tools.search_web_tool import  SearchUniWeb
 from langchain.memory import ConversationBufferMemory
 import streamlit as st
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
@@ -19,18 +19,6 @@ llm = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0)
 
 # create tools
 
-# retriever_tool = create_retriever_tool(
-#     retriever,
-#     "technical_troubleshooting_questions",
-#     prompt_language()['description_technical_troubleshooting'],
-# )
-
-# search_uni_web_tool = Tool(
-#     name='custom_university_web_search',
-#     func=SearchUniWeb.run(SERVICE),
-#     description=prompt_language()['description_university_web_search'],
-#     handle_tool_errors=True
-# )
 
 
 tools = [
@@ -47,8 +35,6 @@ Tool(
 ),
 
 ]
-
-# tools = [retriever_tool, search_uni_web_tool]
 
 
 
@@ -83,8 +69,10 @@ agent_executor = AgentExecutor(agent=agent,
                                handle_parsing_errors=True,
                                max_execution_time=20, # Agent stops after 20 seconds
                                )
-# todo, to solve the character limit override the invoke method of the Chain class form which
-# the AgentExecutor inherits from
+# TODO to solve the character limit override the invoke method of the Chain class form which
+
+
+
 
 if __name__ == "__main__":
 

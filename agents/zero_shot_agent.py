@@ -9,9 +9,9 @@ from langchain.chains import LLMChain
 from langchain.memory import ConversationBufferMemory
 from langchain_openai import OpenAI
 from langchain.agents import AgentType
-from utils.search_web_tool import search_uni_web
+from tools.search_web_tool import search_uni_web
 from langchain.tools.retriever import create_retriever_tool
-from vector_store import retriever
+from db.vector_store import retriever
 from langchain.tools import Tool
 from langchain.prompts.prompt import PromptTemplate
 from langchain_core.prompts import SystemMessagePromptTemplate

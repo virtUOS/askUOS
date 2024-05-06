@@ -3,7 +3,7 @@
 
 import streamlit as st
 # from retrieval_agent import agent
-from agent_openai_tools import agent_executor
+from agents.agent_openai_tools import agent_executor
 from chatbot_log.chatbot_logger import logger
 import time
 from streamlit import session_state

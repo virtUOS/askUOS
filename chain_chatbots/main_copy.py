@@ -2,7 +2,7 @@ from langchain.chains import LLMChain
 from langchain.chains import RetrievalQA, ConversationalRetrievalChain, StuffDocumentsChain
 from langchain_community.llms import Ollama
 import gradio as gr
-from vector_store import retriever
+from db.vector_store import retriever
 from langchain.prompts.prompt import PromptTemplate
 from langchain.chains import ConversationChain
 from langchain.memory import ConversationBufferMemory

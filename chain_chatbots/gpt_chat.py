@@ -1,5 +1,5 @@
 from langchain.chains import LLMChain, StuffDocumentsChain
-from vector_store import retriever
+from db.vector_store import retriever
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts.prompt import PromptTemplate
 from typing import  Dict

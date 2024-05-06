@@ -1,6 +1,6 @@
 from langchain.chains import LLMChain, StuffDocumentsChain
 from langchain_core.prompts import SystemMessagePromptTemplate
-from vector_store import retriever
+from db.vector_store import retriever
 from langchain.prompts.prompt import PromptTemplate
 from langchain.memory import ConversationBufferMemory
 from typing import  Dict

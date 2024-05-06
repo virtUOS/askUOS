@@ -19,13 +19,13 @@ Todo the agent should try the web search three tines with different queries. If 
 
 from langchain.agents import AgentType
 from langchain.tools.retriever import create_retriever_tool
-from vector_store import retriever
+from db.vector_store import retriever
 from langchain.tools import Tool
 from utils.prompt import prompt
 from langchain.prompts.chat import MessagesPlaceholder
 from langchain_openai import ChatOpenAI
 from langchain.agents import initialize_agent
-from utils.search_web_tool import search_uni_web
+from tools.search_web_tool import search_uni_web
 from langchain.memory import ConversationBufferMemory
 
 import dotenv
