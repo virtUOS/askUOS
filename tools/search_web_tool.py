@@ -1,3 +1,4 @@
+from __future__ import annotations
 import re
 import urllib.parse
 from selenium import webdriver
@@ -14,7 +15,6 @@ import os
 from langchain_openai import ChatOpenAI
 from langchain.chains.summarize import load_summarize_chain
 from langchain_core.tools import ToolException
-
 from settings import SEARCH_URL
 
 dotenv.load_dotenv()
@@ -172,7 +172,7 @@ class SearchUniWeb(DecodeStringMixin, ExtractAndVisitLinksMixin):
     '''
 
 
-    def __init__(self, service_path):
+    def __init__(self, service_path:str):
 
         # path to the geckodriver
         self._service_path = service_path

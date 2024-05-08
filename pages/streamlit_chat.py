@@ -2,11 +2,16 @@
 
 
 import streamlit as st
-# from retrieval_agent import agent
-from agents.agent_openai_tools import agent_executor
 from chatbot_log.chatbot_logger import logger
 import time
 from streamlit import session_state
+from agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
+
+
+# create an instance of the agent executor
+# TODO every time the users interacts with the chatbot, all the script ir re-run. This is not efficient. CACHE THE AGENT EXECUTOR???
+agent_executor = CampusManagementOpenAIToolsAgent.run()
+
 
 # Define the prompt text based on the selected language
 start_message = "How may I help you?"
@@ -62,7 +67,8 @@ if st.session_state.messages[-1]["role"] != "assistant":
             logger.info(f"User's query: {prompt}")
             # start time
             start_time = time.time()
-            response = agent_executor.invoke({"input": prompt})
+            # response = agent_executor({"input": prompt})
+            response = agent_executor(prompt)
             # response = agent.invoke({"input": prompt})
             # end time
             end_time = time.time()
