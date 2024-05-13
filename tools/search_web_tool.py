@@ -1,4 +1,4 @@
-from __future__ import annotations
+from typing import Optional, Union
 import re
 import urllib.parse
 from selenium import webdriver
@@ -19,13 +19,9 @@ from settings import SEARCH_URL
 
 dotenv.load_dotenv()
 
-# llm = ChatOpenAI(
-#     model="gpt-3.5-turbo-1106",
-#     temperature=0.3,
-# )
 
 
-# todo summarize  the content when it + the prompt +chat_history exceed the number of openai allow tokens (16385 tokens)
+# TODO summarize  the content when it + the prompt +chat_history exceed the number of openai allow tokens (16385 tokens)
 def summarise_content(text, question):
     print(
         '---------------------------------------------------------summarising content...---------------------------------------------------------')
@@ -197,7 +193,7 @@ class SearchUniWeb(DecodeStringMixin, ExtractAndVisitLinksMixin):
             
 
     @classmethod
-    def run(cls,service_path):
+    def run(cls,service_path:str):
        
         return cls(service_path)
     

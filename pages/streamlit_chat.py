@@ -6,19 +6,29 @@ from chatbot_log.chatbot_logger import logger
 import time
 from streamlit import session_state
 from agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
+from utils.prompt import get_prompt
 
 
 # create an instance of the agent executor
-# TODO every time the users interacts with the chatbot, all the script ir re-run. This is not efficient. CACHE THE AGENT EXECUTOR???
-agent_executor = CampusManagementOpenAIToolsAgent.run()
+# TODO every time the users interacts with the chatbot, all the script  re-runS. This is not efficient. CACHE THE AGENT EXECUTOR???
+# TODO The id of the agent executor object is different every time the script runs. This is not efficient. CACHE THE AGENT EXECUTOR???
+# TODO shall I cache this object and only recreate it when the input changes? the only thing that changes is the language (prompt)
 
 
-# Define the prompt text based on the selected language
+
 start_message = "How may I help you?"
-
 if "selected_language" in st.session_state:
     if st.session_state["selected_language"] == 'Deutsch':
         start_message = "Wie kann ich Ihnen helfen?"
+        from utils.prompt_text import prompt_text_deutsch as prompt_text
+    else:
+        from utils.prompt_text import prompt_text_english as prompt_text
+else:
+
+    from utils.prompt_text import prompt_text_english as prompt_text
+
+
+agent_executor = CampusManagementOpenAIToolsAgent.run(prompt=get_prompt(prompt_text))
 
 # App title
 st.set_page_config(page_title="🤗💬 Campus Management Chatbot", page_icon="🤖", layout="centered",
