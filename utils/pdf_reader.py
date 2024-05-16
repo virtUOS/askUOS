@@ -1,5 +1,7 @@
 import io
 from PyPDF2 import PdfReader
+import requests
+import re
 
 def read_pdf_from_url(response, num_pages=7):
         """
@@ -22,3 +24,52 @@ def read_pdf_from_url(response, num_pages=7):
                 pdf_text += page.extract_text()
 
         return pdf_text
+
+
+# def download_pdf(pdf_url):
+#     try:
+#         # Send a GET request to the URL to download the PDF file
+#         response = requests.get(pdf_url)
+#         response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
+
+#         # Read the content of the PDF file
+#         pdf_content = io.BytesIO(response.content)
+
+#         # Open the PDF file using PyPDF2
+#         pdf_reader = PdfReader(pdf_content)
+        
+#         # Return the PDF reader object
+#         return pdf_reader
+#     except requests.exceptions.RequestException as e:
+#         print(f"Error: Failed to retrieve the PDF file from the URL: {e}")
+#         return None
+#     except PyPDF2.utils.PdfReadError as e:
+#         print(f"Error: Failed to open the PDF file: {e}")
+#         return None
+    
+
+def open_pdf_as_binary(pdf_url: str):
+    try:
+        # Send a GET request to the URL to download the PDF file
+        response = requests.get(pdf_url)
+        response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
+        
+        # Return the binary content of the PDF file
+        return response.content
+    except requests.exceptions.RequestException as e:
+        print(f"Error: Failed to retrieve the PDF file from the URL: {e}")
+        return None
+
+
+def extract_pdf_url(text: str ):
+    # Define a regular expression pattern to match and extract a PDF URL
+    pdf_url_pattern = r'\b(https?://\S+\.pdf)\b'
+
+    # Use re.search to find the pattern in the text
+    match = re.search(pdf_url_pattern, text, re.IGNORECASE)
+    if match:
+        pdf_url = match.group(1)  # Extracted PDF URL
+        pdf_filename = pdf_url.split("/")[-1]  # Extracted PDF file name from the URL
+        return pdf_url, pdf_filename
+    else:
+        return None, None  # Return None for both URL and filename if no PDF URL is found

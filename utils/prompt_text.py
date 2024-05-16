@@ -61,7 +61,7 @@ Achten Sie bitte darauf, dass Sie die obige Aufgabe unter Beachtung der folgende
 
     """,
     'description_university_web_search': """
-nützlich, wenn Sie Fragen zur Universität Osnabrück beantworten müssen. Zum Beispiel Fragen zum 
+ nützlich, wenn Sie Fragen zur Universität Osnabrück beantworten müssen. Zum Beispiel Fragen zum 
     zum Bewerbungsverfahren oder zum Studium an der Universität im Allgemeinen. Dieses Tool ist auch nützlich, um aktuelle Bewerbungstermine
     sowie aktualisierte Termine und Kontaktinformationen. Um dieses Tool erfolgreich zu nutzen, sollten Sie die vorherigen Interaktionen mit dem Nutzer (Chatverlauf) und den Kontext der Konversation berücksichtigen.
 """,
