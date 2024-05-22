@@ -204,7 +204,10 @@ class SearchUniWeb(DecodeStringMixin, ExtractAndVisitLinksMixin):
             # query_url = urllib.parse.quote_plus(query)
             # todo need to check if the query is in german, if not then translate it to german
             self.query = query
+            print(f'------Query--------: {self.query}')
             query_url = self.decode_string()
+            
+            print(f'------Query URL--------: {query_url}')
             
             # constructs the complete URL for the search
             url = SEARCH_URL + query_url
@@ -243,5 +246,6 @@ class SearchUniWeb(DecodeStringMixin, ExtractAndVisitLinksMixin):
 
         except Exception as e:
             logger.error(f'Error while searching the web: {e}')
-            raise ToolException('Error while searching the web')
+            # raise ToolException('Error while searching the web')
+            return 'Error while searching the web'
     

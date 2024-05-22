@@ -107,10 +107,11 @@ if st.session_state.messages[-1]["role"] != "assistant":
             #                             mime="application/pdf")
             
             
-            if response['sources']:
-                with st.expander("Sources"):
-                    for source in response['sources']:
-                        st.write(f"- {source}")
+            if "sources" in response:
+                if response['sources']:
+                    with st.expander("Sources"):
+                        for source in response['sources']:
+                            st.write(f"- {source}")
     
 
     col1,col2,col3,col4 = st.columns([3,3,0.5,0.5])
