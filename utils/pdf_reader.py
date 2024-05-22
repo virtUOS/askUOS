@@ -26,26 +26,7 @@ def read_pdf_from_url(response, num_pages=7):
         return pdf_text
 
 
-# def download_pdf(pdf_url):
-#     try:
-#         # Send a GET request to the URL to download the PDF file
-#         response = requests.get(pdf_url)
-#         response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
 
-#         # Read the content of the PDF file
-#         pdf_content = io.BytesIO(response.content)
-
-#         # Open the PDF file using PyPDF2
-#         pdf_reader = PdfReader(pdf_content)
-        
-#         # Return the PDF reader object
-#         return pdf_reader
-#     except requests.exceptions.RequestException as e:
-#         print(f"Error: Failed to retrieve the PDF file from the URL: {e}")
-#         return None
-#     except PyPDF2.utils.PdfReadError as e:
-#         print(f"Error: Failed to open the PDF file: {e}")
-#         return None
     
 
 def open_pdf_as_binary(pdf_url: str):

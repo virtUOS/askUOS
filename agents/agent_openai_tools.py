@@ -1,4 +1,5 @@
-from typing import Optional
+from typing import Optional, List, Dict, Any, Tuple
+from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain.tools.retriever import create_retriever_tool
 from langchain.tools import Tool
@@ -13,6 +14,11 @@ from db.vector_store import retriever
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.memory import BaseMemory
 from langchain_core.tools import BaseTool
+from langchain_core.agents import AgentActionMessageLog, AgentFinish
+from langchain.agents.format_scratchpad import format_to_openai_function_messages
+import json
+from langchain.memory.utils import get_prompt_input_key
+
 
 
 
@@ -27,6 +33,63 @@ the thing is that a small K could lead to the agent not being able to remember t
 """
 
 
+
+def parse(output):
+    # If no function was invoked, return to user
+    if "function_call" not in output.additional_kwargs:
+        return AgentFinish(return_values={"output": output.content}, log=output.content)
+
+    # Parse out the function call
+    function_call = output.additional_kwargs["function_call"]
+    name = function_call["name"]
+    inputs = json.loads(function_call["arguments"])
+
+    # If the Response function was invoked, return to the user with the function inputs
+    if name == "Response":
+        return AgentFinish(return_values=inputs, log=str(function_call))
+    # Otherwise, return an agent action
+    else:
+        return AgentActionMessageLog(
+            tool=name, tool_input=inputs, log="", message_log=[output]
+        )
+
+
+
+class CustomSaveMemory(ConversationBufferWindowMemory):
+    def _get_input_output(
+        self, inputs: Dict[str, Any], outputs: Dict[str, str]
+    ) -> Tuple[str, str]:
+        if self.input_key is None:
+            prompt_input_key = get_prompt_input_key(inputs, self.memory_variables)
+        else:
+            prompt_input_key = self.input_key
+        if self.output_key is None:
+            if len(outputs) != 1:
+                # if 'sources' in outputs:
+                #     sources = ', '.join(outputs['sources'])
+                # outputs['output'] = outputs['output'] + f'\nSources: {sources}'
+                answer = outputs['output']
+                outputs= {}
+                outputs['output'] = answer
+                
+           
+       
+            output_key = list(outputs.keys())[0]
+        else:
+            output_key = self.output_key
+        return inputs[prompt_input_key], outputs[output_key]
+
+
+        
+
+
+class Response(BaseModel):
+    """Final response to the question being asked"""
+
+    output: str = Field(description="The final answer to respond to the user")
+    sources: List[str] = Field(
+        description="The sources used to find the answer, it should be a list of URLs. Only include this field if the answer is based on external sources obtain from the web"
+    )
 
 
 
@@ -157,18 +220,35 @@ class CampusManagementOpenAIToolsAgent:
         if memory:
             self._memory = memory
         else:
-            self._memory = ConversationBufferWindowMemory(memory_key="chat_history", return_messages=True, k=5)
+            self._memory = CustomSaveMemory(memory_key="chat_history", return_messages=True, k=5)
+            # self._memory = ConversationBufferWindowMemory(memory_key="chat_history", return_messages=True, k=5)
   
     def _create_agent_executor(self):
         """
         Creates the agent executor for the agent.
         """
-        agent = create_openai_tools_agent(self._llm, self._tools, self._prompt)
+        # agent = create_openai_tools_agent(self._llm, self._tools, self._prompt)
+        
+        llm_with_tools = self._llm.bind_functions([self._tools[0],self._tools[1], Response])
+        
+        agent = (
+                    {
+                        "input": lambda x: x["input"],
+                        # Format agent scratchpad from intermediate steps
+                        "agent_scratchpad": lambda x: format_to_openai_function_messages(
+                            x["intermediate_steps"]
+                        ),
+                    }
+                    | self._prompt
+                    | llm_with_tools
+                    | parse
+                )
+                        
 
         self._agent_executor = AgentExecutor(agent=agent,
-                               tools=self.tools,
+                               tools=self._tools,
                                verbose=True,
-                               memory=self.memory,
+                               memory=self._memory,
                                handle_parsing_errors=True,
                                max_execution_time=20, # Agent stops after 20 seconds
                                )
