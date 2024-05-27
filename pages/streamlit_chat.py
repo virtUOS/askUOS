@@ -5,7 +5,8 @@ import streamlit as st
 from chatbot_log.chatbot_logger import logger
 import time
 from streamlit import session_state
-from agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
+# from agents.agent_openai_tools import CampusManagementOpenAIToolsAgent, agent_executor
+from agents.agent_openai_tools import  agent_executor
 from utils.prompt import get_prompt
 from utils.pdf_reader import open_pdf_as_binary, extract_pdf_url
 
@@ -29,7 +30,7 @@ else:
     from utils.prompt_text import prompt_text_english as prompt_text
 
 
-agent_executor = CampusManagementOpenAIToolsAgent.run(prompt=get_prompt(prompt_text))
+# agent_executor = CampusManagementOpenAIToolsAgent.run(prompt=get_prompt(prompt_text))
 
 # App title
 st.set_page_config(page_title="🤗💬 Campus Management Chatbot", page_icon="🤖", layout="centered",
