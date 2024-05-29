@@ -24,9 +24,10 @@ from langchain.agents.format_scratchpad.openai_tools import (
     format_to_openai_tool_messages,
 )
 
-
+from tools.uni_application_tool import application_instructions
 import streamlit as st
 from utils.prompt import get_prompt
+
 
 # Define the prompt text based on the selected language
 if "selected_language" in st.session_state:
@@ -220,7 +221,26 @@ class CampusManagementOpenAIToolsAgent:
                     func=SearchUniWeb.run(SERVICE),
                     description=prompt_language()['description_university_web_search'],
                     handle_tool_errors=True
-                ),]
+                ),
+                
+                Tool (
+                    
+                    name='application_instructions',
+                    func=application_instructions,
+                    description="""  
+                    
+                    Useful when users want to apply to the university and need a guide (step by step) on how to do it. DO NOT provide all the instructions at once, provide them step by step and use a conversational tone to guide the user through the process. for example,
+                    provide the first instruction and wait for the user to confirm that they have completed it before providing the next instruction. Use of the chat_history in order to provide a more personalized experience to the user.
+                    If the user needs more information, the agent can use the other tools to provide more information about the application process, for example, use the 'custom_university_web_search' tool to find more information about the application process or 
+                    the 'technical_troubleshooting_questions' tool to help the user with any technical issues they might have during the application process. 
+                   
+                    """,  
+                    handle_tool_errors=True
+                    
+                )
+                
+                
+                ]
     
     @property
     def memory(self):
@@ -250,7 +270,7 @@ class CampusManagementOpenAIToolsAgent:
         agent = create_openai_tools_agent(self._llm, self._tools, self._prompt)
 
         
-        llm_with_tools = self._llm.bind_functions([self._tools[0],self._tools[1], Response])
+        llm_with_tools = self._llm.bind_functions([self._tools[0],self._tools[1], self._tools[2], Response])
 
             
         agent = (   # prompt input_variables=['input', 'chat_history', 'agent_scratchpad']
@@ -270,6 +290,7 @@ class CampusManagementOpenAIToolsAgent:
 
         self._agent_executor = AgentExecutor(agent=agent,
                                tools=self._tools,
+                               return_intermediate_steps=True,
                                verbose=True,
                                memory=self._memory,
                                handle_parsing_errors=True,
