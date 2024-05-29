@@ -18,6 +18,9 @@ from utils.pdf_reader import open_pdf_as_binary, extract_pdf_url
 
 
 
+
+
+
 start_message = "How may I help you?"
 if "selected_language" in st.session_state:
     if st.session_state["selected_language"] == 'Deutsch':
@@ -35,6 +38,21 @@ else:
 # App title
 st.set_page_config(page_title="🤗💬 Campus Management Chatbot", page_icon="🤖", layout="centered",
                    initial_sidebar_state="collapsed")
+
+
+if "show_warning" in st.session_state:
+    if st.session_state["show_warning"]== True:
+        st.warning("The responses from the chat assistant may be incorrect - therefore, please verify the answers for their correctness.")
+        if st.button("Ich verstehe"):
+            st.session_state["show_warning"] = False
+            st.rerun()
+else:
+    
+    st.warning("Die Ausgaben des Chat-Assistenten können fehlerhaft sein - überprüfen Sie die Antworten daher unbedingt auf ihre Korrektheit.")
+    if st.button("Ich verstehe"):
+        st.session_state["show_warning"] = False
+        st.rerun()
+
 
 st.markdown(
     """
@@ -90,22 +108,22 @@ if st.session_state.messages[-1]["role"] != "assistant":
             # response = agent.run({"input": prompt})
 
       
-            # TODO query to trigger pdf 'Transponder beantragen'
+            # TODO query to trigger pdf 'Transponder beantragen' or 'Anmeldeformular Masterarbeit Universität Osnabrück'  'can i use Microsoft Edge for the application?'
             st.write(response["output"])
             # TODO handle the case where there are multiple PDF files in the response
             # TODO if pdf is too long to display, provide a download link
             # check if the response contains a PDF file
-            # pdf_url, pdf_file_name = extract_pdf_url(response["output"])
-            # if pdf_url:
+            pdf_url, pdf_file_name = extract_pdf_url(response["output"])
+            if pdf_url:
        
-            #     pdf_reader = open_pdf_as_binary(pdf_url)
-            #     if pdf_reader:
-            #         st.write('Downloading PDF...')
+                pdf_reader = open_pdf_as_binary(pdf_url)
+                if pdf_reader:
+                    st.write('Downloading PDF...')
             
-            #         st.download_button(label=f'Download: {pdf_file_name}', 
-            #                             data=pdf_reader, 
-            #                             file_name=pdf_file_name, 
-            #                             mime="application/pdf")
+                    st.download_button(label=f'Download: {pdf_file_name}', 
+                                        data=pdf_reader, 
+                                        file_name=pdf_file_name, 
+                                        mime="application/pdf")
             
             
             if "sources" in response:

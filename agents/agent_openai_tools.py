@@ -273,7 +273,7 @@ class CampusManagementOpenAIToolsAgent:
                                verbose=True,
                                memory=self._memory,
                                handle_parsing_errors=True,
-                               max_execution_time=20, # Agent stops after 20 seconds
+                               max_execution_time=30, # Agent stops after 20 seconds
                                )
  
     def __call__(self, input: str):

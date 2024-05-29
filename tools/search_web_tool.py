@@ -16,6 +16,7 @@ from langchain_openai import ChatOpenAI
 from langchain.chains.summarize import load_summarize_chain
 from langchain_core.tools import ToolException
 from settings import SEARCH_URL
+from urllib.parse import urljoin
 
 dotenv.load_dotenv()
 
@@ -133,6 +134,17 @@ class ExtractAndVisitLinksMixin:
                         div_content = link_soup.find('div', class_='eb2')
                         if div_content:
                             text = re.sub(r'\n+', '\n', div_content.text.strip())
+                            
+                            content_with_link = ''
+                            # TODO FIX THE BASE URL AS IT CAN CHANGE
+                            base_url = 'https://www.lili.uni-osnabrueck.de'
+                            for link in div_content.find_all('a', href=True):
+                                text = re.sub(r'\n+', '\n', link.text.strip())  # Extract the text
+                                url = urljoin(base_url, link['href'])  # Resolve the relative URL to absolute
+                                content_with_link += f" - {text}: {url}"  # Combine the text and the link
+                            
+                            text += 'Links found in the text:  ' + content_with_link
+                            
                             contents.append(text)
                         else:
                             contents.append('Content not found')
