@@ -23,10 +23,12 @@ from langchain_core.runnables import Runnable, RunnablePassthrough
 from langchain.agents.format_scratchpad.openai_tools import (
     format_to_openai_tool_messages,
 )
-
+from langchain.agents import load_tools
 from tools.uni_application_tool import application_instructions
 import streamlit as st
 from utils.prompt import get_prompt
+from json import JSONDecodeError
+from langchain_core.exceptions import OutputParserException
 
 
 # Define the prompt text based on the selected language
@@ -62,25 +64,42 @@ class Response(BaseModel):
     )
 
 
-def parse(output):
+def parse(message):
 
     # If no function was invoked, return to user
-    if "function_call" not in output.additional_kwargs:
-        return AgentFinish(return_values={"output": output.content}, log=output.content)
+    if "function_call" not in message.additional_kwargs:
+        return AgentFinish(return_values={"output": message.content}, log=message.content)
 
     # Parse out the function call
-    function_call = output.additional_kwargs["function_call"]
-    name = function_call["name"]
-    # additional_kwargs= {'function_call': {'arguments': '{{"output":""..."", "sources"}, 'name': '...'}' } }
-    inputs = json.loads(function_call["arguments"])
+    function_call = message.additional_kwargs["function_call"]
+    function_name = function_call["name"]
+    
+    try:
+    
+        # additional_kwargs= {'function_call': {'arguments': '{{"output":""..."", "sources"}, 'name': '...'}' } }
+        inputs = json.loads(function_call["arguments"] or "{}")
+    except JSONDecodeError:
+        raise OutputParserException(
+            f"Could not parse tool input: {function_call} because "
+            f"the `arguments` is not valid JSON."
+        )
 
+    if "__arg1" in inputs:
+            tool_input = inputs["__arg1"]
+    else:
+            tool_input = inputs
+    
+    content_msg = f"responded: {message.content}\n" if message.content else "\n"
+    log = f"\nInvoking: `{function_name}` with `{tool_input}`\n{content_msg}\n"
+
+    print(log)
     # If the Response function was invoked, return to the user with the function inputs
-    if name == "Response":
+    if function_name == "Response":
         return AgentFinish(return_values=inputs, log=str(function_call))
     # Otherwise, return an agent action
     else:
         return AgentActionMessageLog(
-            tool=name, tool_input=inputs, log="", message_log=[output]
+            tool=function_name, tool_input=inputs, log=log, message_log=[message]
         )
 
 
@@ -270,7 +289,7 @@ class CampusManagementOpenAIToolsAgent:
         agent = create_openai_tools_agent(self._llm, self._tools, self._prompt)
 
         
-        llm_with_tools = self._llm.bind_functions([self._tools[0],self._tools[1], self._tools[2], Response])
+        llm_with_tools = self._llm.bind_functions([self._tools[0],self._tools[1], self._tools[2],load_tools(["human"])[0], Response])
 
             
         agent = (   # prompt input_variables=['input', 'chat_history', 'agent_scratchpad']
@@ -333,12 +352,31 @@ if __name__ == "__main__":
     
     agent_executor = CampusManagementOpenAIToolsAgent.run()
     # testing memory 
-    agent_executor('can i study law?')
-    agent_executor('how long does the master take?')
-    agent_executor('how long does the bachelor take?')
+    # agent_executor('can i study law?')            
+    # agent_executor('how long does the master take?')
+    # agent_executor('how long does the bachelor take?')
     
     
 
+    
+    for step in agent_executor._agent_executor.iter({"input": 'what can i study?'}):
+        if output := step.get("intermediate_step"):
+            action, value = output[0]
+            
+            # here i could do something like: if the tool is custom_university_web_search,  and the value is  'Content not found' or 'Failed to fetch content', repeat the serach with different query or ask 
+            # a follow up question to the user.
+            if action.tool == "GetPrime":
+                print(f"Checking whether {value} is prime...")
+        
+            # Ask user if they want to continue
+            _continue = input("Should the agent continue (Y/n)?:\n") or "Y"
+            if _continue.lower() != "y":
+                break
+        
+    
+    
+    
+    
     # from langchain.callbacks import get_openai_callback
     # from utils.prompt import prompt
 

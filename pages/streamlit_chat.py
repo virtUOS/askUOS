@@ -107,7 +107,8 @@ if st.session_state.messages[-1]["role"] != "assistant":
             # response = agent.invoke({"input": prompt}, config={"configurable": {"session_id": "<message_history>"}},)
             # response = agent.run({"input": prompt})
 
-            print(response["intermediate_steps"])
+            # print(response["intermediate_steps"])
+            
             # TODO query to trigger pdf 'Transponder beantragen' or 'Anmeldeformular Masterarbeit Universität Osnabrück'  'can i use Microsoft Edge for the application?'
             st.write(response["output"])
             # TODO handle the case where there are multiple PDF files in the response
