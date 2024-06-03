@@ -356,22 +356,32 @@ if __name__ == "__main__":
     # agent_executor('how long does the master take?')
     # agent_executor('how long does the bachelor take?')
     
-    
+    instructions = ['1. Visit the Online-Bewerbungsportal (online application portal) on the university\'s website.', '2. Review the application deadlines and requirements for your desired program.', '3. Complete the online application form and submit the required documents.', '4. Keep track of the application status and any additional steps required.']
 
     
-    for step in agent_executor._agent_executor.iter({"input": 'what can i study?'}):
+    agent_inter = agent_executor._agent_executor.iter({"input": 'guide me through the application process?'})
+    
+    for step in agent_inter:
         if output := step.get("intermediate_step"):
             action, value = output[0]
             
             # here i could do something like: if the tool is custom_university_web_search,  and the value is  'Content not found' or 'Failed to fetch content', repeat the serach with different query or ask 
             # a follow up question to the user.
-            if action.tool == "GetPrime":
-                print(f"Checking whether {value} is prime...")
+            if action.tool == "application_instructions":
+                for instruction in instructions:
+                    print(instruction)
+                    _continue = input("Should the agent continue (Y/n)?:\n") or "Y"
+                    if _continue.lower() != "y":
+                        break
+                
+                
+
         
             # Ask user if they want to continue
-            _continue = input("Should the agent continue (Y/n)?:\n") or "Y"
-            if _continue.lower() != "y":
-                break
+            # _continue = input("Should the agent continue (Y/n)?:\n") or "Y"
+            # if _continue.lower() != "y":
+            #     break
+    print()
         
     
     
