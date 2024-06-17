@@ -71,12 +71,11 @@ def parse(message):
         return AgentFinish(return_values={"output": message.content}, log=message.content)
 
     # Parse out the function call
+    # additional_kwargs= {'function_call': {'arguments': '{{"output":""..."", "sources"}, 'name': '...'}' } }
     function_call = message.additional_kwargs["function_call"]
     function_name = function_call["name"]
     
     try:
-    
-        # additional_kwargs= {'function_call': {'arguments': '{{"output":""..."", "sources"}, 'name': '...'}' } }
         inputs = json.loads(function_call["arguments"] or "{}")
     except JSONDecodeError:
         raise OutputParserException(
@@ -92,7 +91,7 @@ def parse(message):
     content_msg = f"responded: {message.content}\n" if message.content else "\n"
     log = f"\nInvoking: `{function_name}` with `{tool_input}`\n{content_msg}\n"
 
-    print(log)
+    # print(log)
     # If the Response function was invoked, return to the user with the function inputs
     if function_name == "Response":
         return AgentFinish(return_values=inputs, log=str(function_call))
@@ -208,7 +207,9 @@ class CampusManagementOpenAIToolsAgent:
         if value:
             self._llm = value
         else:
-            self._llm = ChatOpenAI(model=OPEN_AI_MODEL, temperature=0)   
+            from langchain_core.callbacks import StdOutCallbackHandler
+            handler = StdOutCallbackHandler()
+            self._llm = ChatOpenAI(model=OPEN_AI_MODEL, temperature=0, callbacks=[handler])   
     
     @property
     def tools(self):
@@ -242,23 +243,6 @@ class CampusManagementOpenAIToolsAgent:
                     handle_tool_errors=True
                 ),
                 
-                Tool (
-                    
-                    name='application_instructions',
-                    func=application_instructions,
-                    description="""  
-                    
-                    Useful when users want to apply to the university and need a guide (step by step) on how to do it. DO NOT provide all the instructions at once, provide them step by step and use a conversational tone to guide the user through the process. for example,
-                    provide the first instruction and wait for the user to confirm that they have completed it before providing the next instruction. Use of the chat_history in order to provide a more personalized experience to the user.
-                    If the user needs more information, the agent can use the other tools to provide more information about the application process, for example, use the 'custom_university_web_search' tool to find more information about the application process or 
-                    the 'technical_troubleshooting_questions' tool to help the user with any technical issues they might have during the application process. 
-                   
-                    """,  
-                    handle_tool_errors=True
-                    
-                )
-                
-                
                 ]
     
     @property
@@ -289,7 +273,7 @@ class CampusManagementOpenAIToolsAgent:
         agent = create_openai_tools_agent(self._llm, self._tools, self._prompt)
 
         
-        llm_with_tools = self._llm.bind_functions([self._tools[0],self._tools[1], self._tools[2],load_tools(["human"])[0], Response])
+        llm_with_tools = self._llm.bind_functions([self._tools[0],self._tools[1],load_tools(["human"])[0], Response])
 
             
         agent = (   # prompt input_variables=['input', 'chat_history', 'agent_scratchpad']
