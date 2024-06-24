@@ -1,22 +1,24 @@
-from typing import Optional, Union
+import os
 import re
 import urllib.parse
-from selenium import webdriver
-from selenium.webdriver.firefox.service import Service
-from selenium.webdriver.firefox.options import Options
+from typing import Optional, Union
+from urllib.parse import urljoin
+
+import dotenv
 import requests
 from bs4 import BeautifulSoup
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.prompts import PromptTemplate
-import dotenv
-from chatbot_log.chatbot_logger import logger
-from utils.pdf_reader import read_pdf_from_url
-import os
-from langchain_openai import ChatOpenAI
 from langchain.chains.summarize import load_summarize_chain
+from langchain.prompts import PromptTemplate
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.tools import ToolException
+from langchain_openai import ChatOpenAI
+from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
+
+from chatbot_log.chatbot_logger import logger
 from settings import SEARCH_URL
-from urllib.parse import urljoin
+from utils.pdf_reader import read_pdf_from_url
 
 dotenv.load_dotenv()
 

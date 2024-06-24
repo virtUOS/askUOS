@@ -1,15 +1,16 @@
 # run---> streamlit run streamlit_chat.py
 
 
-import streamlit as st
-from chatbot_log.chatbot_logger import logger
 import time
-from streamlit import session_state
-# from agents.agent_openai_tools import CampusManagementOpenAIToolsAgent, agent_executor
-from agents.agent_openai_tools import  agent_executor
-from utils.prompt import get_prompt
-from utils.pdf_reader import open_pdf_as_binary, extract_pdf_url
 
+import streamlit as st
+from streamlit import session_state
+
+# from agents.agent_openai_tools import CampusManagementOpenAIToolsAgent, agent_executor
+from agents.agent_openai_tools import agent_executor
+from chatbot_log.chatbot_logger import logger
+from utils.pdf_reader import extract_pdf_url, open_pdf_as_binary
+from utils.prompt import get_prompt
 
 # create an instance of the agent executor
 # TODO every time the users interacts with the chatbot, all the script  re-runS. This is not efficient. CACHE THE AGENT EXECUTOR???

@@ -31,7 +31,7 @@ class AgentExecutorTest(unittest.TestCase):
     
     def test_output(self):
         agent_executor = CampusManagementOpenAIToolsAgent.run()
-        print('hi')
+       
         response = agent_executor("can I study Biology?")
    
         

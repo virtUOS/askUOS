@@ -1,35 +1,36 @@
-from typing import Optional, List, Dict, Any, Tuple
-from langchain_core.pydantic_v1 import BaseModel, Field
-from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain.tools.retriever import create_retriever_tool
-from langchain.tools import Tool
-from langchain_openai import ChatOpenAI
-from tools.search_web_tool import  SearchUniWeb
-from langchain.memory import ConversationBufferMemory
-import streamlit as st
-from langchain.chains.conversation.memory import ConversationBufferWindowMemory
-from utils.language import prompt_language
-from settings import SERVICE, OPEN_AI_MODEL
-from db.vector_store import retriever
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.memory import BaseMemory
-from langchain_core.tools import BaseTool
-from langchain_core.agents import AgentActionMessageLog, AgentFinish
-from langchain.agents.format_scratchpad import format_to_openai_function_messages
 import json
-from langchain.memory.utils import get_prompt_input_key
-from langchain_core.utils.function_calling import convert_to_openai_tool
-from langchain_core.runnables import Runnable, RunnablePassthrough
-from langchain.agents.format_scratchpad.openai_tools import (
-    format_to_openai_tool_messages,
-)
-from langchain.agents import load_tools
-from tools.uni_application_tool import application_instructions
-import streamlit as st
-from utils.prompt import get_prompt
 from json import JSONDecodeError
-from langchain_core.exceptions import OutputParserException
+from typing import Any, Dict, List, Optional, Tuple
 
+import streamlit as st
+from langchain.agents import (AgentExecutor, create_openai_tools_agent,
+                              load_tools)
+from langchain.agents.format_scratchpad import \
+    format_to_openai_function_messages
+from langchain.agents.format_scratchpad.openai_tools import \
+    format_to_openai_tool_messages
+from langchain.chains.conversation.memory import ConversationBufferWindowMemory
+from langchain.memory import ConversationBufferMemory
+from langchain.memory.utils import get_prompt_input_key
+from langchain.tools import Tool
+from langchain.tools.retriever import create_retriever_tool
+from langchain_core.agents import AgentActionMessageLog, AgentFinish
+from langchain_core.callbacks import StdOutCallbackHandler
+from langchain_core.exceptions import OutputParserException
+from langchain_core.memory import BaseMemory
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.pydantic_v1 import BaseModel, Field
+from langchain_core.runnables import Runnable, RunnablePassthrough
+from langchain_core.tools import BaseTool
+from langchain_core.utils.function_calling import convert_to_openai_tool
+from langchain_openai import ChatOpenAI
+
+from db.vector_store import retriever
+from settings import OPEN_AI_MODEL, SERVICE
+from tools.search_web_tool import SearchUniWeb
+from tools.uni_application_tool import application_instructions
+from utils.language import prompt_language
+from utils.prompt import get_prompt
 
 # Define the prompt text based on the selected language
 if "selected_language" in st.session_state:
@@ -129,12 +130,81 @@ class CustomSaveMemory(ConversationBufferWindowMemory):
 
 
         
+class CampusManagementOpenAIToolsAgentBuilder:
+    """
+    Builder class that creates the objects needed to create the CampusManagementOpenAIToolsAgent.
+    """
+    def __init__(self):
+        self._prompt = None
+        self._llm = None
+        self._tools = None
+        self._memory = None
 
+    def set_prompt(self, prompt: ChatPromptTemplate) -> 'CampusManagementOpenAIToolsAgentBuilder':
+        self._prompt = prompt
+        return self
+
+    def set_llm(self, llm: ChatOpenAI) -> 'CampusManagementOpenAIToolsAgentBuilder':
+        self._llm = llm
+        return self
+
+    def set_tools(self, tools: List[BaseTool]) -> 'CampusManagementOpenAIToolsAgentBuilder':
+        self._tools = tools
+        return self
+
+    def set_memory(self, memory: BaseMemory) -> 'CampusManagementOpenAIToolsAgentBuilder':
+        self._memory = memory
+        return self
+
+    def build(self) -> 'CampusManagementOpenAIToolsAgent':
+        prompt = self._prompt or CampusManagementOpenAIToolsAgentBuilder.create_prompt()
+        llm = self._llm or CampusManagementOpenAIToolsAgentBuilder.create_llm()
+        tools = self._tools or CampusManagementOpenAIToolsAgentBuilder.create_tools()
+        memory = self._memory or CampusManagementOpenAIToolsAgentBuilder.create_memory()
+        return CampusManagementOpenAIToolsAgent(prompt, llm, tools, memory)
+
+    @staticmethod
+    def create_prompt() -> ChatPromptTemplate:
+        from utils.prompt import get_prompt
+        from utils.prompt_text import prompt_text_english as prompt_text
+        return get_prompt(prompt_text)
+
+    @staticmethod
+    def create_llm() -> ChatOpenAI:
+        handler = StdOutCallbackHandler()
+        return ChatOpenAI(model=OPEN_AI_MODEL, temperature=0, callbacks=[handler])
+
+    @staticmethod
+    def create_tools() -> List[BaseTool]:
+        return [
+            create_retriever_tool(
+                retriever,
+                "technical_troubleshooting_questions",
+                prompt_language()['description_technical_troubleshooting'],
+            ),
+            Tool(
+                name='custom_university_web_search',
+                func=SearchUniWeb.run(SERVICE),
+                description=prompt_language()['description_university_web_search'],
+                handle_tool_errors=True
+            ),
+        ]
+
+    @staticmethod
+    def create_memory() -> BaseMemory:
+        return CustomSaveMemory(memory_key="chat_history", return_messages=True, k=5)
 
 
 class CampusManagementOpenAIToolsAgent:
     """
     A class representing an agent for campus management using OpenAI tools.
+    
+    Args:
+            prompt (Optional[ChatPromptTemplate]): The chat prompt template.
+            llm (Optional[ChatOpenAI]): The language model used by the agent.
+            tools (Optional[list[BaseTool]]): The list of tools used by the agent.
+            memory (Optional[BaseMemory]): The memory used by the agent.
+            
 
     Example:
 
@@ -145,186 +215,59 @@ class CampusManagementOpenAIToolsAgent:
 
     """
 
-    def __init__(self,
-                 prompt: Optional[ChatPromptTemplate] =None,
-                 llm: Optional[ChatOpenAI]=None, 
-                 memory: Optional[BaseMemory]=None,
-                 tools:  Optional[list [BaseTool]]=None):
-        """
-        Initialize the CampusManagementOpenAIToolsAgent.
-
-        Args:
-            prompt (Optional[ChatPromptTemplate]): The chat prompt template.
-            llm (Optional[ChatOpenAI]): The language model used by the agent.
-            memory (Optional[BaseMemory]): The memory used by the agent.
-            tools (Optional[list[BaseTool]]): The list of tools used by the agent.
-        """
+    def __init__(self, prompt: ChatPromptTemplate, llm: ChatOpenAI, tools: List[BaseTool], memory: BaseMemory):
         self.prompt = prompt
-        self.llm = llm 
+        self.llm = llm
         self.tools = tools
         self.memory = memory
         self._create_agent_executor()
 
-    @property
-    def prompt(self):
-        """
-        Get the chat prompt template.
-        """
-        return self._prompt
-
-    @prompt.setter
-    def prompt(self, value):
-        """
-        Set the chat prompt template.
-
-        Args:
-            value: The chat prompt template.
-        """
-        if value:
-            self._prompt = value
-        else:
-          
-            from utils.prompt import get_prompt
-            from utils.prompt_text import prompt_text_english as prompt_text
-            prompt=get_prompt(prompt_text)
-            self._prompt = prompt
-    
-    @property
-    def llm(self):
-        """
-        Get the language model used by the agent.
-        """
-        return self._llm
-
-    @llm.setter
-    def llm(self, value):
-        """
-        Set the language model used by the agent.
-
-        Args:
-            value: The language model used by the agent.
-        """
-        if value:
-            self._llm = value
-        else:
-            from langchain_core.callbacks import StdOutCallbackHandler
-            handler = StdOutCallbackHandler()
-            self._llm = ChatOpenAI(model=OPEN_AI_MODEL, temperature=0, callbacks=[handler])   
-    
-    @property
-    def tools(self):
-        """
-        Get the list of tools used by the agent.
-        """
-        return self._tools
-
-    @tools.setter
-    def tools(self, value):
-        """
-        Set the list of tools used by the agent.
-
-        Args:
-            value: The list of tools used by the agent.
-        """
-        if value:
-            self._tools = value
-        else:
-
-            self._tools =[
-                    create_retriever_tool(
-                    retriever,
-                    "technical_troubleshooting_questions",
-                    prompt_language()['description_technical_troubleshooting'],
-                ), 
-                Tool(
-                    name='custom_university_web_search',
-                    func=SearchUniWeb.run(SERVICE),
-                    description=prompt_language()['description_university_web_search'],
-                    handle_tool_errors=True
-                ),
-                
-                ]
-    
-    @property
-    def memory(self):
-        """
-        Get the memory used by the agent.
-        """
-        return self._memory
-
-    @memory.setter
-    def memory(self, memory):
-        """
-        Set the memory used by the agent.
-
-        Args:
-            memory: The memory used by the agent.
-        """
-        if memory:
-            self._memory = memory
-        else:
-            self._memory = CustomSaveMemory(memory_key="chat_history", return_messages=True, k=5)
-            #self._memory = ConversationBufferWindowMemory(memory_key="chat_history", return_messages=True, k=5)
-  
     def _create_agent_executor(self):
-        """
-        Creates the agent executor for the agent.
-        """
-        agent = create_openai_tools_agent(self._llm, self._tools, self._prompt)
-
+        agent = create_openai_tools_agent(self.llm, self.tools, self.prompt)
         
-        llm_with_tools = self._llm.bind_functions([self._tools[0],self._tools[1],load_tools(["human"])[0], Response])
+        # TODO MAKE THIS GENERAL
+        llm_with_tools = self.llm.bind_functions([self.tools[0], self.tools[1], load_tools(["human"])[0], Response])
 
-            
-        agent = (   # prompt input_variables=['input', 'chat_history', 'agent_scratchpad']
-                    {
-                        "input": lambda x: x["input"],
-                        "chat_history": lambda x: x["chat_history"],
-                        # Format agent scratchpad from intermediate steps
-                        "agent_scratchpad": lambda x: format_to_openai_function_messages(
-                            x["intermediate_steps"]
-                        ),
-                    }
-                    | self._prompt
-                    | llm_with_tools
-                    | parse
-                )
-                   
+        agent = (
+            {
+                "input": lambda x: x["input"],
+                "chat_history": lambda x: x["chat_history"],
+                "agent_scratchpad": lambda x: format_to_openai_function_messages(
+                    x["intermediate_steps"]
+                ),
+            }
+            | self.prompt
+            | llm_with_tools
+            | parse
+        )
 
-        self._agent_executor = AgentExecutor(agent=agent,
-                               tools=self._tools,
-                               return_intermediate_steps=True,
-                               verbose=True,
-                               memory=self._memory,
-                               handle_parsing_errors=True,
-                               max_execution_time=30, # Agent stops after 20 seconds
-                               )
- 
+        self._agent_executor = AgentExecutor(
+            agent=agent,
+            tools=self.tools,
+            return_intermediate_steps=True,
+            verbose=True,
+            memory=self.memory,
+            handle_parsing_errors=True,
+            max_execution_time=30,  # Agent stops after 20 seconds
+        )
+
     def __call__(self, input: str):
-        """
-        Invoke the agent with the given input.
-
-        Args:
-            input: The input to the agent.
-
-        Returns:
-            The response from the agent.
-        """
         response = self._agent_executor.invoke({"input": input})
         return response
 
     @classmethod
-    def run(cls,**kwargs):
-        """
-        Run the agent with the given keyword arguments.
+    def run(cls, **kwargs):
+        builder = CampusManagementOpenAIToolsAgentBuilder()
+        if 'prompt' in kwargs:
+            builder.set_prompt(kwargs['prompt'])
+        if 'llm' in kwargs:
+            builder.set_llm(kwargs['llm'])
+        if 'tools' in kwargs:
+            builder.set_tools(kwargs['tools'])
+        if 'memory' in kwargs:
+            builder.set_memory(kwargs['memory'])
+        return builder.build()
 
-        Args:
-            kwargs: The keyword arguments.
-
-        Returns:
-            The instance of the agent.
-        """
-        return cls(**kwargs)
 
 
 
@@ -368,28 +311,193 @@ if __name__ == "__main__":
     print()
         
     
+
+
+
+# class CampusManagementOpenAIToolsAgent:
+
+
+#     def __init__(self,
+#                  prompt: Optional[ChatPromptTemplate] =None,
+#                  llm: Optional[ChatOpenAI]=None, 
+#                  memory: Optional[BaseMemory]=None,
+#                  tools:  Optional[list [BaseTool]]=None):
+#         """
+#         Initialize the CampusManagementOpenAIToolsAgent.
+
+        
+#         """
+#         self.prompt = prompt
+#         self.llm = llm 
+#         self.tools = tools
+#         self.memory = memory
+#         self._create_agent_executor()
+
+#     @property
+#     def prompt(self):
+#         """
+#         Get the chat prompt template.
+#         """
+#         return self._prompt
+
+#     @prompt.setter
+#     def prompt(self, value):
+#         """
+#         Set the chat prompt template.
+
+#         Args:
+#             value: The chat prompt template.
+#         """
+#         if value:
+#             self._prompt = value
+#         else:
+          
+#             from utils.prompt import get_prompt
+#             from utils.prompt_text import prompt_text_english as prompt_text
+#             prompt=get_prompt(prompt_text)
+#             self._prompt = prompt
+    
+#     @property
+#     def llm(self):
+#         """
+#         Get the language model used by the agent.
+#         """
+#         return self._llm
+
+#     @llm.setter
+#     def llm(self, value):
+#         """
+#         Set the language model used by the agent.
+
+#         Args:
+#             value: The language model used by the agent.
+#         """
+#         if value:
+#             self._llm = value
+#         else:
+#             from langchain_core.callbacks import StdOutCallbackHandler
+#             handler = StdOutCallbackHandler()
+#             self._llm = ChatOpenAI(model=OPEN_AI_MODEL, temperature=0, callbacks=[handler])   
+    
+#     @property
+#     def tools(self):
+#         """
+#         Get the list of tools used by the agent.
+#         """
+#         return self._tools
+
+#     @tools.setter
+#     def tools(self, value):
+#         """
+#         Set the list of tools used by the agent.
+
+#         Args:
+#             value: The list of tools used by the agent.
+#         """
+#         if value:
+#             self._tools = value
+#         else:
+
+#             self._tools =[
+#                     create_retriever_tool(
+#                     retriever,
+#                     "technical_troubleshooting_questions",
+#                     prompt_language()['description_technical_troubleshooting'],
+#                 ), 
+#                 Tool(
+#                     name='custom_university_web_search',
+#                     func=SearchUniWeb.run(SERVICE),
+#                     description=prompt_language()['description_university_web_search'],
+#                     handle_tool_errors=True
+#                 ),
+                
+#                 ]
+    
+#     @property
+#     def memory(self):
+#         """
+#         Get the memory used by the agent.
+#         """
+#         return self._memory
+
+#     @memory.setter
+#     def memory(self, memory):
+#         """
+#         Set the memory used by the agent.
+
+#         Args:
+#             memory: The memory used by the agent.
+#         """
+#         if memory:
+#             self._memory = memory
+#         else:
+#             self._memory = CustomSaveMemory(memory_key="chat_history", return_messages=True, k=5)
+#             #self._memory = ConversationBufferWindowMemory(memory_key="chat_history", return_messages=True, k=5)
+  
+#     def _create_agent_executor(self):
+#         """
+#         Creates the agent executor for the agent.
+#         """
+#         agent = create_openai_tools_agent(self._llm, self._tools, self._prompt)
+
+        
+#         llm_with_tools = self._llm.bind_functions([self._tools[0],self._tools[1],load_tools(["human"])[0], Response])
+
+            
+#         agent = (   # prompt input_variables=['input', 'chat_history', 'agent_scratchpad']
+#                     {
+#                         "input": lambda x: x["input"],
+#                         "chat_history": lambda x: x["chat_history"],
+#                         # Format agent scratchpad from intermediate steps
+#                         "agent_scratchpad": lambda x: format_to_openai_function_messages(
+#                             x["intermediate_steps"]
+#                         ),
+#                     }
+#                     | self._prompt
+#                     | llm_with_tools
+#                     | parse
+#                 )
+                   
+
+#         self._agent_executor = AgentExecutor(agent=agent,
+#                                tools=self._tools,
+#                                return_intermediate_steps=True,
+#                                verbose=True,
+#                                memory=self._memory,
+#                                handle_parsing_errors=True,
+#                                max_execution_time=30, # Agent stops after 20 seconds
+#                                )
+ 
+#     def __call__(self, input: str):
+#         """
+#         Invoke the agent with the given input.
+
+#         Args:
+#             input: The input to the agent.
+
+#         Returns:
+#             The response from the agent.
+#         """
+#         response = self._agent_executor.invoke({"input": input})
+#         return response
+
+#     @classmethod
+#     def run(cls,**kwargs):
+#         """
+#         Run the agent with the given keyword arguments.
+
+#         Args:
+#             kwargs: The keyword arguments.
+
+#         Returns:
+#             The instance of the agent.
+#         """
+#         return cls(**kwargs)
+
+
+
+
     
     
-    
-    # from langchain.callbacks import get_openai_callback
-    # from utils.prompt import prompt
 
-
-    # def count_tokens(agent_ex, input):
-    #         with get_openai_callback() as cb:
-    #             result = agent_ex.invoke({'input':input})
-    #             print(f'Spent a total of {cb.total_tokens} tokens')
-
-    #         return result
-
-    
-
-    # response = agent_executor({"input": 'Richtlinie der Universität Osnabrück für die Vergabe von Deutschlandstipendien'}) # should return the pdf
-    # response = agent_executor({"input": 'Abschlussnote Psychologiestudium Osnabrueck'})
-    # # response = count_tokens(agent_executor, 'muss ich das Einverständnis meiner Eltern haben?')
-    # response =agent_executor({"input": 'where is the university'})
-    # response = agent_executor({"input": 'what is the application process'})
-    # response = agent_executor({"input": 'what is the application deadline'})
-    # response = agent_executor({"input": 'how much does it cost?'})
-    print()
 
