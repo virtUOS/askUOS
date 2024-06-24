@@ -138,14 +138,25 @@ class ExtractAndVisitLinksMixin:
                             text = re.sub(r'\n+', '\n', div_content.text.strip())
                             
                             content_with_link = ''
-                            # TODO FIX THE BASE URL AS IT CAN CHANGE
-                            base_url = 'https://www.lili.uni-osnabrueck.de'
+                    
                             for link in div_content.find_all('a', href=True):
                                 text = re.sub(r'\n+', '\n', link.text.strip())  # Extract the text
-                                url = urljoin(base_url, link['href'])  # Resolve the relative URL to absolute
-                                content_with_link += f" - {text}: {url}"  # Combine the text and the link
+                                content_with_link += f" - {text}: {link['href']}"  # Combine the text and the link
                             
-                            text += 'Links found in the text:  ' + content_with_link
+                            text += '\nHref found in the text:\n' + content_with_link
+                            
+                            
+                            
+                            # base_url = 'https://www.lili.uni-osnabrueck.de'
+                            # for link in div_content.find_all('a', href=True):
+                            #     text = re.sub(r'\n+', '\n', link.text.strip())  # Extract the text
+                            #     url = urljoin(base_url, link['href'])  # Resolve the relative URL to absolute
+                            #     content_with_link += f" - {text}: {url}"  # Combine the text and the link
+                            
+                            # text += 'Links found in the text:  ' + content_with_link
+                            
+                            
+                            
                             
                             contents.append(text)
                         else:

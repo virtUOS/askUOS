@@ -9,7 +9,7 @@ from streamlit import session_state
 # from agents.agent_openai_tools import CampusManagementOpenAIToolsAgent, agent_executor
 from agents.agent_openai_tools import agent_executor
 from chatbot_log.chatbot_logger import logger
-from utils.pdf_reader import extract_pdf_url, open_pdf_as_binary
+from utils.pdf_reader import extract_pdf_with_timeout
 from utils.prompt import get_prompt
 
 # create an instance of the agent executor
@@ -115,17 +115,7 @@ if st.session_state.messages[-1]["role"] != "assistant":
             # TODO handle the case where there are multiple PDF files in the response
             # TODO if pdf is too long to display, provide a download link
             # check if the response contains a PDF file
-            pdf_url, pdf_file_name = extract_pdf_url(response["output"])
-            if pdf_url:
-       
-                pdf_reader = open_pdf_as_binary(pdf_url)
-                if pdf_reader:
-                    st.write('Downloading PDF...')
             
-                    st.download_button(label=f'Download: {pdf_file_name}', 
-                                        data=pdf_reader, 
-                                        file_name=pdf_file_name, 
-                                        mime="application/pdf")
             
             
             if "sources" in response:
@@ -133,6 +123,20 @@ if st.session_state.messages[-1]["role"] != "assistant":
                     with st.expander("Sources"):
                         for source in response['sources']:
                             st.write(f"- {source}")
+            
+            
+            
+            pdf_content, pdf_file_name = extract_pdf_with_timeout(response["output"], 15)
+            # pdf_content, pdf_file_name = extract_pdf_url(response["output"])
+            if pdf_content:
+                
+                st.download_button(label=f'Download: {pdf_file_name}', 
+                                            data=pdf_content, 
+                                            file_name=pdf_file_name, 
+                                            mime="application/pdf")
+                
+            
+            
     
 
     col1,col2,col3,col4 = st.columns([3,3,0.5,0.5])

@@ -2,6 +2,8 @@ import io
 from PyPDF2 import PdfReader
 import requests
 import re
+import concurrent.futures
+from typing import Optional, Tuple
 
 def read_pdf_from_url(response, num_pages=7):
         """
@@ -29,28 +31,63 @@ def read_pdf_from_url(response, num_pages=7):
 
     
 
-def open_pdf_as_binary(pdf_url: str):
-    try:
-        # Send a GET request to the URL to download the PDF file
-        response = requests.get(pdf_url)
-        response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
+# def open_pdf_as_binary(pdf_url: str):
+#     try:
+#         # Send a GET request to the URL to download the PDF file
+#         response = requests.get(pdf_url)
+#         response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
         
-        # Return the binary content of the PDF file
-        return response.content
-    except requests.exceptions.RequestException as e:
-        print(f"Error: Failed to retrieve the PDF file from the URL: {e}")
-        return None
+#         # Return the binary content of the PDF file
+#         return response.content
+#     except requests.exceptions.RequestException as e:
+#         print(f"Error: Failed to retrieve the PDF file from the URL: {e}")
+#         return None
 
 
 def extract_pdf_url(text: str ):
-    # Define a regular expression pattern to match and extract a PDF URL
-    pdf_url_pattern = r'\b(https?://\S+\.pdf)\b'
+    # Regular expression to detect links to PDF files
+    pattern = r'(https?://[^/]+)?(/[^"]*\/([^"/]+\.pdf))'
 
-    # Use re.search to find the pattern in the text
-    match = re.search(pdf_url_pattern, text, re.IGNORECASE)
-    if match:
-        pdf_url = match.group(1)  # Extracted PDF URL
-        pdf_filename = pdf_url.split("/")[-1]  # Extracted PDF file name from the URL
-        return pdf_url, pdf_filename
+    
+    # Default domain
+    default_domain = ['https://www.lili.uni-osnabrueck.de', 'https://www.uni-osnabrueck.de']
+    
+    # Find all matches in the text
+    matches = re.findall(pattern, text)
+    
+    if matches:
+        # TODO if there are multiple PDF files in the response, choose the most relevant one based on the context
+        for match in matches:
+            domain, path, filename = match
+            break
+    
+        if domain is None:
+            
+            for d in default_domain:
+                response = requests.get(d + path)
+                if response.status_code == 404:
+                    continue
+                else:
+                    break
+                
+        else:
+            response = requests.get(domain + path)
     else:
-        return None, None  # Return None for both URL and filename if no PDF URL is found
+        return None, None
+    
+    if response.status_code == 200:
+        return response.content, filename
+    else:
+        return None, None
+        
+        
+# Function to run the extract_pdf_url with a timeout
+def extract_pdf_with_timeout(text: str, timeout: int) -> Tuple[Optional[bytes], Optional[str]]:
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future = executor.submit(extract_pdf_url, text)
+        try:
+            result = future.result(timeout=timeout)
+            return result
+        except concurrent.futures.TimeoutError:
+            print(f"Operation timed out after {timeout} seconds")
+            return None, None
