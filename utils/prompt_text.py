@@ -29,13 +29,13 @@ Question:
     
     """,
 
-    'description_university_web_search': """
+'description_university_web_search': """
     Useful for when you need to answer questions about the University of Osnabrück. For example questions about 
     the application process or studying at the university in general. This tool is also useful to access updated application dates
     and updated dates and contact information. To use this tool successfully, take into account the previous interactions with the user (chat history) and the context of the conversation.
 """,
 
-    'description_technical_troubleshooting':
+'description_technical_troubleshooting':
         """Use this tool to answer technical questions about the application process. This tool is also useful to help the user when they encounter technical problems (troubleshooting) 
          For example, questions about how to use the software
          through which the application is submitted.
@@ -46,6 +46,16 @@ Question:
          
          
          """,
+         
+'response_output_description':'The final answer to respond to the user',  
+'response_sources_description':'The sources used to generate the answer. The sources should consist of a list of URLs. Only include the sources if the answer was extracted from the University of Osnabrück website.',
+         
+         
+         
+         
+         
+         
+         
 }
 
 prompt_text_deutsch = {
@@ -67,7 +77,7 @@ Wenn Sie das Tool custom_university_web_search verwenden, kodieren Sie die Abfra
 4. Detaillierte Antworten: Geben Sie eine plausible Antwort mit einem Hyperlink zu den Unterlagen (falls vorhanden).
 5. Einbindung des Kontexts: Beziehen Sie den zur Verfügung gestellten Kontext und den Chatverlauf (siehe unten) in Ihre Antworten ein und holen Sie gegebenenfalls weitere Informationen vom Benutzer ein, um seine Fragen effektiv zu beantworten.
 6. Einbeziehung des Benutzers: Sie können dem Benutzer Fragen stellen, um bei Bedarf weitere Informationen zu erhalten.
-7. Wenn Sie mehr Informationen über die Frage oder den Kontext des Nutzers benötigen, können Sie den Nutzer um weitere Informationen bitten, dazu können Sie das Human Werkzeug verwenden.
+7. Wenn Sie mehr Informationen über die Frage oder den Kontext des Nutzers benötigen, können Sie den Nutzer um weitere Informationen bitten, dazu können Sie das human Werkzeug verwenden.
 
 Chat-Verlauf:
 {chat_history}
@@ -96,6 +106,9 @@ Verwenden Sie dieses Tool, um technische Fragen zum Bewerbungsverfahren zu beant
  Kann ich Login-Daten aus dem vergangenen Semester benutzen?,
     Wie setze ich mein Passwort zurück?
  
-"""
+""",
+
+'response_output_description':'Die endgültige Antwort, um dem Benutzer zu antworten',
+'response_sources_description':'Die Quellen, die zur Erstellung der Antwort verwendet wurden. Die Quellen sollten aus einer Liste von URLs bestehen. Geben Sie die Quellen nur an, wenn die Antwort von der Website der Universität Osnabrück stammt.',
 
 }

@@ -59,9 +59,9 @@ the thing is that a small K could lead to the agent not being able to remember t
 class Response(BaseModel):
     """Final response to the question being asked"""
 
-    output: str = Field(description="The final answer to respond to the user")
+    output: str = Field(description=prompt_text['response_output_description'])
     sources: List[str] = Field(
-        description="The sources used to find the answer, it should be a list of URLs. Only include this field if the answer is based on external sources obtain from the web"
+        description=prompt_text['response_sources_description']    
     )
 
 
@@ -92,7 +92,7 @@ def parse(message):
     content_msg = f"responded: {message.content}\n" if message.content else "\n"
     log = f"\nInvoking: `{function_name}` with `{tool_input}`\n{content_msg}\n"
 
-    # print(log)
+    print(log)
     # If the Response function was invoked, return to the user with the function inputs
     if function_name == "Response":
         return AgentFinish(return_values=inputs, log=str(function_call))
@@ -182,6 +182,9 @@ class CampusManagementOpenAIToolsAgentBuilder:
                 "technical_troubleshooting_questions",
                 prompt_language()['description_technical_troubleshooting'],
             ),
+            
+            
+            
             Tool(
                 name='custom_university_web_search',
                 func=SearchUniWeb.run(SERVICE),
@@ -223,10 +226,11 @@ class CampusManagementOpenAIToolsAgent:
         self._create_agent_executor()
 
     def _create_agent_executor(self):
-        agent = create_openai_tools_agent(self.llm, self.tools, self.prompt)
+        # agent = create_openai_tools_agent(self.llm, [*self.tools, load_tools(["human"])[0]], self.prompt)
         
         # TODO MAKE THIS GENERAL
-        llm_with_tools = self.llm.bind_functions([self.tools[0], self.tools[1], load_tools(["human"])[0], Response])
+        llm_with_tools = self.llm.bind_functions([*self.tools, load_tools(["human"])[0], Response])
+        # llm_with_tools = self.llm.bind_functions([self.tools[0], self.tools[1], self.tools[2], Response])
 
         agent = (
             {

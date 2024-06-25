@@ -140,8 +140,8 @@ class ExtractAndVisitLinksMixin:
                             content_with_link = ''
                     
                             for link in div_content.find_all('a', href=True):
-                                text = re.sub(r'\n+', '\n', link.text.strip())  # Extract the text
-                                content_with_link += f" - {text}: {link['href']}"  # Combine the text and the link
+                                text_anchor_tag = re.sub(r'\n+', '\n', link.text.strip())  # Extract the text
+                                content_with_link += f" - {text_anchor_tag}: {link['href']}"  # Combine the text and the link
                             
                             text += '\nHref found in the text:\n' + content_with_link
                             
@@ -155,13 +155,11 @@ class ExtractAndVisitLinksMixin:
                             
                             # text += 'Links found in the text:  ' + content_with_link
                             
-                            
-                            
-                            
                             contents.append(text)
                         else:
                             contents.append('Content not found')
                 else:
+                    print(f'Failed to fetch content from the link: {href} ----> response status code: {response.status_code}')
                     contents.append('Failed to fetch content')
             
             # only visit the first two links
