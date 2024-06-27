@@ -158,6 +158,7 @@ class ExtractAndVisitLinksMixin:
                             contents.append(text)
                         else:
                             contents.append('Content not found')
+                            print(f'Failed to fetch content from the link: {href} ----> response status code: {response.status_code}')
                 else:
                     print(f'Failed to fetch content from the link: {href} ----> response status code: {response.status_code}')
                     contents.append('Failed to fetch content')

@@ -34,7 +34,7 @@ start_message = """
 - I am also interested in getting a sense of how often the chatbot is able to provide the correct answer to the user's question.
 
 Kindly note that any information you input or search for in the chat area is sent to OpenAI.
-The Chatbot is powered by gpt-3.5-turbo-1106.
+The Chatbot is powered by gpt-4o.
 """
 
 if "selected_language" in st.session_state:
@@ -50,7 +50,7 @@ if "selected_language" in st.session_state:
 - Ich bin auch daran interessiert, ein Gefühl dafür zu bekommen, wie oft der Chatbot in der Lage ist, die richtige Antwort auf die Frage des Benutzers zu geben.
 
 Bitte beachten Sie, dass alle Informationen, die Sie in den Chatbereich eingeben oder nach denen Sie suchen, an OpenAI gesendet werden.
-Der Chatbot wird von gpt-3.5-turbo-1106 betrieben.
+Der Chatbot wird von gpt-4o betrieben.
 """
 
 initialize_language()
