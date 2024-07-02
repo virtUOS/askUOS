@@ -90,7 +90,6 @@ def get_feedback(user_query,response,time_taken,rate):
 
 
 # Generate a new response if last message is not from assistant
-# USING THE RETRIEVAL AGENT
 if st.session_state.messages[-1]["role"] != "assistant":
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
@@ -98,24 +97,27 @@ if st.session_state.messages[-1]["role"] != "assistant":
             logger.info(f"User's query: {prompt}")
             # start time
             start_time = time.time()
-            # response = agent_executor({"input": prompt})
+     
+            
+            # chunks = []
+            # for chunk in agent_executor._agent_executor.stream({"input": prompt}):
+            #     chunks.append(chunk)
+            #     st.write(chunk)
+            
+            
+            # streaming is done in CallbackHandlerStreaming
             response = agent_executor(prompt)
             # response = agent.invoke({"input": prompt})
             # end time
             end_time = time.time()
             time_taken = end_time - start_time
             logger.info(f"Time taken to generate a response: {time_taken} seconds")
-            # response = agent.invoke({"input": prompt}, config={"configurable": {"session_id": "<message_history>"}},)
-            # response = agent.run({"input": prompt})
-
-            # print(response["intermediate_steps"])
+         
             
-            # TODO query to trigger pdf 'Transponder beantragen' or 'Anmeldeformular Masterarbeit Universität Osnabrück'  'can i use Microsoft Edge for the application?'
-            st.write(response["output"])
+            # TODO query to trigger pdf 'Transponder beantragen' or 'Anmeldeformular Masterarbeit Universität Osnabrück' 
             # TODO handle the case where there are multiple PDF files in the response
             # TODO if pdf is too long to display, provide a download link
             # check if the response contains a PDF file
-            
             
             
             if "sources" in response:
@@ -137,7 +139,6 @@ if st.session_state.messages[-1]["role"] != "assistant":
                 
             
             
-    
 
     col1,col2,col3,col4 = st.columns([3,3,0.5,0.5])
     with col3:
@@ -155,13 +156,3 @@ if st.session_state.messages[-1]["role"] != "assistant":
     message = {"role": "assistant", "content": response["output"]}
     st.session_state.messages.append(message)
 
-# Generate a new response if last message is not from assistant
-
-# USING THE CHAIN
-# if st.session_state.messages[-1]["role"] != "assistant":
-#     with st.chat_message("assistant"):
-#         with st.spinner("Thinking..."):
-#             response = GetAnswer.predict(prompt)
-#             st.write(response)
-#     message = {"role": "assistant", "content": response}
-#     st.session_state.messages.append(message)
