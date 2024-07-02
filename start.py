@@ -35,7 +35,7 @@ start_message = """
 Kindly note that any information you input or search for in the chat area is sent to OpenAI.
 The Chatbot is powered by gpt-4o.
 
-Have any question? [Email Me](mailto: yecanocastro@uos.de)
+Have any question? Email me at yecanocastro@uos.de
 
 """
 
@@ -53,7 +53,7 @@ if "selected_language" in st.session_state:
 Bitte beachten Sie, dass alle Informationen, die Sie in den Chatbereich eingeben oder nach denen Sie suchen, an OpenAI gesendet werden.
 Der Chatbot wird von gpt-4o betrieben.
 
-Bei Fragen, melde dich bei mir [Email Me](mailto: yecanocastro@uos.de)
+Bei Fragen, melde Dich über die Mail yecanocastro@uos.de
 """
 
 initialize_language()
