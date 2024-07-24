@@ -8,6 +8,9 @@ import pickle
 from langchain_community.vectorstores import Chroma
 import os
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
+import chromadb
+from chromadb.config import Settings
+import argparse
 
 EXTRACT_FROM_WEBSITE = False
 
@@ -103,28 +106,40 @@ def split_embed_to_db(links=None, path_doc=None):
     return documents
 
 # load or create db
-db = Chroma(persist_directory="./data/chroma_index", embedding_function=embeddings)
+# db = Chroma(persist_directory="./chromadb/chroma_index", embedding_function=embeddings)
+
+client = chromadb.HttpClient(settings=Settings(allow_reset=True))
+
+db = Chroma(client=client, embedding_function=embeddings)
 
 # prepare documents for embedding
 if __name__ == "__main__":
-
-    if EXTRACT_FROM_WEBSITE:
-            links = get_links_from_pickle('data/links.pickle')
-            documents = split_embed_to_db(links=list(links))
-            print(f'embedding model: {embeddings}')
-            if documents:
-                db.add_documents(documents)
-    else:
-            for filename in os.listdir('data/documents/'):
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--create_db', type=str, default='false', help='Flag to create the database')
+    args = parser.parse_args()
+    
+    if args.create_db.lower() == 'true':
+    
+        if EXTRACT_FROM_WEBSITE:
+                links = get_links_from_pickle('data/links.pickle')
+                documents = split_embed_to_db(links=list(links))
                 print(f'embedding model: {embeddings}')
-                file_path = os.path.join('data/documents/', filename)
-                if os.path.isfile(file_path):
-                    print(f'embedding: {filename}')
-                    documents = split_embed_to_db(path_doc=file_path)
-                    if documents:
-                        db.add_documents(documents)
+                if documents:
+                    db.add_documents(documents)
+        else:
+                for filename in os.listdir('data/documents/'):
+                    print(f'embedding model: {embeddings}')
+                    file_path = os.path.join('data/documents/', filename)
+                    if os.path.isfile(file_path):
+                        print(f'embedding: {filename}')
+                        documents = split_embed_to_db(path_doc=file_path)
+                        if documents:
+                            db.add_documents(documents)
 
-    print('DB created')
+        print('DB created')
+    else:
+        print('DB loaded from disk')
 
 
 

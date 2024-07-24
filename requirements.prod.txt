@@ -12,4 +12,3 @@ langchain-openai
 selenium==4.18.1
 pypdf===4.0.1
 PyPDF2
-uvicorn

@@ -1,0 +1,40 @@
+networks:
+  net:
+    driver: bridge
+    
+services:
+  app:
+    image: langchain-streamlit-agent
+    build: .
+    command: streamlit run start.py --server.port 8501
+    env_file:
+      - .env.dev
+    volumes:
+      - .:/app
+    ports:
+      - "8501:8501"
+    depends_on:
+      chromadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://chromadb:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks: 
+      - net 
+
+  chromadb:
+    image: chromadb/chroma:latest
+    command: uvicorn chromadb.app:app --reload --workers 1 --host 0.0.0.0 --port 8000 --log-config log_config.yml
+    environment:
+      - IS_PERSISTENT=true
+      - ALLOW_RESET=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma # this is the default path
+      - ANONYMIZED_TELEMETRY=${ANONYMIZED_TELEMETRY:-TRUE}
+    ports:
+      - "8000:8000"
+    networks:
+      - net
+
+
