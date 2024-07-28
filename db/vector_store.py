@@ -30,10 +30,21 @@ EXTRACT_FROM_WEBSITE = False
 
 # embeddings = OllamaEmbeddings(model="llama2:13b", show_progress=True)
 #https://python.langchain.com/docs/integrations/text_embedding/fastembed
-embeddings = FastEmbedEmbeddings(
-    model_name='intfloat/multilingual-e5-large'
-)
+# embeddings = FastEmbedEmbeddings(
+#     model_name='intfloat/multilingual-e5-large'
+# )
 
+
+# load or create db
+# db = Chroma(persist_directory="./chromadb/chroma_index", embedding_function=embeddings)
+
+try:
+    client = chromadb.HttpClient(host='chromadb',settings=Settings(allow_reset=True))
+except:
+    client = chromadb.HttpClient(settings=Settings(allow_reset=True))
+
+db = Chroma(client=client)
+# db = Chroma(client=client, embedding_function=embeddings)
 
 def get_links_from_pickle (path_to_pickle):
     with open(path_to_pickle, 'rb') as f:
@@ -105,14 +116,9 @@ def split_embed_to_db(links=None, path_doc=None):
 
     return documents
 
-# load or create db
-# db = Chroma(persist_directory="./chromadb/chroma_index", embedding_function=embeddings)
 
-client = chromadb.HttpClient(settings=Settings(allow_reset=True))
 
-db = Chroma(client=client, embedding_function=embeddings)
 
-# prepare documents for embedding
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
