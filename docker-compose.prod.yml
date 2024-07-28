@@ -10,8 +10,6 @@ services:
     command: streamlit run ./src/start.py --server.port 8501
     env_file:
       - .env.prod
-    volumes:
-      - .:/app
     ports:
       - "8501:8501"
     depends_on:
