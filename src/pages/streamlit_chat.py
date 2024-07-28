@@ -7,10 +7,10 @@ import streamlit as st
 from streamlit import session_state
 
 # from agents.agent_openai_tools import CampusManagementOpenAIToolsAgent, agent_executor
-from agents.agent_openai_tools import agent_executor
+from chatbot.agents.agent_openai_tools import agent_executor
 from chatbot_log.chatbot_logger import logger
-from utils.pdf_reader import extract_pdf_with_timeout
-from utils.prompt import get_prompt
+from chatbot.utils.pdf_reader import extract_pdf_with_timeout
+from chatbot.utils.prompt import get_prompt
 
 # create an instance of the agent executor
 # TODO every time the users interacts with the chatbot, all the script  re-runS. This is not efficient. CACHE THE AGENT EXECUTOR???
@@ -26,12 +26,12 @@ start_message = "How may I help you?"
 if "selected_language" in st.session_state:
     if st.session_state["selected_language"] == 'Deutsch':
         start_message = "Wie kann ich Ihnen helfen?"
-        from utils.prompt_text import prompt_text_deutsch as prompt_text
+        from chatbot.utils.prompt_text import prompt_text_deutsch as prompt_text
     else:
-        from utils.prompt_text import prompt_text_english as prompt_text
+        from chatbot.utils.prompt_text import prompt_text_english as prompt_text
 else:
 
-    from utils.prompt_text import prompt_text_english as prompt_text
+    from chatbot.utils.prompt_text import prompt_text_english as prompt_text
 
 
 # agent_executor = CampusManagementOpenAIToolsAgent.run(prompt=get_prompt(prompt_text))

@@ -12,5 +12,3 @@ python3 vector_store.py --create_db true
 
 cd ..
 
-# Start Gunicorn server
-exec "$@"

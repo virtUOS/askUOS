@@ -25,12 +25,12 @@ from langchain_core.tools import BaseTool
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from langchain_openai import ChatOpenAI
 from langchain.callbacks.streaming_stdout_final_only import FinalStreamingStdOutCallbackHandler
-from db.vector_store import retriever
-from settings import OPEN_AI_MODEL, SERVICE
+from chatbot.db.vector_store import retriever
+from config.settings import OPEN_AI_MODEL, SERVICE
 # from tools.search_web_tool import SearchUniWeb
-from tools.uni_application_tool import application_instructions
-from utils.language import prompt_language
-from utils.prompt import get_prompt
+from chatbot.tools.uni_application_tool import application_instructions
+from chatbot.utils.language import prompt_language
+from chatbot.utils.prompt import get_prompt
 import sys
 from langchain_core.callbacks import StreamingStdOutCallbackHandler
 from langchain_core.messages.base import BaseMessage
@@ -39,11 +39,11 @@ from langchain_core.messages.base import BaseMessage
 # Define the prompt text based on the selected language
 if "selected_language" in st.session_state:
     if st.session_state["selected_language"] == 'English':
-        from utils.prompt_text import prompt_text_english as prompt_text
+        from chatbot.utils.prompt_text import prompt_text_english as prompt_text
     elif st.session_state["selected_language"] == 'Deutsch':
-        from utils.prompt_text import prompt_text_deutsch as prompt_text
+        from chatbot.utils.prompt_text import prompt_text_deutsch as prompt_text
 else:
-    from utils.prompt_text import prompt_text_english as prompt_text
+    from chatbot.utils.prompt_text import prompt_text_english as prompt_text
 
 
 
@@ -194,8 +194,8 @@ class CampusManagementOpenAIToolsAgentBuilder:
 
     @staticmethod
     def create_prompt() -> ChatPromptTemplate:
-        from utils.prompt import get_prompt
-        from utils.prompt_text import prompt_text_english as prompt_text
+        from chatbot.utils.prompt import get_prompt
+        from chatbot.utils.prompt_text import prompt_text_english as prompt_text
         return get_prompt(prompt_text)
 
     @staticmethod
@@ -209,7 +209,7 @@ class CampusManagementOpenAIToolsAgentBuilder:
 
     @staticmethod
     def create_tools() -> List[BaseTool]:
-        from tools.search_web_tool import search_uni_web
+        from chatbot.tools.search_web_tool import search_uni_web
         from langchain.tools.base import StructuredTool
         return [
             create_retriever_tool(

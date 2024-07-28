@@ -5,7 +5,7 @@ from time import sleep
 from dotenv import load_dotenv
 import streamlit as st
 from streamlit import session_state
-from utils.language import  initialize_language
+from chatbot.utils.language import  initialize_language
 
 load_dotenv()
 

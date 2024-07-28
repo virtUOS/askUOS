@@ -52,10 +52,10 @@ def prompt_language():
 
     if "selected_language" in st.session_state:
         if st.session_state["selected_language"] == 'English':
-            from utils.prompt_text import prompt_text_english as prompt_text
+            from chatbot.utils.prompt_text import prompt_text_english as prompt_text
         elif st.session_state["selected_language"] == 'Deutsch':
-            from utils.prompt_text import prompt_text_deutsch as prompt_text
+            from chatbot.utils.prompt_text import prompt_text_deutsch as prompt_text
     else:
-        from utils.prompt_text import prompt_text_english as prompt_text
+        from chatbot.utils.prompt_text import prompt_text_english as prompt_text
     
     return prompt_text

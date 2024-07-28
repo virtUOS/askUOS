@@ -6,7 +6,8 @@ networks:
     
 services:
   app:
-    image: langchain-streamlit-agent
+    image: langchain-streamlit-agent-prod
+    container_name: langchain-streamlit-agent-container-prod
     build: ./Dockerfile.prod
     command: streamlit run start.py --server.port 8501
     env_file:
@@ -30,7 +31,7 @@ services:
     image: chromadb/chroma:latest
     volumes:
       - chromadb:/chroma/chroma
-    command: uvicorn chromadb.app:app --reload --workers 1 --host 0.0.0.0 --port 8000 --log-config log_config.yml
+    # command: uvicorn chromadb.app:app --reload --workers 1 --host 0.0.0.0 --port 8000 --log-config log_config.yml
     environment:
       - IS_PERSISTENT=true
       - ALLOW_RESET=TRUE

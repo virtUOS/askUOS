@@ -15,20 +15,18 @@ from langchain_openai import ChatOpenAI
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
-from utils.language import prompt_language
+from chatbot.utils.language import prompt_language
 from chatbot_log.chatbot_logger import logger
-from settings import SEARCH_URL
-from utils.pdf_reader import read_pdf_from_url
+from config.settings import SEARCH_URL, SERVICE
+from chatbot.utils.pdf_reader import read_pdf_from_url
 from pydantic import BaseModel,  Field
 from pydantic_settings import BaseSettings
 from typing import Optional, Type
-from settings import  SERVICE
 dotenv.load_dotenv()
 
 
 
-class SearchUniWebToolSchema(BaseModel):
-    query: str = Field(default="", description="The query to search the university web")
+
 
 
 

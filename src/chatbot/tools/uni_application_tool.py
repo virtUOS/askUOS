@@ -10,12 +10,12 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.prompts import PromptTemplate
 import dotenv
 from chatbot_log.chatbot_logger import logger
-from utils.pdf_reader import read_pdf_from_url
+from chatbot.utils.pdf_reader import read_pdf_from_url
 import os
 from langchain_openai import ChatOpenAI
 from langchain.chains.summarize import load_summarize_chain
 from langchain_core.tools import ToolException
-from settings import SEARCH_URL
+from config.settings import SEARCH_URL
 from urllib.parse import urljoin
 
 dotenv.load_dotenv()
