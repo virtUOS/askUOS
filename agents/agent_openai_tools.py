@@ -27,7 +27,7 @@ from langchain_openai import ChatOpenAI
 from langchain.callbacks.streaming_stdout_final_only import FinalStreamingStdOutCallbackHandler
 from db.vector_store import retriever
 from settings import OPEN_AI_MODEL, SERVICE
-from tools.search_web_tool import SearchUniWeb
+# from tools.search_web_tool import SearchUniWeb
 from tools.uni_application_tool import application_instructions
 from utils.language import prompt_language
 from utils.prompt import get_prompt
@@ -209,6 +209,8 @@ class CampusManagementOpenAIToolsAgentBuilder:
 
     @staticmethod
     def create_tools() -> List[BaseTool]:
+        from tools.search_web_tool import search_uni_web
+        from langchain.tools.base import StructuredTool
         return [
             create_retriever_tool(
                 retriever,
@@ -218,9 +220,9 @@ class CampusManagementOpenAIToolsAgentBuilder:
             
             
             
-            Tool(
+            StructuredTool.from_function(
                 name='custom_university_web_search',
-                func=SearchUniWeb.run(SERVICE),
+                func=search_uni_web,
                 description=prompt_language()['description_university_web_search'],
                 handle_tool_errors=True
             ),
