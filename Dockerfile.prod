@@ -10,8 +10,6 @@ RUN apt-get update && apt-get install -y \
     wget \
     firefox-esr
 
-
-# install dependencies
 RUN pip install --upgrade pip
 COPY ./requirements.prod.txt .
 RUN pip install -r requirements.prod.txt
@@ -25,25 +23,10 @@ RUN wget https://github.com/mozilla/geckodriver/releases/download/v0.34.0/geckod
 # Clean up
 RUN rm geckodriver-v0.34.0-linux64.tar.gz
 
-# copy entrypoint.sh
-# COPY ./entrypoint.sh .
-# Ensure that the entrypoint script is executable
-# RUN sed -i 's/\r$//g'  /app/entrypoint.sh 
-# RUN chmod +x /app/entrypoint.sh
-
 # Copy the rest of the application code into the container
 COPY . .
-
-
 
 # Expose the port that Streamlit will run on
 EXPOSE 8501
 
-# ENTRYPOINT ["./entrypoint.sh"]
-
-# Run the Python script within the db directory
-# RUN cd db && python3 vector_store.py --create_db true
-
-# Command to run the Streamlit app
-# CMD ["streamlit", "run", "start.py"]
 CMD ["sh", "-c", "cd db && python3 vector_store.py --create_db true && cd .. && streamlit run start.py"]

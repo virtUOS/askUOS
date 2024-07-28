@@ -6,7 +6,7 @@ services:
   app:
     build: .
     container_name: langchain-streamlit-agent-container-dev
-    command: streamlit run start.py --server.port 8501
+    command: streamlit run ./src/start.py --server.port 8501
     env_file:
       - .env.dev
     volumes:
