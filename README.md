@@ -44,7 +44,7 @@ You can develop or deploy this application using Docker.
    ```
    docker compose up -d
    ```
-3. To access the ChatBot visit ` http://localhost:8502/`
+3. To access the ChatBot visit ` http://localhost:8501/`
    
 
 

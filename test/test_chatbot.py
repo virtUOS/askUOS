@@ -3,7 +3,7 @@ import sys
 
 # sys.path.append('/Users/yesidcano/repos/chatbot/')
 
-from agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.evaluation import load_evaluator
 import unittest
