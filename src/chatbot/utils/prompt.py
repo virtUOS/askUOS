@@ -8,10 +8,7 @@ from langchain.prompts.chat import (
 )
 
 
-
-
-def get_prompt(prompt_text: dict[str, str])->ChatPromptTemplate:
-
+def get_prompt(prompt_text: dict[str, str]) -> ChatPromptTemplate:
     """
     Generates a chat prompt template based on the provided prompt text.
 
@@ -22,16 +19,18 @@ def get_prompt(prompt_text: dict[str, str])->ChatPromptTemplate:
         ChatPromptTemplate: The generated chat prompt template.
     """
 
-
     template_messages = [
-    SystemMessagePromptTemplate(prompt=PromptTemplate(input_variables=['input', 'chat_history', 'agent_scratchpad'],
-                                                      template=prompt_text['system_message'])),
-    MessagesPlaceholder(variable_name='chat_history', optional=True),
-    HumanMessagePromptTemplate(prompt=PromptTemplate(input_variables=['input'], template='{input}')),
-    MessagesPlaceholder(variable_name='agent_scratchpad')]
-
+        SystemMessagePromptTemplate(
+            prompt=PromptTemplate(
+                input_variables=["input", "chat_history", "agent_scratchpad"],
+                template=prompt_text["system_message"],
+            )
+        ),
+        MessagesPlaceholder(variable_name="chat_history", optional=True),
+        HumanMessagePromptTemplate(
+            prompt=PromptTemplate(input_variables=["input"], template="{input}")
+        ),
+        MessagesPlaceholder(variable_name="agent_scratchpad"),
+    ]
 
     return ChatPromptTemplate.from_messages(template_messages)
-
-
-
