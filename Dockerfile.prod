@@ -27,6 +27,6 @@ RUN rm geckodriver-v0.34.0-linux64.tar.gz
 COPY . .
 
 # Expose the port that Streamlit will run on
-EXPOSE 8501
+# EXPOSE 8501
 
-CMD ["sh", "-c", "cd db && python3 vector_store.py --create_db true && cd .. && streamlit run start.py"]
+CMD ["sh", "-c", "cd db && python3 vector_store.py --create_db true && cd .. "]

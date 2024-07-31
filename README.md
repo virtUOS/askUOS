@@ -54,7 +54,12 @@ You can develop or deploy this application using Docker.
    ```
    cp .env.prod-example .env.prod
    ```
-2. Start the ChatBot application 
+2. Create a `nginx.conf` file from `nginx.conf-example` and modify it accordingly
+```
+cp ./nginx/nginx.conf.example nginx.conf
+```
+
+3. Start the ChatBot application 
    ```
    docker compose -f docker-compose.prod.yml up
 
