@@ -1,5 +1,7 @@
 import re
 import urllib.parse
+import logging
+
 import dotenv
 import requests
 from bs4 import BeautifulSoup
@@ -10,9 +12,10 @@ from langchain_openai import ChatOpenAI
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
+
+from chatbot.utils.pdf_reader import read_pdf_from_url
 from chatbot_log.chatbot_logger import logger
 from config.settings import SEARCH_URL, SERVICE
-from chatbot.utils.pdf_reader import read_pdf_from_url
 
 dotenv.load_dotenv()
 

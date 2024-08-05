@@ -46,7 +46,7 @@ You can develop or deploy this application using Docker.
    ```
 3. To access the ChatBot visit ` http://localhost:8501/`
    
-
+**Note:** If you run the application without Docker; you need to set up a chromadb server manually. 
 
 #### Production
 
