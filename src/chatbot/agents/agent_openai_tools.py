@@ -1,4 +1,5 @@
 import json
+import sys
 from json import JSONDecodeError
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -8,35 +9,36 @@ from langchain.agents.format_scratchpad import format_to_openai_function_message
 from langchain.agents.format_scratchpad.openai_tools import (
     format_to_openai_tool_messages,
 )
+from langchain.callbacks.streaming_stdout_final_only import (
+    FinalStreamingStdOutCallbackHandler,
+)
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 from langchain.memory import ConversationBufferMemory
 from langchain.memory.utils import get_prompt_input_key
 from langchain.tools import Tool
 from langchain.tools.retriever import create_retriever_tool
 from langchain_core.agents import AgentActionMessageLog, AgentFinish
-from langchain_core.callbacks import StdOutCallbackHandler
+from langchain_core.callbacks import (
+    StdOutCallbackHandler,
+    StreamingStdOutCallbackHandler,
+)
 from langchain_core.exceptions import OutputParserException
 from langchain_core.memory import BaseMemory
+from langchain_core.messages.base import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
 from langchain_core.runnables import Runnable, RunnablePassthrough
 from langchain_core.tools import BaseTool
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from langchain_openai import ChatOpenAI
-from langchain.callbacks.streaming_stdout_final_only import (
-    FinalStreamingStdOutCallbackHandler,
-)
+
 from chatbot.db.vector_store import retriever
-from config.settings import OPEN_AI_MODEL, SERVICE
 
 # from tools.search_web_tool import SearchUniWeb
 from chatbot.tools.uni_application_tool import application_instructions
 from chatbot.utils.language import prompt_language
 from chatbot.utils.prompt import get_prompt
-import sys
-from langchain_core.callbacks import StreamingStdOutCallbackHandler
-from langchain_core.messages.base import BaseMessage
-
+from config.settings import OPEN_AI_MODEL, SERVICE
 
 # Define the prompt text based on the selected language
 if "selected_language" in st.session_state:
@@ -173,8 +175,9 @@ class Defaults:
 
     @staticmethod
     def create_tools() -> List[BaseTool]:
-        from chatbot.tools.search_web_tool import search_uni_web
         from langchain.tools.base import StructuredTool
+
+        from chatbot.tools.search_web_tool import search_uni_web
 
         return [
             create_retriever_tool(
