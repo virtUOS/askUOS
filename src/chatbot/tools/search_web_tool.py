@@ -131,8 +131,8 @@ def extract_and_visit_links(rendered_html: str, max_num_links: int = MAX_NUM_LIN
     visited_links = set()
     soup = BeautifulSoup(rendered_html, "html.parser")
     # 'gs-title' is the class attached to the anchor tag that contains the search result (University website search result page)
-    anchor_tags = set(soup.find_all("a", class_="gs-title"))  # the search result links
-
+    anchor_tags = soup.find_all("a", class_="gs-title")  # the search result links
+    # TODO Make sure that the search result links ordered is preserved (Implement test)
     for tag in anchor_tags:
         href = str(tag.get("href"))
         # there could be repeated links
