@@ -125,6 +125,19 @@ def extract_html_text(href: str, response) -> str:
 
 
 def extract_and_visit_links(rendered_html: str, max_num_links: int = MAX_NUM_LINKS):
+    """
+    Extracts and visits links from rendered HTML.
+
+    Args:
+        rendered_html (str): The rendered HTML content.
+        max_num_links (int, optional): The maximum number of links to visit. Defaults to MAX_NUM_LINKS.
+
+    Returns:
+        tuple: A tuple containing the extracted contents and the anchor tags.
+            - The extracted contents as a string. If no contents are found, returns "Content not found".
+            - The anchor tags as a list.
+
+    """
     contents = []
     taken_from = "Information taken from:"
     search_result_text = "Content not found"
@@ -159,7 +172,7 @@ def extract_and_visit_links(rendered_html: str, max_num_links: int = MAX_NUM_LIN
                 if len(visited_links) >= max_num_links:
                     break
 
-    return "\n".join(contents) if contents else search_result_text
+    return "\n".join(contents) if contents else search_result_text, anchor_tags
 
 
 def search_uni_web(query: str) -> str:
@@ -190,7 +203,7 @@ def search_uni_web(query: str) -> str:
         url = SEARCH_URL + query_url
         driver.get(url)
         rendered_html = driver.page_source
-        search_result_text = extract_and_visit_links(rendered_html)
+        search_result_text, _ = extract_and_visit_links(rendered_html)
 
         # TODO use algorithm from my thesis to compute exact number of tokens given length of the search result text
         if len(search_result_text) > 15000:
@@ -207,3 +220,18 @@ def search_uni_web(query: str) -> str:
         return "Error while searching the web"
 
 
+
+
+if __name__ == "__main__":
+    # use for testing/ debugging
+    try:
+        from search_sample import search_sample
+    except ImportError:
+        import sys
+        sys.path.append('./test')
+        from search_sample import search_sample
+        
+    content, anchor_tags= extract_and_visit_links(search_sample)
+    query = "can I study Biology?"
+    search_result = search_uni_web(query)
+    print(search_result)

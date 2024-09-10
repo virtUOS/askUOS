@@ -1,9 +1,11 @@
 import sys
 # print(f'Python version: {sys.path}')
 
-# sys.path.append('/Users/yesidcano/repos/chatbot/')
+sys.path.append('./')
 
 from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
+from src.chatbot.tools.search_web_tool import extract_and_visit_links
+from test.search_sample import search_sample, expected_result
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.evaluation import load_evaluator
 import unittest
@@ -28,6 +30,14 @@ class AgentExecutorTest(unittest.TestCase):
     
     # def setUp(self):
     #     self._agent_executor = CampusManagementOpenAIToolsAgent.run()
+    
+    
+    def test_results_oder(self):
+        
+        search_result_text, anchor_tags = extract_and_visit_links (search_sample)
+        hrefs = [str(tag.get("href")) for tag in anchor_tags]
+        self.assertEqual(hrefs, expected_result, "The anchor tags are not equal.")
+        print()
     
     def test_output(self):
         agent_executor = CampusManagementOpenAIToolsAgent.run()
@@ -63,6 +73,10 @@ class AgentExecutorTest(unittest.TestCase):
         print(f'output: {response["output"]}')
         self.assertGreaterEqual(score['score'], 0, "The value is not greater than or equal to 0.")
         self.assertIn('Biology' or 'biology', response['output'])
+        
+    
+        
+            
         
         
         
