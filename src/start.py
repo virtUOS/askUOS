@@ -2,15 +2,27 @@
 
 import os
 from time import sleep
-from dotenv import load_dotenv
+
 import streamlit as st
-from streamlit import session_state
-from chatbot.utils.language import  initialize_language
+from dotenv import load_dotenv
+
+
+from chatbot.utils.language import initialize_language
 
 load_dotenv()
 
 
-st.set_page_config(page_title="🤗💬 Campus Management Chatbot", page_icon="🤖", layout="centered", initial_sidebar_state="collapsed")
+# Initialization
+if "selected_language" not in st.session_state:
+    st.session_state["selected_language"] = "Deutsch"
+
+
+st.set_page_config(
+    page_title="🤗💬 Campus Management Chatbot",
+    page_icon="🤖",
+    layout="centered",
+    initial_sidebar_state="collapsed",
+)
 st.markdown(
     """
 <style>
@@ -24,6 +36,24 @@ st.markdown(
 
 
 start_message = """
+## Willkommen beim Campus Management Chatbot.
+### Unser Chatbot soll Ihnen bei Fragen rund um die Universität Osnabrück helfen (z.B. bei der Bewerbung oder dem Studium).
+
+- Bei diesem Tool handelt es sich um einen temporären Testserver, mit dem wir über einige Tage hinweg Feedback einholen können.
+- **Es ist nur für den internen Gebrauch und nicht für den öffentlichen Zugang bestimmt.**
+- Mit diesem Test möchte ich herausfinden, wann der Chat normalerweise halluziniert und wie oft er halluziniert.
+- Ich bin auch daran interessiert, ein Gefühl dafür zu bekommen, wie oft der Chatbot in der Lage ist, die richtige Antwort auf die Frage des Benutzers zu geben.
+
+Bitte beachten Sie, dass alle Informationen, die Sie in den Chatbereich eingeben oder nach denen Sie suchen, an OpenAI gesendet werden.
+Der Chatbot wird von gpt-4o betrieben.
+
+Bei Fragen, melde Dich über die Mail yecanocastro@uos.de
+"""
+
+
+if "selected_language" in st.session_state:
+    if st.session_state["selected_language"] == "English":
+        start_message = """
 ## Welcome to the Campus Management Chatbot.
 ### Our chatbot is designed to assist you with queries related to the University of Osnabrueck (e.g., applying or studying at the University).
 
@@ -39,37 +69,13 @@ Have any question? Email me at yecanocastro@uos.de
 
 """
 
-if "selected_language" in st.session_state:
-    if st.session_state["selected_language"] == 'Deutsch':
-        start_message = """
-## Willkommen beim Campus Management Chatbot.
-### Unser Chatbot soll Ihnen bei Fragen rund um die Universität Osnabrück helfen (z.B. bei der Bewerbung oder dem Studium).
-
-- Bei diesem Tool handelt es sich um einen temporären Testserver, mit dem wir über einige Tage hinweg Feedback einholen können.
-- **Es ist nur für den internen Gebrauch und nicht für den öffentlichen Zugang bestimmt.**
-- Mit diesem Test möchte ich herausfinden, wann der Chat normalerweise halluziniert und wie oft er halluziniert.
-- Ich bin auch daran interessiert, ein Gefühl dafür zu bekommen, wie oft der Chatbot in der Lage ist, die richtige Antwort auf die Frage des Benutzers zu geben.
-
-Bitte beachten Sie, dass alle Informationen, die Sie in den Chatbereich eingeben oder nach denen Sie suchen, an OpenAI gesendet werden.
-Der Chatbot wird von gpt-4o betrieben.
-
-Bei Fragen, melde Dich über die Mail yecanocastro@uos.de
-"""
-
 initialize_language()
 
 
-
-
-
 st.markdown(start_message)
-
-
 
 
 if st.button("Start Chatting", type="primary"):
 
     sleep(0.5)
     st.switch_page("pages/streamlit_chat.py")
-
-

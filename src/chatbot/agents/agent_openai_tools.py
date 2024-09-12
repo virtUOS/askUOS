@@ -1,7 +1,7 @@
 import json
 import sys
 from json import JSONDecodeError
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, ClassVar
 
 import streamlit as st
 from langchain.agents import AgentExecutor, create_openai_tools_agent, load_tools
@@ -38,7 +38,13 @@ from chatbot.db.vector_store import retriever
 from chatbot.tools.uni_application_tool import application_instructions
 from chatbot.utils.language import prompt_language
 from chatbot.utils.prompt import get_prompt
-from config.settings import OPEN_AI_MODEL, SERVICE
+from chatbot_log.chatbot_logger import logger
+from config import settings
+from chatbot.utils.language import config_language
+import importlib
+
+
+OPEN_AI_MODEL = settings.OPEN_AI_MODEL
 
 # Define the prompt text based on the selected language
 if "selected_language" in st.session_state:
@@ -158,7 +164,17 @@ class Defaults:
     @staticmethod
     def create_prompt() -> ChatPromptTemplate:
         from chatbot.utils.prompt import get_prompt
-        from chatbot.utils.prompt_text import prompt_text_english as prompt_text
+
+        if config_language.language == "Deutsch":
+            from chatbot.utils.prompt_text import prompt_text_deutsch as prompt_text
+        elif config_language.language == "English":
+            from chatbot.utils.prompt_text import prompt_text_english as prompt_text
+        else:
+            from chatbot.utils.prompt_text import prompt_text_deutsch as prompt_text
+
+            logger.warning(
+                f'Language "{config_language.language}" not supported. Defaulting to "Deutsch"'
+            )
 
         return get_prompt(prompt_text)
 
@@ -204,6 +220,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
 
     Args:
             prompt (Optional[ChatPromptTemplate]): The chat prompt template.
+            language (Optional[str]): The language chosen by the user and subsequtly used by the agent.
             llm (Optional[ChatOpenAI]): The language model used by the agent.
             tools (Optional[list[BaseTool]]): The list of tools used by the agent.
             memory (Optional[BaseMemory]): The memory used by the agent.
@@ -213,13 +230,17 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
 
     from agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 
-    agent_executor = CampusManagementOpenAIToolsAgent.run()
-    # agent_executor = CampusManagementOpenAIToolsAgent.run(prompt=some_prompt, llm=some_llm, tools=some_tools, memory=some_memory)
-    response = agent_executor('Hi, this is the user input')
+    agent_executor = CampusManagementOpenAIToolsAgent.run() # run with default values
+    agent_executor = CampusManagementOpenAIToolsAgent.run(prompt=some_prompt, llm=some_llm, tools=some_tools, memory=some_memory)
+    response = agent_executor('Hi, are you an AI?') # ask the agent a question
 
     """
 
+    # Singleton instance
+    _instance: ClassVar[Optional["CampusManagementOpenAIToolsAgent"]] = None
+
     prompt: ChatPromptTemplate = Field(default_factory=Defaults.create_prompt)
+    language: Optional[str] = None
     llm: ChatOpenAI = Field(default_factory=Defaults.create_llm)
     tools: List[BaseTool] = Field(default_factory=Defaults.create_tools)
     memory: BaseMemory = Field(default_factory=Defaults.create_memory)
@@ -227,9 +248,25 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
     # (not part of the model schema)
     _agent_executor: AgentExecutor = PrivateAttr(default=None)
 
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
+            logger.info("Creating a new instance of CampusManagementOpenAIToolsAgent")
+
+        # create a new instance if the language changes
+        elif cls._instance.language != config_language.language:
+            # TODO preserve the memory of the previous agent (when the language changes and a previous conversation is still ongoing)
+            cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
+            logger.info("Creating a new instance of CampusManagementOpenAIToolsAgent")
+
+        return cls._instance
+
     def __init__(self, **data):
-        super().__init__(**data)
-        self._create_agent_executor()
+        if not self.__dict__:
+            super().__init__(**data)
+            self.language = config_language.language
+            logger.info(f"Language set to: {self.language}")
+            self._create_agent_executor()
 
     def _create_agent_executor(self):
         # agent = create_openai_tools_agent(self.llm, [*self.tools, load_tools(["human"])[0]], self.prompt)
@@ -271,11 +308,10 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
     @classmethod
     def run(cls, **kwargs):
 
-        return cls(**kwargs)
+        instance = cls(**kwargs)
 
-
-# agent_executor = CampusManagementOpenAIToolsAgent.run(prompt=get_prompt(prompt_text))
-agent_executor = CampusManagementOpenAIToolsAgent.run()
+        # TODO make sure there is only one instance of the agent in the memory (check all objects in the memory with type CampusManagementOpenAIToolsAgent)
+        return instance
 
 
 if __name__ == "__main__":
