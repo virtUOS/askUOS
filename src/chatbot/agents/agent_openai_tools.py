@@ -37,23 +37,13 @@ from chatbot.db.vector_store import retriever
 # from tools.search_web_tool import SearchUniWeb
 from chatbot.tools.uni_application_tool import application_instructions
 from chatbot.utils.language import prompt_language
-from chatbot.utils.prompt import get_prompt
+from chatbot.utils.prompt import get_prompt, translate_prompt
 from chatbot_log.chatbot_logger import logger
 from config import settings
 from chatbot.utils.language import config_language
-import importlib
 
 
 OPEN_AI_MODEL = settings.OPEN_AI_MODEL
-
-# Define the prompt text based on the selected language
-if "selected_language" in st.session_state:
-    if st.session_state["selected_language"] == "English":
-        from chatbot.utils.prompt_text import prompt_text_english as prompt_text
-    elif st.session_state["selected_language"] == "Deutsch":
-        from chatbot.utils.prompt_text import prompt_text_deutsch as prompt_text
-else:
-    from chatbot.utils.prompt_text import prompt_text_english as prompt_text
 
 
 """
@@ -93,6 +83,7 @@ class CallbackHandlerStreaming(StreamingStdOutCallbackHandler):
 class Response(BaseModel):
     """Final response to the question being asked"""
 
+    prompt_text = translate_prompt()
     output: str = Field(description=prompt_text["response_output_description"])
     sources: List[str] = Field(description=prompt_text["response_sources_description"])
 
@@ -163,23 +154,23 @@ class CustomSaveMemory(ConversationBufferWindowMemory):
 class Defaults:
     @staticmethod
     def create_prompt() -> ChatPromptTemplate:
-        from chatbot.utils.prompt import get_prompt
+        """
+        Creates a chatbot prompt using the `get_prompt` function.
 
-        if config_language.language == "Deutsch":
-            from chatbot.utils.prompt_text import prompt_text_deutsch as prompt_text
-        elif config_language.language == "English":
-            from chatbot.utils.prompt_text import prompt_text_english as prompt_text
-        else:
-            from chatbot.utils.prompt_text import prompt_text_deutsch as prompt_text
+        Returns:
+            ChatPromptTemplate: The generated chatbot prompt.
+        """
 
-            logger.warning(
-                f'Language "{config_language.language}" not supported. Defaulting to "Deutsch"'
-            )
-
-        return get_prompt(prompt_text)
+        return get_prompt()
 
     @staticmethod
     def create_llm() -> ChatOpenAI:
+        """
+        Creates a ChatOpenAI instance with the specified model, temperature, streaming, and callbacks.
+
+        Returns:
+            ChatOpenAI: The created ChatOpenAI instance.
+        """
 
         # handler = StdOutCallbackHandler()
         return ChatOpenAI(
@@ -191,6 +182,12 @@ class Defaults:
 
     @staticmethod
     def create_tools() -> List[BaseTool]:
+        """
+        Creates a list of tools for the chatbot agent.
+
+        Returns:
+            List[BaseTool]: A list of tools for the chatbot agent.
+        """
         from langchain.tools.base import StructuredTool
 
         from chatbot.tools.search_web_tool import search_uni_web
@@ -211,6 +208,12 @@ class Defaults:
 
     @staticmethod
     def create_memory() -> BaseMemory:
+        """
+        Creates a memory object for the chatbot agent.
+
+        Returns:
+            BaseMemory: The created memory object.
+        """
         return CustomSaveMemory(memory_key="chat_history", return_messages=True, k=5)
 
 
