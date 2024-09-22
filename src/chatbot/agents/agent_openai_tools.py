@@ -1,5 +1,8 @@
 import json
 import sys
+
+# if "src" not in sys.path:
+#     sys.path.append("./src")
 from json import JSONDecodeError
 from typing import Any, Dict, List, Optional, Tuple, ClassVar
 
@@ -32,15 +35,15 @@ from langchain_core.tools import BaseTool
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from langchain_openai import ChatOpenAI
 
-from chatbot.db.vector_store import retriever
+from src.chatbot.db.vector_store import retriever
 
 # from tools.search_web_tool import SearchUniWeb
-from chatbot.tools.uni_application_tool import application_instructions
-from chatbot.utils.language import prompt_language
-from chatbot.utils.prompt import get_prompt, translate_prompt
-from chatbot_log.chatbot_logger import logger
-from config import settings
-from chatbot.utils.language import config_language
+from src.chatbot.tools.uni_application_tool import application_instructions
+from src.chatbot.utils.language import prompt_language
+from src.chatbot.utils.prompt import get_prompt, translate_prompt
+from src.chatbot_log.chatbot_logger import logger
+from src.config import settings
+from src.chatbot.utils.language import config_language
 
 
 OPEN_AI_MODEL = settings.OPEN_AI_MODEL
@@ -190,7 +193,7 @@ class Defaults:
         """
         from langchain.tools.base import StructuredTool
 
-        from chatbot.tools.search_web_tool import search_uni_web
+        from src.chatbot.tools.search_web_tool import search_uni_web
 
         return [
             create_retriever_tool(

@@ -6,9 +6,9 @@ from langchain.prompts.chat import (
     HumanMessagePromptTemplate,
     MessagesPlaceholder,
 )
-from chatbot_log.chatbot_logger import logger
-import chatbot.utils.prompt_text as text
-from chatbot.utils.language import config_language
+from src.chatbot_log.chatbot_logger import logger
+import src.chatbot.utils.prompt_text as text
+from src.chatbot.utils.language import config_language
 
 
 def translate_prompt() -> Dict[str, str]:

@@ -1,7 +1,6 @@
 import streamlit as st
-import gettext
 from streamlit import session_state
-import config.settings as settings
+import src.config.settings as settings
 
 
 class Language:
@@ -77,10 +76,10 @@ def prompt_language():
 
     if "selected_language" in st.session_state:
         if st.session_state["selected_language"] == "English":
-            from chatbot.utils.prompt_text import prompt_text_english as prompt_text
+            from src.chatbot.utils.prompt_text import prompt_text_english as prompt_text
         elif st.session_state["selected_language"] == "Deutsch":
-            from chatbot.utils.prompt_text import prompt_text_deutsch as prompt_text
+            from src.chatbot.utils.prompt_text import prompt_text_deutsch as prompt_text
     else:
-        from chatbot.utils.prompt_text import prompt_text_english as prompt_text
+        from src.chatbot.utils.prompt_text import prompt_text_english as prompt_text
 
     return prompt_text

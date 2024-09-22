@@ -12,9 +12,9 @@ from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
 
-from chatbot.utils.pdf_reader import read_pdf_from_url
-from chatbot_log.chatbot_logger import logger
-from config.settings import SEARCH_URL, SERVICE
+from src.chatbot.utils.pdf_reader import read_pdf_from_url
+from src.chatbot_log.chatbot_logger import logger
+from src.config.settings import SEARCH_URL, SERVICE
 
 dotenv.load_dotenv()
 
@@ -220,18 +220,17 @@ def search_uni_web(query: str) -> str:
         return "Error while searching the web"
 
 
-
-
 if __name__ == "__main__":
     # use for testing/ debugging
     try:
         from search_sample import search_sample
     except ImportError:
         import sys
-        sys.path.append('./test')
+
+        sys.path.append("./test")
         from search_sample import search_sample
-        
-    content, anchor_tags= extract_and_visit_links(search_sample)
+
+    content, anchor_tags = extract_and_visit_links(search_sample)
     query = "can I study Biology?"
     search_result = search_uni_web(query)
     print(search_result)

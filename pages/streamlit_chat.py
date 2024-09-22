@@ -6,12 +6,10 @@ import time
 import streamlit as st
 from streamlit import session_state
 
-from chatbot.agents.agent_openai_tools import (
+from src.chatbot.agents.agent_openai_tools import (
     CampusManagementOpenAIToolsAgent,
 )
-from chatbot_log.chatbot_logger import logger
-from chatbot.utils.pdf_reader import extract_pdf_with_timeout
-from chatbot.utils.prompt import get_prompt
+from src.chatbot_log.chatbot_logger import logger
 
 # create an instance of the agent executor
 # TODO every time the users interacts with the chatbot, all the script  re-runS. This is not efficient. CACHE THE AGENT EXECUTOR??? (solved singltone pattern)

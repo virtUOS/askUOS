@@ -1,13 +1,12 @@
 # streamlit run start.py
 
-import os
 from time import sleep
 
 import streamlit as st
 from dotenv import load_dotenv
 
 
-from chatbot.utils.language import initialize_language
+from src.chatbot.utils.language import initialize_language
 
 load_dotenv()
 
