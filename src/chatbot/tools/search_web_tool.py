@@ -13,6 +13,7 @@ from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
 
 from src.chatbot.utils.pdf_reader import read_pdf_from_url
+from src.chatbot.utils.tool_helpers import visited_links, VisitedLinks
 from src.chatbot_log.chatbot_logger import logger
 from src.config.settings import SEARCH_URL, SERVICE
 
@@ -124,13 +125,18 @@ def extract_html_text(href: str, response) -> str:
     return ""
 
 
-def extract_and_visit_links(rendered_html: str, max_num_links: int = MAX_NUM_LINKS):
+def extract_and_visit_links(
+    rendered_html: str,
+    max_num_links: int = MAX_NUM_LINKS,
+    visited_links: VisitedLinks = visited_links,
+):
     """
     Extracts and visits links from rendered HTML.
 
     Args:
         rendered_html (str): The rendered HTML content.
         max_num_links (int, optional): The maximum number of links to visit. Defaults to MAX_NUM_LINKS.
+        visited_links (VisitedLinks): Keeps track of the visited links (URLs used for information extraction).
 
     Returns:
         tuple: A tuple containing the extracted contents and the anchor tags.
@@ -138,10 +144,11 @@ def extract_and_visit_links(rendered_html: str, max_num_links: int = MAX_NUM_LIN
             - The anchor tags as a list.
 
     """
+    # Clear the list of visited links
+    visited_links.clear()
     contents = []
     taken_from = "Information taken from:"
     search_result_text = "Content not found"
-    visited_links = set()
     soup = BeautifulSoup(rendered_html, "html.parser")
     # 'gs-title' is the class attached to the anchor tag that contains the search result (University website search result page)
     anchor_tags = soup.find_all("a", class_="gs-title")  # the search result links
@@ -149,7 +156,7 @@ def extract_and_visit_links(rendered_html: str, max_num_links: int = MAX_NUM_LIN
     for tag in anchor_tags:
         href = str(tag.get("href"))
         # there could be repeated links
-        if href in visited_links:
+        if href in visited_links():
             continue
         try:
             response = requests.get(href)
@@ -167,9 +174,9 @@ def extract_and_visit_links(rendered_html: str, max_num_links: int = MAX_NUM_LIN
             if text:
                 text = f"{taken_from}{href}\n{text}"
                 contents.append(text)
-                visited_links.add(href)
+                visited_links().append(href)
 
-                if len(visited_links) >= max_num_links:
+                if len(visited_links()) >= max_num_links:
                     break
 
     return "\n".join(contents) if contents else search_result_text, anchor_tags

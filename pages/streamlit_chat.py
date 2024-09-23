@@ -10,6 +10,7 @@ from src.chatbot.agents.agent_openai_tools import (
     CampusManagementOpenAIToolsAgent,
 )
 from src.chatbot_log.chatbot_logger import logger
+from src.chatbot.utils.tool_helpers import visited_links
 
 # create an instance of the agent executor
 # TODO every time the users interacts with the chatbot, all the script  re-runS. This is not efficient. CACHE THE AGENT EXECUTOR??? (solved singltone pattern)
@@ -119,11 +120,17 @@ if st.session_state.messages[-1]["role"] != "assistant":
             # TODO if pdf is too long to display, provide a download link
             # check if the response contains a PDF file
 
-            if "sources" in response:
-                if response["sources"]:
-                    with st.expander("Sources"):
-                        for source in response["sources"]:
-                            st.write(f"- {source}")
+            if visited_links():
+                with st.expander("Sources"):
+                    for link in visited_links():
+                        st.write("- " + link)
+                visited_links.clear()
+
+            # if "sources" in response:
+            #     if response["sources"]:
+            #         with st.expander("Sources"):
+            #             for source in response["sources"]:
+            #                 st.write(f"- {source}")
 
             # Comment out the following code block to disable the PDF download feature
             # pdf_content, pdf_file_name = extract_pdf_with_timeout(
