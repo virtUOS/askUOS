@@ -1,24 +1,12 @@
 import json
-import sys
-
-# if "src" not in sys.path:
-#     sys.path.append("./src")
 from json import JSONDecodeError
-from typing import Any, Dict, List, Optional, Tuple, ClassVar
+from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
 import streamlit as st
-from langchain.agents import AgentExecutor, create_openai_tools_agent, load_tools
+from langchain.agents import AgentExecutor, load_tools
 from langchain.agents.format_scratchpad import format_to_openai_function_messages
-from langchain.agents.format_scratchpad.openai_tools import (
-    format_to_openai_tool_messages,
-)
-from langchain.callbacks.streaming_stdout_final_only import (
-    FinalStreamingStdOutCallbackHandler,
-)
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
-from langchain.memory import ConversationBufferMemory
 from langchain.memory.utils import get_prompt_input_key
-from langchain.tools import Tool
 from langchain.tools.retriever import create_retriever_tool
 from langchain_core.agents import AgentActionMessageLog, AgentFinish
 from langchain_core.callbacks import (
@@ -27,24 +15,16 @@ from langchain_core.callbacks import (
 )
 from langchain_core.exceptions import OutputParserException
 from langchain_core.memory import BaseMemory
-from langchain_core.messages.base import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
-from langchain_core.runnables import Runnable, RunnablePassthrough
 from langchain_core.tools import BaseTool
-from langchain_core.utils.function_calling import convert_to_openai_tool
 from langchain_openai import ChatOpenAI
 
 from src.chatbot.db.vector_store import retriever
-
-# from tools.search_web_tool import SearchUniWeb
-from src.chatbot.tools.uni_application_tool import application_instructions
-from src.chatbot.utils.language import prompt_language
+from src.chatbot.utils.language import config_language
 from src.chatbot.utils.prompt import get_prompt, translate_prompt
 from src.chatbot_log.chatbot_logger import logger
 from src.config import settings
-from src.chatbot.utils.language import config_language
-
 
 OPEN_AI_MODEL = settings.OPEN_AI_MODEL
 
@@ -205,12 +185,12 @@ class Defaults:
             create_retriever_tool(
                 retriever,
                 "technical_troubleshooting_questions",
-                prompt_language()["description_technical_troubleshooting"],
+                translate_prompt()["description_technical_troubleshooting"],
             ),
             StructuredTool.from_function(
                 name="custom_university_web_search",
                 func=search_uni_web,
-                description=prompt_language()["description_university_web_search"],
+                description=translate_prompt()["description_university_web_search"],
                 handle_tool_errors=True,
             ),
         ]

@@ -6,11 +6,10 @@ import time
 import streamlit as st
 from streamlit import session_state
 
-from src.chatbot.agents.agent_openai_tools import (
-    CampusManagementOpenAIToolsAgent,
-)
-from src.chatbot_log.chatbot_logger import logger
+from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.utils.tool_helpers import visited_links
+from src.chatbot_log.chatbot_logger import logger
+from pages.utils import initialize_session_sate
 
 # create an instance of the agent executor
 # TODO every time the users interacts with the chatbot, all the script  re-runS. This is not efficient. CACHE THE AGENT EXECUTOR??? (solved singltone pattern)
@@ -18,10 +17,10 @@ from src.chatbot.utils.tool_helpers import visited_links
 # TODO shall I cache this object and only recreate it when the input changes? the only thing that changes is the language (prompt)
 
 
-start_message = "Wie kann ich Ihnen helfen?"
-if "selected_language" in st.session_state:
-    if st.session_state["selected_language"] == "English":
-        start_message = "How can I help you?"
+initialize_session_sate()
+
+
+greeting_message = session_state["_"]("How can I help you?")
 
 
 agent_executor = CampusManagementOpenAIToolsAgent.run()
@@ -35,21 +34,14 @@ st.set_page_config(
 )
 
 
-if "show_warning" in st.session_state:
-    if st.session_state["show_warning"] == True:
-        st.warning(
+if session_state.get("show_warning", True):
+    st.warning(
+        session_state["_"](
             "The responses from the chat assistant may be incorrect - therefore, please verify the answers for their correctness."
         )
-        if st.button("Ich verstehe"):
-            st.session_state["show_warning"] = False
-            st.rerun()
-else:
-
-    st.warning(
-        "Die Ausgaben des Chat-Assistenten können fehlerhaft sein - überprüfen Sie die Antworten daher unbedingt auf ihre Korrektheit."
     )
-    if st.button("Ich verstehe"):
-        st.session_state["show_warning"] = False
+    if st.button(session_state["_"]("I understand")):
+        session_state["show_warning"] = False
         st.rerun()
 
 
@@ -69,7 +61,7 @@ st.title("🤗💬 Campus Management")
 
 # Store LLM generated responses
 if "messages" not in st.session_state:
-    st.session_state["messages"] = [{"role": "assistant", "content": start_message}]
+    st.session_state["messages"] = [{"role": "assistant", "content": greeting_message}]
 
 # Display chat messages
 for message in st.session_state["messages"]:

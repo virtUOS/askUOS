@@ -4,16 +4,16 @@ from time import sleep
 
 import streamlit as st
 from dotenv import load_dotenv
+from streamlit import session_state
 
-
-from src.chatbot.utils.language import initialize_language
+from pages.language import initialize_language
+from pages.utils import initialize_session_sate
 
 load_dotenv()
 
 
 # Initialization
-if "selected_language" not in st.session_state:
-    st.session_state["selected_language"] = "Deutsch"
+initialize_session_sate()
 
 
 st.set_page_config(
@@ -22,6 +22,8 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="collapsed",
 )
+
+
 st.markdown(
     """
 <style>
@@ -34,25 +36,9 @@ st.markdown(
 )
 
 
+initialize_language()
+
 start_message = """
-## Willkommen beim Campus Management Chatbot.
-### Unser Chatbot soll Ihnen bei Fragen rund um die Universität Osnabrück helfen (z.B. bei der Bewerbung oder dem Studium).
-
-- Bei diesem Tool handelt es sich um einen temporären Testserver, mit dem wir über einige Tage hinweg Feedback einholen können.
-- **Es ist nur für den internen Gebrauch und nicht für den öffentlichen Zugang bestimmt.**
-- Mit diesem Test möchte ich herausfinden, wann der Chat normalerweise halluziniert und wie oft er halluziniert.
-- Ich bin auch daran interessiert, ein Gefühl dafür zu bekommen, wie oft der Chatbot in der Lage ist, die richtige Antwort auf die Frage des Benutzers zu geben.
-
-Bitte beachten Sie, dass alle Informationen, die Sie in den Chatbereich eingeben oder nach denen Sie suchen, an OpenAI gesendet werden.
-Der Chatbot wird von gpt-4o betrieben.
-
-Bei Fragen, melde Dich über die Mail yecanocastro@uos.de
-"""
-
-
-if "selected_language" in st.session_state:
-    if st.session_state["selected_language"] == "English":
-        start_message = """
 ## Welcome to the Campus Management Chatbot.
 ### Our chatbot is designed to assist you with queries related to the University of Osnabrueck (e.g., applying or studying at the University).
 
@@ -60,21 +46,17 @@ if "selected_language" in st.session_state:
 - **It is intended for internal use only and not for public access.**
 - With this test I am interested in finding out when the chat usually hallucinates and how often it hallucinates.
 - I am also interested in getting a sense of how often the chatbot is able to provide the correct answer to the user's question.
-
 Kindly note that any information you input or search for in the chat area is sent to OpenAI.
 The Chatbot is powered by gpt-4o.
 
 Have any question? Email me at yecanocastro@uos.de
-
 """
 
-initialize_language()
+
+st.markdown(session_state["_"](start_message))
 
 
-st.markdown(start_message)
-
-
-if st.button("Start Chatting", type="primary"):
+if st.button(session_state["_"]("Start Chatting"), type="primary"):
 
     sleep(0.5)
     st.switch_page("pages/streamlit_chat.py")
