@@ -8,6 +8,7 @@ This project is a chatbot application built using LangChain and Streamlit. The c
 - [Overview](#overview)
 - [Features](#features)
 - [Setup](#setup)
+- [Translation Mechanism](#translation_mechanism)
 
 
 ## Overview
@@ -71,5 +72,26 @@ cp ./nginx/nginx.conf.example nginx.conf
 - Data: Place the documents to be processed and embedded here `src/data`
 
 
+## Translation Mechanism
 
 
+This project supports both German and English languages, allowing users to switch between them seamlessly. The translation mechanism is implemented using the `gettext` library: a standard for internationalization and localization in Python.
+
+### How It Works
+
+1. Translation Setup:
+   - The system generates a  `base.mo`file from `locale/de/LC_MESSAGES/base.po` (This file is autmatically generated when the software is installed using `Docker`)
+   - The project sets up the translation for German using `gettext.translation`. It installs the German translation and provides a function to translate text.
+
+2. Language Initialization:
+
+   - The project, using `Streamlit`, sets up a radio button for language selection. It defaults to German if no language is chosen.
+   - When the user selects a language, the application updates the session state and configuration based on the selected language.
+   - The selected language is stored in the session state and query parameters.
+
+
+3. Usage in Streamlit:
+
+   - Throughout the Streamlit application, the translation function from the session state is used to translate text dynamically based on the selected language.
+
+By following this approach, the project ensures that all user-facing text can be easily translated and displayed in the user's preferred language.
