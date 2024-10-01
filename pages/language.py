@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit import session_state
 import gettext
-from src.chatbot.utils.language import config_language
+from src.config.core_config import settings
 
 
 def translate():
@@ -34,13 +34,13 @@ def initialize_language() -> None:
     def change_language():
         if session_state["selected_language"] == "English":
             set_language(language="en")
-            config_language.set_language("English")
+            settings.language = "English"
             session_state["_"] = gettext.gettext
 
         else:
             session_state["selected_language"] = "Deutsch"
             set_language(language="de")
-            config_language.set_language("Deutsch")
+            settings.language = "Deutsch"
             session_state["_"] = translate()
 
     # If no language is chosen yet set it to German

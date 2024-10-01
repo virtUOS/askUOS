@@ -38,6 +38,17 @@
    
         },
 
+        {
+            "name": "core_config",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./src/config/core_config.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
 
         {
             "name": "chromadb",

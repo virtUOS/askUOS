@@ -21,12 +21,12 @@ from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
 
 from src.chatbot.db.vector_store import retriever
-from src.chatbot.utils.language import config_language
+from src.config.core_config import settings
 from src.chatbot.utils.prompt import get_prompt, translate_prompt
 from src.chatbot_log.chatbot_logger import logger
-from src.config import settings
 
-OPEN_AI_MODEL = settings.OPEN_AI_MODEL
+
+OPEN_AI_MODEL = settings.model.model_name
 
 
 """
@@ -246,7 +246,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
             logger.info("Creating a new instance of CampusManagementOpenAIToolsAgent")
 
         # create a new instance if the language changes
-        elif cls._instance.language != config_language.language:
+        elif cls._instance.language != settings.language:
             # TODO preserve the memory of the previous agent (when the language changes and a previous conversation is still ongoing)
             cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
             logger.info("Creating a new instance of CampusManagementOpenAIToolsAgent")
@@ -256,7 +256,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
     def __init__(self, **data):
         if not self.__dict__:
             super().__init__(**data)
-            self.language = config_language.language
+            self.language = settings.language
             logger.info(f"Language set to: {self.language}")
             self._create_agent_executor()
 

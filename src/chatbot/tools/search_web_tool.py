@@ -15,11 +15,12 @@ from selenium.webdriver.firefox.service import Service
 from src.chatbot.utils.pdf_reader import read_pdf_from_url
 from src.chatbot.utils.tool_helpers import visited_links, VisitedLinks
 from src.chatbot_log.chatbot_logger import logger
-from src.config.settings import SEARCH_URL, SERVICE
+from src.config.core_config import settings
 
 dotenv.load_dotenv()
 
-
+SEARCH_URL = settings.search_config.search_url
+SERVICE = settings.search_config.service
 MAX_NUM_LINKS = 2
 HEADLESS_OPTION = "--headless"
 QUERY_SPACE_REPLACEMENT = "+"
@@ -159,6 +160,7 @@ def extract_and_visit_links(
         if href in visited_links():
             continue
         try:
+            # TODO I/O operation (use async code)
             response = requests.get(href)
         except:
             logger.error(f"Error while fetching: {href}")
@@ -208,11 +210,21 @@ def search_uni_web(query: str) -> str:
         driver = webdriver.Firefox(service=service, options=firefox_options)
 
         url = SEARCH_URL + query_url
+        # TODO I/O operation (use async code) During waiting time compute the number of tokens in the prompt and chat history
         driver.get(url)
         rendered_html = driver.page_source
         search_result_text, _ = extract_and_visit_links(rendered_html)
 
-        # TODO use algorithm from my thesis to compute exact number of tokens given length of the search result text
+        # TODO get number of tokens in the search result text, needs to add the number of tokens in the prompt and chat history
+        """
+        formula to roughly compute the number of tokens: https://stackoverflow.com/questions/70060847/how-to-work-with-openai-maximum-context-length-is-2049-tokens
+        
+        l = ChatOpenAI(
+            model='gpt-4o-mini',
+            temperature=0,
+        )
+        l.get_num_tokens('hi this one thing ')
+        """
         if len(search_result_text) > 15000:
             logger.info(
                 f"Truncating search result text due to length: {len(search_result_text)}"

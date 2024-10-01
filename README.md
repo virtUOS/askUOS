@@ -30,6 +30,15 @@ The LangChain Streamlit Chatbot is designed to provide an interactive interface 
 - See `requirements.txt`
 - Docker ( for containerization)
 
+
+### Application Configuration
+This application uses a configuration file (`config.yaml`) to manage its settings. The settings are structured in a way that allows for easy customization without modifying the source code. The configuration is validated at startup using Pydantic, ensuring that all required fields are present and correctly formatted.
+
+#### Congiguration File `config.yaml`
+
+The `config.yaml` file should be placed in the root directory of the application. Modify the existing file accordingly (If necessary). 
+
+
 ### Installation
 
 You can develop or deploy this application using Docker.

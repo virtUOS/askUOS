@@ -8,7 +8,7 @@ from langchain.prompts.chat import (
 )
 from src.chatbot_log.chatbot_logger import logger
 import src.chatbot.utils.prompt_text as text
-from src.chatbot.utils.language import config_language
+from src.config.core_config import settings
 
 
 def translate_prompt() -> Dict[str, str]:
@@ -19,15 +19,15 @@ def translate_prompt() -> Dict[str, str]:
         A dictionary containing the translated prompt text.
     """
 
-    if config_language.language == "Deutsch":
+    if settings.language == "Deutsch":
         prompt_text = text.prompt_text_deutsch
-    elif config_language.language == "English":
+    elif settings.language == "English":
         prompt_text = text.prompt_text_english
     else:
         prompt_text = text.prompt_text_deutsch
 
         logger.warning(
-            f'Language "{config_language.language}" not supported. Defaulting to "Deutsch"'
+            f'Language "{settings.language}" not supported. Defaulting to "Deutsch"'
         )
     return prompt_text
 

@@ -9,7 +9,7 @@ from src.chatbot.tools.search_web_tool import extract_and_visit_links
 from test.search_sample import search_sample, expected_result
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.evaluation import load_evaluator
-from src.chatbot.utils.language import config_language
+from src.config.core_config import settings
 import src.chatbot.utils.prompt_text as text
 from src.chatbot.utils.prompt import get_prompt
 import unittest
@@ -36,7 +36,7 @@ class AgentExecutorTest(unittest.TestCase):
 
     def test_prompt_language(self):
         # prompt should be in english
-        config_language.language = "English"
+        settings.language = "English"
         english_prompt = get_prompt()
         agent_executor = CampusManagementOpenAIToolsAgent.run()
         self.assertEqual(
@@ -46,7 +46,7 @@ class AgentExecutorTest(unittest.TestCase):
         )
 
         # prompt should be in german
-        config_language.language = "Deutsch"
+        settings.language = "Deutsch"
         german_prompt = get_prompt()
         agent_executor = CampusManagementOpenAIToolsAgent.run()
         self.assertEqual(
