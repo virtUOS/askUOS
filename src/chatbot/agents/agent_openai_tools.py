@@ -22,9 +22,9 @@ from langchain_openai import ChatOpenAI
 
 from src.chatbot.db.vector_store import retriever
 from src.config.core_config import settings
-from src.chatbot.utils.prompt import get_prompt, translate_prompt
+from src.chatbot.utils.prompt import get_prompt, translate_prompt, get_prompt_length
 from src.chatbot_log.chatbot_logger import logger
-
+from src.chatbot.utils.agent_helpers import llm
 
 OPEN_AI_MODEL = settings.model.model_name
 
@@ -162,12 +162,13 @@ class Defaults:
         """
 
         # handler = StdOutCallbackHandler()
-        return ChatOpenAI(
-            model=OPEN_AI_MODEL,
-            temperature=0,
-            streaming=True,
-            callbacks=[StdOutCallbackHandler()],
-        )
+        # return ChatOpenAI(
+        #     model=OPEN_AI_MODEL,
+        #     temperature=0,
+        #     streaming=True,
+        #     callbacks=[StdOutCallbackHandler()],
+        # )
+        return llm()
 
     @staticmethod
     def create_tools() -> List[BaseTool]:
@@ -232,6 +233,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
     _instance: ClassVar[Optional["CampusManagementOpenAIToolsAgent"]] = None
 
     prompt: ChatPromptTemplate = Field(default_factory=Defaults.create_prompt)
+    prompt_length: int = Field(default_factory=get_prompt_length)
     language: Optional[str] = None
     llm: ChatOpenAI = Field(default_factory=Defaults.create_llm)
     tools: List[BaseTool] = Field(default_factory=Defaults.create_tools)
@@ -246,7 +248,10 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
             logger.info("Creating a new instance of CampusManagementOpenAIToolsAgent")
 
         # create a new instance if the language changes
-        elif cls._instance.language != settings.language:
+        elif (
+            hasattr(cls._instance, "language")
+            and cls._instance.language != settings.language
+        ):  # TODO dependency injection (settings)
             # TODO preserve the memory of the previous agent (when the language changes and a previous conversation is still ongoing)
             cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
             logger.info("Creating a new instance of CampusManagementOpenAIToolsAgent")
@@ -288,6 +293,26 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
             handle_parsing_errors=True,
             max_execution_time=60,  # Agent stops after 60 seconds
         )
+
+    def compute_num_tokens(self, search_result_text, query):
+        # extract the chathistory from the memory
+        # TODO this is a list, iterate over the list and extract the content
+        # TODO BUG: Agent's scratchpad tokens are not being counted (fix sum(count_tokens_history) * 2)
+        history = self._agent_executor.memory.dict()["chat_memory"][
+            "messages"
+        ]  # this is a list [{'content':'', 'additional_kwargs':{},...}, {}...]
+
+        count_tokens_history = [self.llm.get_num_tokens(c["content"]) for c in history]
+        search_result_text_tokens = self.llm.get_num_tokens(search_result_text)
+        total_tokens = (
+            sum(count_tokens_history)
+            * 2  # multiply by 2 to account for agent's scratchpad
+            + search_result_text_tokens
+            + self.llm.get_num_tokens(query)
+            + self.prompt_length
+        )
+
+        return search_result_text_tokens, total_tokens
 
     def __call__(self, input: str):
 

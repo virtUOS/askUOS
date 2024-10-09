@@ -13,11 +13,13 @@ from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
 
 from src.chatbot.utils.pdf_reader import read_pdf_from_url
+from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.utils.tool_helpers import visited_links, VisitedLinks
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
 dotenv.load_dotenv()
+
 
 SEARCH_URL = settings.search_config.search_url
 SERVICE = settings.search_config.service
@@ -215,23 +217,27 @@ def search_uni_web(query: str) -> str:
         rendered_html = driver.page_source
         search_result_text, _ = extract_and_visit_links(rendered_html)
 
-        # TODO get number of tokens in the search result text, needs to add the number of tokens in the prompt and chat history
-        """
-        formula to roughly compute the number of tokens: https://stackoverflow.com/questions/70060847/how-to-work-with-openai-maximum-context-length-is-2049-tokens
-        
-        l = ChatOpenAI(
-            model='gpt-4o-mini',
-            temperature=0,
+        agent_executor = CampusManagementOpenAIToolsAgent.run()
+        search_result_text_tokens, total_tokens = agent_executor.compute_num_tokens(
+            search_result_text, query
         )
-        l.get_num_tokens('hi this one thing ')
-        """
-        if len(search_result_text) > 15000:
+        # TODO instatead of truncating, summarize the content
+        if total_tokens > settings.model.context_window:
             logger.info(
                 f"Truncating search result text due to length: {len(search_result_text)}"
             )
-            search_result_text = search_result_text[:15000]
+
+            # 1 token ~= 4 chars in English  --> https://help.openai.com/en/articles/4936856-what-are-tokens-and-how-to-count-them
+            # TODO COMPUTE  for german
+            delta = total_tokens - settings.model.context_window
+            # TODO Weather we want to use up all the openai tokens should be tuned along with the max_execution_time in the agent executor
+            search_result_text = search_result_text[: -delta * 4]
 
         driver.quit()
+
+        logger.info(
+            f"Search result text length (tokens): {search_result_text_tokens}, Total tokens: {total_tokens}"
+        )
         return search_result_text
     except Exception as e:
         logger.error(f"Error while searching the web: {e}", exc_info=True)

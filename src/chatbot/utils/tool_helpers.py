@@ -1,3 +1,6 @@
+from src.chatbot.utils.agent_helpers import llm
+
+
 class VisitedLinks:
     """
     Singleton class to keep track of visited links.

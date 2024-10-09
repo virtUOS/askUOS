@@ -9,6 +9,7 @@ from langchain.prompts.chat import (
 from src.chatbot_log.chatbot_logger import logger
 import src.chatbot.utils.prompt_text as text
 from src.config.core_config import settings
+from src.chatbot.utils.agent_helpers import llm
 
 
 def translate_prompt() -> Dict[str, str]:
@@ -57,3 +58,21 @@ def get_prompt() -> ChatPromptTemplate:
     ]
 
     return ChatPromptTemplate.from_messages(template_messages)
+
+
+def get_prompt_length() -> int:
+    """
+    Calculates the length of the prompt based on the provided text.
+
+    Returns:
+        int: The length of the prompt (in tokens).
+
+    """
+
+    prompt_text = translate_prompt()
+
+    # formula to roughly compute the number of tokens: https://stackoverflow.com/questions/70060847/how-to-work-with-openai-maximum-context-length-is-2049-tokens
+
+    num_prompt_tokens = llm().get_num_tokens(prompt_text["system_message"])
+
+    return num_prompt_tokens
