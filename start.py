@@ -24,6 +24,12 @@ st.set_page_config(
 )
 
 
+with open("./pages/static/style.css") as css:
+    st.markdown(f"<style>{css.read()}</style>", unsafe_allow_html=True)
+
+# st.markdown("![Click me](app/static/Icon-chatbot.png)")
+
+
 st.markdown(
     """
 <style>
