@@ -13,5 +13,5 @@ pypdf===4.0.1
 PyPDF2===3.0.1
 uvicorn
 fastembed===0.2.1
-streamlit===1.35.0
+streamlit===1.39.0
 pydantic-settings===2.3.4

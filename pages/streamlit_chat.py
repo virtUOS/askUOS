@@ -2,7 +2,6 @@
 
 
 import time
-
 import streamlit as st
 from streamlit import session_state
 
@@ -27,8 +26,8 @@ agent_executor = CampusManagementOpenAIToolsAgent.run()
 
 # App title
 st.set_page_config(
-    page_title="🤗💬 Campus Management Chatbot",
-    page_icon="🤖",
+    page_title="Campus Management Chatbot",
+    page_icon="app/static/Icon-chatbot.png",
     layout="centered",
     initial_sidebar_state="collapsed",
 )
@@ -48,6 +47,14 @@ if session_state.get("show_warning", True):
         session_state["show_warning"] = False
         st.rerun()
 
+# TODO move css to a separate file
+
+# To change the color of the input text area, you can use the following CSS code:
+
+#   [data-testid="stChatInputTextArea"] {
+#         background-color: #adb5bd;
+#     }
+
 
 st.markdown(
     """
@@ -55,27 +62,78 @@ st.markdown(
     [data-testid="collapsedControl"] {
         display: none
     }
+        .st-key-like button {
+        background-image: url('app/static/Icon-Daumen-h.png'); /* Path to your png file */
+        background-size: cover; /* Adjusts the size of the background */
+        background-position: center; /* Centers the image */
+        background-repeat: no-repeat; /* Prevents the image from repeating */
+        color: white; /* Text color */
+        border: none; /* No border */
+        cursor: pointer; /* Change the cursor on hover */
+
+    }
+    
+    
+    .st-key-like button:hover {
+
+    background-image: url('app/static/Icon-Daumen-h-2.png'); /* Path to your png file */
+}
+    
+    .st-key-like p {
+        display: none;
+    }
+    
+    
+    .st-key-dislike button {
+        background-image: url('app/static/Icon-Daumen-u.png'); /* Path to your SVG file */
+        background-size: cover; /* Adjusts the size of the background */
+        background-position: center; /* Centers the image */
+        background-repeat: no-repeat; /* Prevents the image from repeating */
+        color: white; /* Text color */
+        border: none; /* No border */
+        cursor: pointer; /* Change the cursor on hover */
+
+    }
+    
+    .st-key-dislike p {
+        display: none;
+    }
+    
+.st-key-dislike button:hover {
+
+    background-image: url('app/static/Icon-Daumen-u-2.png'); /* Path to your png file */
+}
+
+
 </style>
 """,
     unsafe_allow_html=True,
 )
 # sidebar (include authentication backend here)
 
-st.title("🤗💬 Campus Management")
+st.title("Campus Management")
 
 # Store LLM generated responses
 if "messages" not in st.session_state:
-    st.session_state["messages"] = [{"role": "assistant", "content": greeting_message}]
+    st.session_state["messages"] = [
+        {
+            "role": "assistant",
+            "avatar": "./static/Icon-chatbot.svg",
+            "content": greeting_message,
+        }
+    ]
 
 # Display chat messages
 for message in st.session_state["messages"]:
-    with st.chat_message(message["role"]):
+    with st.chat_message(message["role"], avatar=message["avatar"]):
         st.write(message["content"])
 
 # User-provided prompt
-if prompt := st.chat_input():
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
+if prompt := st.chat_input(placeholder=session_state["_"]("Message")):
+    st.session_state.messages.append(
+        {"role": "user", "content": prompt, "avatar": "./static/Icon-user.svg"}
+    )
+    with st.chat_message("user", avatar="./static/Icon-user.svg"):
         st.write(prompt)
 
 
@@ -91,8 +149,8 @@ def get_feedback(user_query, response, time_taken, rate):
 
 # Generate a new response if last message is not from assistant
 if st.session_state.messages[-1]["role"] != "assistant":
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
+    with st.chat_message("assistant", avatar="./static/Icon-chatbot.svg"):
+        with st.spinner(session_state["_"]("Generating response...")):
 
             logger.info(f"User's query: {prompt}")
             # start time
@@ -142,21 +200,32 @@ if st.session_state.messages[-1]["role"] != "assistant":
             #     )
 
     col1, col2, col3, col4 = st.columns([3, 3, 0.5, 0.5])
+
     with col3:
-        st.button(
-            ":thumbsup:",
-            on_click=get_feedback,
-            args=[prompt, response["output"], time_taken, "like"],
-            help="Click here if you like the response",
-        )
+        with st.container(key="FeedbackLike"):
+            st.button(
+                label=":thumbsup:",
+                type="primary",
+                on_click=get_feedback,
+                key="like-button",
+                args=[prompt, response["output"], time_taken, "like"],
+                help=session_state["_"]("Click here if you like the response"),
+            )
 
     with col4:
-        st.button(
-            ":thumbsdown:",
-            on_click=get_feedback,
-            args=[prompt, response["output"], time_taken, "dislike"],
-            help="Click here if you dislike the response",
-        )
+        with st.container(key="FeedbackDislike"):
+            st.button(
+                ":thumbsdown:",
+                on_click=get_feedback,
+                type="primary",
+                key="dislike-button",
+                args=[prompt, response["output"], time_taken, "dislike"],
+                help=session_state["_"]("Click here if you dislike the response"),
+            )
 
-    message = {"role": "assistant", "content": response["output"]}
+    message = {
+        "role": "assistant",
+        "content": response["output"],
+        "avatar": "./static/Icon-chatbot.svg",
+    }
     st.session_state.messages.append(message)

@@ -17,8 +17,8 @@ initialize_session_sate()
 
 
 st.set_page_config(
-    page_title="🤗💬 Campus Management Chatbot",
-    page_icon="🤖",
+    page_title="Campus Management Chatbot",
+    page_icon="app/static/Icon-chatbot.png",
     layout="centered",
     initial_sidebar_state="collapsed",
 )
@@ -36,6 +36,21 @@ st.markdown(
     [data-testid="collapsedControl"] {
         display: none
     }
+    
+    [data-testid="baseButton-primary"]{
+        background-color: #ad1034;
+ 
+    }
+    
+    [data-testid="baseButton-primary"]:hover {
+    background-color: #8f2133; /* Dunkelrot background color on hover */
+    }
+    
+    [data-testid="baseButton-primary"] p {
+    color: white; /* Set paragraph (the button text is contained in a <p>) text color to white */
+    }
+    
+    
 </style>
 """,
     unsafe_allow_html=True,
