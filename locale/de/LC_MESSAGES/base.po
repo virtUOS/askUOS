@@ -49,3 +49,15 @@ msgstr "Die Ausgaben des Chat-Assistenten können fehlerhaft sein - überprüfen
 
 msgid "I understand"
 msgstr "Ich verstehe"
+
+msgid "Generating response..."
+msgstr "Antwort wird generiert..."
+
+msgid "Click here if you like the response"
+msgstr "Klicken Sie hier, wenn Ihnen die Antwort gefällt"
+
+msgid "Click here if you dislike the response"
+msgstr "Klicken Sie hier, wenn Ihnen die Antwort nicht gefällt"
+
+msgid "Message"
+msgstr "Nachricht"
