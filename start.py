@@ -27,35 +27,6 @@ st.set_page_config(
 with open("./pages/static/style.css") as css:
     st.markdown(f"<style>{css.read()}</style>", unsafe_allow_html=True)
 
-# st.markdown("![Click me](app/static/Icon-chatbot.png)")
-
-
-st.markdown(
-    """
-<style>
-    [data-testid="collapsedControl"] {
-        display: none
-    }
-    
-    [data-testid="baseButton-primary"]{
-        background-color: #ad1034;
- 
-    }
-    
-    [data-testid="baseButton-primary"]:hover {
-    background-color: #8f2133; /* Dunkelrot background color on hover */
-    }
-    
-    [data-testid="baseButton-primary"] p {
-    color: white; /* Set paragraph (the button text is contained in a <p>) text color to white */
-    }
-    
-    
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
 
 initialize_language()
 
@@ -77,7 +48,11 @@ Have any question? Email me at yecanocastro@uos.de
 st.markdown(session_state["_"](start_message))
 
 
-if st.button(session_state["_"]("Start Chatting"), type="primary"):
+with st.container(
+    key="start-chat"
+):  # the key is used to identify the container in the page with the class st-key-start
 
-    sleep(0.5)
-    st.switch_page("pages/streamlit_chat.py")
+    if st.button(session_state["_"]("Start Chatting"), type="primary"):
+
+        sleep(0.5)
+        st.switch_page("pages/streamlit_chat.py")

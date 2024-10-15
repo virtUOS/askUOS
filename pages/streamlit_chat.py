@@ -47,69 +47,6 @@ if session_state.get("show_warning", True):
         session_state["show_warning"] = False
         st.rerun()
 
-# TODO move css to a separate file
-
-# To change the color of the input text area, you can use the following CSS code:
-
-#   [data-testid="stChatInputTextArea"] {
-#         background-color: #adb5bd;
-#     }
-
-
-st.markdown(
-    """
-<style>
-    [data-testid="collapsedControl"] {
-        display: none
-    }
-        .st-key-like button {
-        background-image: url('app/static/Icon-Daumen-h.png'); /* Path to your png file */
-        background-size: cover; /* Adjusts the size of the background */
-        background-position: center; /* Centers the image */
-        background-repeat: no-repeat; /* Prevents the image from repeating */
-        color: white; /* Text color */
-        border: none; /* No border */
-        cursor: pointer; /* Change the cursor on hover */
-
-    }
-    
-    
-    .st-key-like button:hover {
-
-    background-image: url('app/static/Icon-Daumen-h-2.png'); /* Path to your png file */
-}
-    
-    .st-key-like p {
-        display: none;
-    }
-    
-    
-    .st-key-dislike button {
-        background-image: url('app/static/Icon-Daumen-u.png'); /* Path to your SVG file */
-        background-size: cover; /* Adjusts the size of the background */
-        background-position: center; /* Centers the image */
-        background-repeat: no-repeat; /* Prevents the image from repeating */
-        color: white; /* Text color */
-        border: none; /* No border */
-        cursor: pointer; /* Change the cursor on hover */
-
-    }
-    
-    .st-key-dislike p {
-        display: none;
-    }
-    
-.st-key-dislike button:hover {
-
-    background-image: url('app/static/Icon-Daumen-u-2.png'); /* Path to your png file */
-}
-
-
-</style>
-""",
-    unsafe_allow_html=True,
-)
-# sidebar (include authentication backend here)
 
 st.title("Campus Management")
 
@@ -169,8 +106,6 @@ if st.session_state.messages[-1]["role"] != "assistant":
             time_taken = end_time - start_time
             logger.info(f"Time taken to generate a response: {time_taken} seconds")
 
-            # TODO query to trigger pdf 'Transponder beantragen' or 'Anmeldeformular Masterarbeit Universität Osnabrück'
-            # TODO handle the case where there are multiple PDF files in the response
             # TODO if pdf is too long to display, provide a download link
             # check if the response contains a PDF file
 

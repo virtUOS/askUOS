@@ -4,3 +4,74 @@ body * {
     font-family: "Signika", sans-serif !important;
     color: #3e3e3f;
 }
+
+/* start.py */
+
+[data-testid="collapsedControl"] {
+    display: none
+}
+
+[data-testid="baseButton-primary"]{
+    background-color: #ad1034;
+
+}
+
+[data-testid="baseButton-primary"]:hover {
+background-color: #8f2133; /* Dunkelrot background color on hover */
+}
+
+
+.st-key-start p {
+    color: white;  /* Set paragraph (the button text is contained in a <p>) text color to white */
+}
+
+
+/* streamlit_chat.py */
+
+
+
+[data-testid="collapsedControl"] {
+    display: none
+}
+
+.st-key-like button {
+    background-image: url('app/static/Icon-Daumen-h.png'); /* Path to your png file */
+    background-size: cover; /* Adjusts the size of the background */
+    background-position: center; /* Centers the image */
+    background-repeat: no-repeat; /* Prevents the image from repeating */
+    color: white; /* Text color */
+    border: none; /* No border */
+    cursor: pointer; /* Change the cursor on hover */
+
+}
+
+
+.st-key-like button:hover {
+
+background-image: url('app/static/Icon-Daumen-h-2.png'); /* Path to your png file */
+}
+
+.st-key-like p {
+    display: none;
+}
+
+
+.st-key-dislike button {
+    background-image: url('app/static/Icon-Daumen-u.png'); /* Path to your SVG file */
+    background-size: cover; /* Adjusts the size of the background */
+    background-position: center; /* Centers the image */
+    background-repeat: no-repeat; /* Prevents the image from repeating */
+    color: white; /* Text color */
+    border: none; /* No border */
+    cursor: pointer; /* Change the cursor on hover */
+
+}
+
+.st-key-dislike p {
+    display: none;
+}
+
+.st-key-dislike button:hover {
+
+background-image: url('app/static/Icon-Daumen-u-2.png'); /* Path to your png file */
+}
