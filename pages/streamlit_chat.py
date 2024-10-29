@@ -68,9 +68,9 @@ for message in st.session_state["messages"]:
 # User-provided prompt
 if prompt := st.chat_input(placeholder=session_state["_"]("Message")):
     st.session_state.messages.append(
-        {"role": "user", "content": prompt, "avatar": "./static/Icon-user.svg"}
+        {"role": "user", "content": prompt, "avatar": "./static/Icon-User.svg"}
     )
-    with st.chat_message("user", avatar="./static/Icon-user.svg"):
+    with st.chat_message("user", avatar="./static/Icon-User.svg"):
         st.write(prompt)
 
 
