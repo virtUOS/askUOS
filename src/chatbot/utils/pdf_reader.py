@@ -6,13 +6,19 @@ import concurrent.futures
 from typing import Optional, Tuple
 
 
-def read_pdf_from_url(response, num_pages=7):
+def read_pdf_from_url(pdf_bytes: bytes, num_pages: int = 7) -> str:
     """
-    Read the content of a pdf file from a given response object
-    :param response: response object from the request
-    :param num_pages: number of pages to process. If None, process all pages
+    Read the content of a PDF file from a given byte stream.
+
+    Args:
+        pdf_bytes (bytes): Raw bytes of the PDF content.
+        num_pages (int, optional): Number of pages to process. If None, process all pages. Defaults to 7.
+
+    Returns:
+        str: Extracted text content from the PDF.
     """
-    pdf_stream = io.BytesIO(response.content)
+
+    pdf_stream = io.BytesIO(pdf_bytes)
 
     pdf_text = ""
     with pdf_stream as f:
@@ -24,7 +30,7 @@ def read_pdf_from_url(response, num_pages=7):
 
         for page_num in range(num_pages):
             page = reader.pages[page_num]
-            pdf_text += page.extract_text()
+            pdf_text += page.extract_text() or ""
 
     return pdf_text
 

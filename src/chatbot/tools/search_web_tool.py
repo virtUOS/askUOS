@@ -1,8 +1,14 @@
+import sys
+
+sys.path.append("/app")
+
 import re
 import urllib.parse
 
 import dotenv
 import requests
+import asyncio
+import aiohttp
 from bs4 import BeautifulSoup
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
@@ -11,7 +17,7 @@ from langchain_openai import ChatOpenAI
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
-
+from aiohttp import ClientSession
 from src.chatbot.utils.pdf_reader import read_pdf_from_url
 from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.utils.tool_helpers import visited_links, VisitedLinks
@@ -23,7 +29,7 @@ dotenv.load_dotenv()
 
 SEARCH_URL = settings.search_config.search_url
 SERVICE = settings.search_config.service
-MAX_NUM_LINKS = 2
+MAX_NUM_LINKS = 4
 HEADLESS_OPTION = "--headless"
 QUERY_SPACE_REPLACEMENT = "+"
 
@@ -107,15 +113,16 @@ def decode_string(query):
     return query.replace(" ", QUERY_SPACE_REPLACEMENT)
 
 
-def extract_pdf_text(href: str, response) -> str:
+def extract_pdf_text(href: str, pdf_bytes: bytes) -> str:
 
-    text = read_pdf_from_url(response)
+    # TODO append url to the text
+    text = read_pdf_from_url(pdf_bytes)
     return re.sub(r"(\n\s*|\n\s+\n\s+)", "\n", text.strip())
 
 
-def extract_html_text(href: str, response) -> str:
+def extract_html_text(href: str, html_content: str) -> str:
 
-    link_soup = BeautifulSoup(response.content, "html.parser")
+    link_soup = BeautifulSoup(html_content, "html.parser")
     div_content = link_soup.find("div", class_="eb2")
     if div_content:
         text = re.sub(r"\n+", "\n", div_content.text.strip())
@@ -128,11 +135,40 @@ def extract_html_text(href: str, response) -> str:
     return ""
 
 
-def extract_and_visit_links(
+async def fetch_url(session: ClientSession, url: str) -> str:
+    """
+    Fetches the content from a given URL asynchronously.
+    Args:
+        session (ClientSession): The aiohttp client session to use for making the request.
+        url (str): The URL to fetch content from.
+    Returns:
+        str: The extracted text content from the URL, prefixed with a source information string.
+            Returns None if an error occurs or the response status is not 200.
+    Raises:
+        Exception: Logs any exceptions that occur during the fetch process.
+    """
+
+    taken_from = "Information taken from: "
+    try:
+        async with session.get(url) as response:
+            if response.status == 200:
+                if url.endswith(".pdf"):
+                    pdf_bytes = await response.read()  # Read PDF content as bytes
+                    text = f"{taken_from}{url}\n{extract_pdf_text(url, pdf_bytes)}"
+                else:
+                    html_content = await response.text()
+                    text = f"{taken_from}{url}\n{extract_html_text(url, html_content)}"
+                return text
+    except Exception as e:
+        logger.error(f"Error while fetching: {url} - {e}")
+    return None
+
+
+async def extract_and_visit_links(
     rendered_html: str,
     max_num_links: int = MAX_NUM_LINKS,
     visited_links: VisitedLinks = visited_links,
-):
+) -> tuple[str, list]:
     """
     Extracts and visits links from rendered HTML.
 
@@ -150,40 +186,37 @@ def extract_and_visit_links(
     # Clear the list of visited links
     visited_links.clear()
     contents = []
-    taken_from = "Information taken from:"
     search_result_text = "Content not found"
     soup = BeautifulSoup(rendered_html, "html.parser")
     # 'gs-title' is the class attached to the anchor tag that contains the search result (University website search result page)
     anchor_tags = soup.find_all("a", class_="gs-title")  # the search result links
-    # TODO Make sure that the search result links ordered is preserved (Implement test)
-    for tag in anchor_tags:
-        href = str(tag.get("href"))
-        # there could be repeated links
-        if href in visited_links():
-            continue
-        try:
-            # TODO I/O operation (use async code)
-            response = requests.get(href)
-        except:
-            logger.error(f"Error while fetching: {href}")
-            continue
 
-        if response.status_code == 200:
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        # Track the number of successfully visited links
 
-            if href.endswith(".pdf"):
-                text = extract_pdf_text(href, response)
-            else:
-                text = extract_html_text(href, response)
+        # TODO Make sure that the search result links ordered is preserved (Implement test)
+        for tag in anchor_tags:
+            href = str(tag.get("href"))
+            # Check for previously visited links
+            if len(visited_links()) >= max_num_links:
+                break
+            if href in visited_links():
+                continue
 
+            visited_links().append(href)
+            # Create and collect a task to fetch the URL
+            tasks.append(fetch_url(session, href))
+
+        # Gather the results of the tasks (text fetched from the URLs)
+        texts = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # TODO summarize text if needed
+        for text in texts:
             if text:
-                text = f"{taken_from}{href}\n{text}"
                 contents.append(text)
-                visited_links().append(href)
 
-                if len(visited_links()) >= max_num_links:
-                    break
-
-    return "\n".join(contents) if contents else search_result_text, anchor_tags
+    return ("\n".join(contents) if contents else search_result_text, anchor_tags)
 
 
 def search_uni_web(query: str) -> str:
@@ -215,8 +248,10 @@ def search_uni_web(query: str) -> str:
         # TODO I/O operation (use async code) During waiting time compute the number of tokens in the prompt and chat history
         driver.get(url)
         rendered_html = driver.page_source
-        search_result_text, _ = extract_and_visit_links(rendered_html)
+        # search_result_text, _ = extract_and_visit_links(rendered_html)
+        search_result_text, _ = asyncio.run(extract_and_visit_links(rendered_html))
 
+        # TODO dependency injection
         agent_executor = CampusManagementOpenAIToolsAgent.run()
         search_result_text_tokens, total_tokens = agent_executor.compute_num_tokens(
             search_result_text, query
@@ -231,7 +266,9 @@ def search_uni_web(query: str) -> str:
             # TODO COMPUTE  for german
             delta = total_tokens - settings.model.context_window
             # TODO Weather we want to use up all the openai tokens should be tuned along with the max_execution_time in the agent executor
-            search_result_text = search_result_text[: -delta * 4]
+            search_result_text = search_result_text[
+                : -delta * 4
+            ]  # 4 is the average number of characters per token in English
 
         driver.quit()
 
@@ -247,15 +284,44 @@ def search_uni_web(query: str) -> str:
 
 if __name__ == "__main__":
     # use for testing/ debugging
+
     try:
         from search_sample import search_sample
     except ImportError:
-        import sys
 
         sys.path.append("./test")
         from search_sample import search_sample
 
-    content, anchor_tags = extract_and_visit_links(search_sample)
-    query = "can I study Biology?"
+    # content, anchor_tags = extract_and_visit_links(search_sample)
+    # query = "can I study Biology?"
+    query = "PO-Bachelor-Cognitive Science pdf"
     search_result = search_uni_web(query)
     print(search_result)
+
+    # # TODO Make sure that the search result links ordered is preserved (Implement test)
+    # for tag in anchor_tags:
+    #     href = str(tag.get("href"))
+    #     # there could be repeated links
+    #     if href in visited_links():
+    #         continue
+    #     try:
+    #         # TODO I/O operation (use async code)
+    #         response = requests.get(href)
+    #     except:
+    #         logger.error(f"Error while fetching: {href}")
+    #         continue
+
+    #     if response.status_code == 200:
+
+    #         if href.endswith(".pdf"):
+    #             text = extract_pdf_text(href, response)
+    #         else:
+    #             text = extract_html_text(href, response)
+
+    #         if text:
+    #             text = f"{taken_from}{href}\n{text}"
+    #             contents.append(text)
+    #             visited_links().append(href)
+
+    #             if len(visited_links()) >= max_num_links:
+    #                 break

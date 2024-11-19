@@ -294,7 +294,9 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
             max_execution_time=60,  # Agent stops after 60 seconds
         )
 
-    def compute_num_tokens(self, search_result_text, query):
+    def compute_num_tokens(
+        self, search_result_text: str, query: str
+    ) -> Tuple[int, int]:
         # extract the chathistory from the memory
         # TODO this is a list, iterate over the list and extract the content
         # TODO BUG: Agent's scratchpad tokens are not being counted (fix sum(count_tokens_history) * 2)
@@ -306,7 +308,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
         search_result_text_tokens = self.llm.get_num_tokens(search_result_text)
         total_tokens = (
             sum(count_tokens_history)
-            * 2  # multiply by 2 to account for agent's scratchpad
+            * 2  # multiply by 2 to account for agent's scratchpad # TODO FIX THIS (THIS IS NOT THE CORRECT WAY TO COUNT (SCRATCHPAD) TOKENS)
             + search_result_text_tokens
             + self.llm.get_num_tokens(query)
             + self.prompt_length
