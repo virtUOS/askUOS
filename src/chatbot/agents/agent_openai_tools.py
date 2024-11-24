@@ -190,7 +190,7 @@ class Defaults:
             ),
             StructuredTool.from_function(
                 name="custom_university_web_search",
-                func=search_uni_web,
+                func=search_uni_web.run,
                 description=translate_prompt()["description_university_web_search"],
                 handle_tool_errors=True,
             ),
@@ -294,9 +294,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
             max_execution_time=60,  # Agent stops after 60 seconds
         )
 
-    def compute_num_tokens(
-        self, search_result_text: str, query: str
-    ) -> Tuple[int, int]:
+    def compute_internal_tokens(self, query: str) -> int:
         # extract the chathistory from the memory
         # TODO this is a list, iterate over the list and extract the content
         # TODO BUG: Agent's scratchpad tokens are not being counted (fix sum(count_tokens_history) * 2)
@@ -305,16 +303,19 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
         ]  # this is a list [{'content':'', 'additional_kwargs':{},...}, {}...]
 
         count_tokens_history = [self.llm.get_num_tokens(c["content"]) for c in history]
-        search_result_text_tokens = self.llm.get_num_tokens(search_result_text)
-        total_tokens = (
-            sum(count_tokens_history)
-            * 2  # multiply by 2 to account for agent's scratchpad # TODO FIX THIS (THIS IS NOT THE CORRECT WAY TO COUNT (SCRATCHPAD) TOKENS)
-            + search_result_text_tokens
-            + self.llm.get_num_tokens(query)
+        # TODO multiply by 2 to account for agent's scratchpad # TODO FIX THIS (THIS IS NOT THE CORRECT WAY TO COUNT (SCRATCHPAD) TOKENS)
+        internal_tokens = (
+            sum(count_tokens_history) * 2
             + self.prompt_length
+            + self.llm.get_num_tokens(query)
         )
+        return internal_tokens
 
-        return search_result_text_tokens, total_tokens
+    def compute_search_num_tokens(self, search_result_text: str) -> int:
+
+        search_result_text_tokens = self.llm.get_num_tokens(search_result_text)
+
+        return search_result_text_tokens
 
     def __call__(self, input: str):
 

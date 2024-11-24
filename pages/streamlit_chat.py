@@ -6,7 +6,7 @@ import streamlit as st
 from streamlit import session_state
 
 from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
-from src.chatbot.utils.tool_helpers import visited_links
+from src.chatbot.tools.utils.tool_helpers import visited_links
 from src.chatbot_log.chatbot_logger import logger
 from pages.utils import initialize_session_sate
 
