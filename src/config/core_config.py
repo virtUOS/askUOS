@@ -7,6 +7,7 @@ from pydantic_settings import (
 from typing import Type, Tuple, Literal, ClassVar, Optional
 from .models import SearchConfig, ModelConfig
 from src.chatbot_log.chatbot_logger import logger
+import time
 
 
 class Settings(BaseSettings):
@@ -24,6 +25,8 @@ class Settings(BaseSettings):
     model: ModelConfig
     language: Literal["Deutsch", "English"]
     model_config = SettingsConfigDict(yaml_file="config.yaml")
+    # TODO move this a global object/context
+    time_request_sent: Optional[float] = None
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:

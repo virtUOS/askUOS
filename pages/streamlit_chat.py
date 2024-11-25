@@ -4,7 +4,7 @@
 import time
 import streamlit as st
 from streamlit import session_state
-
+from src.config.core_config import settings
 from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.tools.utils.tool_helpers import visited_links
 from src.chatbot_log.chatbot_logger import logger
@@ -92,6 +92,7 @@ if st.session_state.messages[-1]["role"] != "assistant":
             logger.info(f"User's query: {prompt}")
             # start time
             start_time = time.time()
+            settings.time_request_sent = start_time
 
             # chunks = []
             # for chunk in agent_executor._agent_executor.stream({"input": prompt}):
@@ -104,7 +105,9 @@ if st.session_state.messages[-1]["role"] != "assistant":
             # end time
             end_time = time.time()
             time_taken = end_time - start_time
-            logger.info(f"Time taken to generate a response: {time_taken} seconds")
+            logger.info(
+                f"Time taken to serve whole answer to the user: {time_taken} seconds"
+            )
 
             # TODO if pdf is too long to display, provide a download link
             # check if the response contains a PDF file

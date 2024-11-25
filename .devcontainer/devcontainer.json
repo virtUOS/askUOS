@@ -24,7 +24,8 @@
 				"ms-python.debugpy",
 				"ms-python.black-formatter",
 				"ms-python.isort",
-				"ms-python.python"
+				"ms-python.python",
+				"mechatroner.rainbow-csv"
 			]
 		}
 	}
