@@ -1,0 +1,99 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "streamlit_app",
+            "type": "debugpy",
+            "justMyCode":true,
+            "request": "launch",
+            "program": "/usr/local/bin/streamlit",
+            "args": [
+                "run",
+                "./start.py"
+            ]
+        },
+
+        {
+            "name": "streamlit_chat",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/usr/local/bin/streamlit",
+            "env":{ "PYTHONPATH": "/app"},
+            "args": [
+                "run",
+                "./pages/streamlit_chat.py"
+            ],
+        
+        },
+
+
+
+        {
+            "name": "agent_openai_tools",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./src/chatbot/agents/agent_openai_tools.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+
+        {
+            "name": "test_time_gen",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./test/test_time_gen.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+
+        {
+            "name": "core_config",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./src/config/core_config.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+
+        {
+            "name": "chromadb",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./src/chatbot/db/vector_store.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+
+        },
+   
+        {
+            "name": "search_web_tool",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./src/chatbot/tools/search_web_tool.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "./src"},
+            "console": "integratedTerminal"
+        },
+
+
+        {
+            "name": "test_chatbot",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./test/test_chatbot.py",
+            "console": "integratedTerminal",
+            "env":{ "PYTHONPATH": "./src"}
+        },
+
+  
+    ]
+}

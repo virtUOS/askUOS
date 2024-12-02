@@ -8,7 +8,7 @@ services:
       context: .
       dockerfile: Dockerfile.prod
     container_name: langchain-streamlit-agent-container-prod
-    command: streamlit run ./src/start.py --server.port 8501
+    command: streamlit run ./start.py --server.port 8501
     env_file:
       - .env.prod
     ports:
@@ -42,10 +42,17 @@ services:
     container_name: nginx_prod_container
     ports:
       - "80:80"
+      - 443:443 # https port
+    restart: always
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # - ./certbot/www:/var/www/certbot/:ro
     networks:
       - net
+  # certbot:
+  #   image: certbot/certbot:latest
+  #   volumes:
+  #     - ./certbot/www/:/var/www/certbot/:rw
 volumes:  
   chroma-data:
 

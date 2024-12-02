@@ -1,0 +1,7 @@
+[server]
+enableStaticServing = true
+
+[theme]
+
+primaryColor = "#ad1034"
+

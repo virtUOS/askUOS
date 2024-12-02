@@ -9,19 +9,17 @@ from bs4 import BeautifulSoup
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.prompts import PromptTemplate
 import dotenv
-from chatbot_log.chatbot_logger import logger
-from chatbot.utils.pdf_reader import read_pdf_from_url
+from src.chatbot_log.chatbot_logger import logger
 import os
 from langchain_openai import ChatOpenAI
-from langchain.chains.summarize import load_summarize_chain
 from langchain_core.tools import ToolException
-from config.settings import SEARCH_URL
-from urllib.parse import urljoin
+from src.config.settings import SEARCH_URL
+
 
 dotenv.load_dotenv()
 
 
-def application_instructions (user_input: str, **kwargs):
+def application_instructions(user_input: str, **kwargs):
 
     instructions = """
      
@@ -31,6 +29,5 @@ def application_instructions (user_input: str, **kwargs):
     4. Keep track of the application status and any additional steps required. For more detailed information, you can visit the university's website or contact the Persönliche Studienberatung (personal study advisory service).
      
     """
-    
-    return instructions
 
+    return instructions

@@ -1,8 +1,14 @@
-import re
-import urllib.parse
+import sys
+
+sys.path.append("/app")
+
+
+from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
 import dotenv
 import requests
-from bs4 import BeautifulSoup
+import asyncio
+import aiohttp
+
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -10,209 +16,254 @@ from langchain_openai import ChatOpenAI
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
-from chatbot_log.chatbot_logger import logger
-from config.settings import SEARCH_URL, SERVICE
-from chatbot.utils.pdf_reader import read_pdf_from_url
+from aiohttp import ClientSession
+from src.chatbot.tools.utils.tool_helpers import (
+    decode_string,
+    extract_html_text,
+    extract_pdf_text,
+    visited_links,
+    VisitedLinks,
+)
+from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
+
+from src.chatbot_log.chatbot_logger import logger
+from src.config.core_config import settings
+from bs4 import BeautifulSoup
 
 dotenv.load_dotenv()
 
 
-# TODO summarize  the content when it + the prompt +chat_history exceed the number of openai allow tokens (16385 tokens)
-def summarise_content(text, question):
-    print(
-        "---------------------------------------------------------summarising content...---------------------------------------------------------"
-    )
-    llm = ChatOpenAI(temperature=0)
-    text_splitter = RecursiveCharacterTextSplitter(
-        separators=["\n\n", "\n"], chunk_size=3500, chunk_overlap=300
-    )
-    docs = text_splitter.create_documents([text])
+SEARCH_URL = settings.search_config.search_url
+SERVICE = settings.search_config.service
+MAX_NUM_LINKS = 4
+HEADLESS_OPTION = "--headless"
 
-    reduce_template_string = """I will act as a text summarizer to help create a concise summary of the text provided, with a focus on addressing the given query. 
-    The summary can be up to 20 sentences in length, capturing the key points and concepts from the original text without adding interpretations. The summary should keep the links found in the text. 
-    Irrelevant details not related to the question will be excluded from the summary.
 
-   Summarize this text:
-        {text}
+class SearchUniWebTool:
 
-        question: {question}
-        Answer:
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(SearchUniWebTool, cls).__new__(cls)
+        else:
+            cls._instance.anchor_tags = None
+        return cls._instance
+
+    def __init__(self):
+        if not self.__dict__:  # to avoid reinitializing the object
+            self.no_content_found_message = "Content not found"
+            firefox_options = Options()
+            firefox_options.add_argument(HEADLESS_OPTION)
+            service = Service(SERVICE)
+            self.driver = webdriver.Firefox(service=service, options=firefox_options)
+
+    def __del__(self):
+        self.driver.quit()
+
+    def generate_summary(self, text: str, question: str) -> str:
+        # TODO summarize the content when it + the prompt +chat_history exceed the number of openai allowed tokens (16385 tokens)
+        logger.info(f"Summarizing content, query: {question}")
+
+        # TODO solve for german
+
+        # TODO evaluate how the chunk size affects the results. The idea is to not call the API multiple times
+        # converts tokens to characters and divides by 2. Make sure the chunk size is not bigger than the (model) context window
+        chunk_size = (
+            settings.model.context_window * 4
+        ) // 2  # 4 is the average number of characters per token in English
+        text_splitter = RecursiveCharacterTextSplitter(
+            separators=["\n\n", "\n"], chunk_size=chunk_size, chunk_overlap=300
+        )
+        docs = text_splitter.create_documents([text])
+
+        reduce_template_string = """Your task it to create a concise summary of the text provided. 
+    The summary must capture the key points and concepts from the original text without adding interpretations. Focus on the information that can be helpful in order
+    to answer the question/query provided below. Make sure that you DO NOT summarize/shorten links or references to external sources.
+
+    Summarize this text:
+    {text}
+
+    question/query: {question}
+    Answer:
     """
-    reduce_template = PromptTemplate(
-        template=reduce_template_string, input_variables=["text", "question"]
-    )
-    chain = load_summarize_chain(
-        llm=llm,
-        chain_type="map_reduce",
-        map_prompt=reduce_template,
-        combine_prompt=reduce_template,
-        verbose=True,
-    )
-    summary_result_text = chain.run(input_documents=docs, question=question)
-    # return chain.run(input_documents=docs, question=question)
-    return summary_result_text
 
+        reduce_template = PromptTemplate(
+            template=reduce_template_string, input_variables=["text", "question"]
+        )
+        chain = load_summarize_chain(
+            llm=self.agent_executor.llm,
+            chain_type="map_reduce",
+            map_prompt=reduce_template,
+            combine_prompt=reduce_template,
+            verbose=True,
+        )
 
-def decode_string(query):
-    """
-    Decode the query string to a format that can be used by the university website. e.g., wo+ist+der+universität
-    :return: decoded string in this format: wo+ist+der+universität
-    """
+        # TODO use aync chain.run?
+        summary = chain.run(input_documents=docs, question=question)
+        # TODO the summary does not include the Taking from: url
+        return summary
 
-    # Regular expressions for checking different types of encoding
-    utf8_pattern = re.compile(
-        b"[\xc0-\xdf][\x80-\xbf]|[\xe0-\xef][\x80-\xbf]{2}|[\xf0-\xf7][\x80-\xbf]{3}"
-    )
-    url_encoding_pattern = re.compile(r"%[0-9a-fA-F]{2}")
-    unicode_escape_pattern = re.compile(r"\\u[0-9a-fA-F]{4}")
+    def compute_tokens(self, search_result_text: str):
+        current_search_num_tokens = self.agent_executor.compute_search_num_tokens(
+            search_result_text
+        )
 
-    # Check for UTF-8 encoding
-    if utf8_pattern.search(query.encode("latin1")):
+        total_tokens = self.internal_num_tokens + current_search_num_tokens
+        return total_tokens, current_search_num_tokens
+
+    async def fetch_url(self, session: ClientSession, url: str) -> str:
+        """
+        Fetches the content from a given URL asynchronously.
+        Args:
+            session (ClientSession): The aiohttp client session to use for making the request.
+            url (str): The URL to fetch content from.
+        Returns:
+            str: The extracted text content from the URL, prefixed with a source information string.
+                Returns None if an error occurs or the response status is not 200.
+        Raises:
+            Exception: Logs any exceptions that occur during the fetch process.
+        """
+
+        taken_from = "Information taken from: "
         try:
-            decoded_utf8 = query.encode("latin1").decode("utf-8")
-            logger.info(
-                f"This is the query used by the University website: {decoded_utf8}"
-            )
+            async with session.get(url) as response:
+                if response.status == 200:
+                    # TODO pdf files need to be handled differently (Vector DB for example)
+                    if url.endswith(".pdf"):
+                        # TODO read pdf using response.stream(), so that the whole pdf is not loaded into memory. Process every stream
+                        # TODO as soon as it is available (see online algorithm)
+                        pdf_bytes = await response.read()  # Read PDF content as bytes
+                        text = f"{taken_from}{url}\n{extract_pdf_text(url, pdf_bytes)}"
+                    else:
+                        html_content = await response.text()
+                        text = (
+                            f"{taken_from}{url}\n{extract_html_text(url, html_content)}"
+                        )
+                    if text:
+                        self.contents.append(text)
+                        total_tokens, _ = self.compute_tokens("".join(self.contents))
+                        # 1 token ~= 4 chars in English  --> https://help.openai.com/en/articles/4936856-what-are-tokens-and-how-to-count-them
+                        if total_tokens > settings.model.context_window:
 
-            return decoded_utf8.replace(" ", "+")
+                            # TODO generate_summary must be async and the chain inside it must be awaited (use async chain.run)
+                            self.contents[-1] = self.generate_summary(text, self.query)
+
         except Exception as e:
-            pass
+            logger.error(f"Error while fetching: {url} - {e}")
 
-    # Check for URL encoding
-    if url_encoding_pattern.search(query):
+    async def visit_urls_extract(
+        self,
+        rendered_html: str,
+        max_num_links: int = MAX_NUM_LINKS,
+        visited_links: VisitedLinks = visited_links,
+    ) -> tuple[str, list]:
+        """
+        Extracts and visits links from rendered HTML.
+
+        Args:
+            rendered_html (str): The rendered HTML content.
+            max_num_links (int, optional): The maximum number of links to visit. Defaults to MAX_NUM_LINKS.
+            visited_links (VisitedLinks): Keeps track of the visited links (URLs used for information extraction).
+
+        Returns:
+            tuple: A tuple containing the extracted contents and the anchor tags.
+                - The extracted contents as a string. If no contents are found, returns "Content not found".
+                - The anchor tags as a list.
+
+        """
+        # get num tokens (prompt + chat history+query)
+        self.internal_num_tokens = self.agent_executor.compute_internal_tokens(
+            self.query
+        )
+        # Clear the list of visited links
+        visited_links.clear()
+        self.contents = []
+        soup = BeautifulSoup(rendered_html, "html.parser")
+        # 'gs-title' is the class attached to the anchor tag that contains the search result (University website search result page)
+        self.anchor_tags = soup.find_all(
+            "a", class_="gs-title"
+        )  # the search result links
+
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+
+            # TODO Make sure that the search result links ordered is preserved (Implement test)
+            for tag in self.anchor_tags:
+                href = str(tag.get("href"))
+                # Check for previously visited links
+                if len(visited_links()) >= max_num_links:
+                    break
+                if href in visited_links():
+                    continue
+
+                visited_links().append(href)
+                # Create and collect a task to fetch the URL
+                tasks.append(self.fetch_url(session, href))
+
+            # Gather the results of the tasks (text fetched from the URLs)
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    def run(self, query: str) -> str:
+        """
+        Searches the University of Osnabrück website based on the given query.
+
+        Args:
+            query (str): The query to search for.
+
+        Returns:
+            str: The search result text.
+
+        Notes:
+            - This function is specifically designed to handle questions about the University of Osnabrück, such as the application process or studying at the university.
+
+        """
+
         try:
-            decoded_url = urllib.parse.unquote(query)
-            logger.info(
-                f"This is the query used by the University website: {decoded_url}"
-            )
+            # TODO FIX dependency injection and circular dependency/import
+            self.agent_executor = CampusManagementOpenAIToolsAgent.run()
+            self.query = query
+            query_url = decode_string(self.query)
+            url = SEARCH_URL + query_url
+            # TODO I/O operation (use async code) During waiting time compute the number of tokens in the prompt and chat history
+            self.driver.get(url)
+            rendered_html = self.driver.page_source
 
-            return decoded_url.replace(" ", "+")
+            asyncio.run(self.visit_urls_extract(rendered_html))
+
+            final_output = "\n".join(self.contents)
+            # for tesing
+            # TODO REMOVE
+            final_output_tokens, final_search_tokens = self.compute_tokens(final_output)
+            logger.info(f"Search tokens: {final_search_tokens}")
+            logger.info(f"Final output (search + prompt): {final_output_tokens}")
+            # settings.final_output_tokens.append(final_output_tokens)
+            # settings.final_search_tokens.append(final_search_tokens)
+
+            return final_output if self.contents else self.no_content_found_message
+
         except Exception as e:
-            pass
-
-    # Check for Unicode escape sequences
-    if unicode_escape_pattern.search(query):
-        try:
-            decoded_unicode = query.encode("latin1").decode("unicode-escape")
-            logger.info(
-                f"This is the query used by the University website: {decoded_unicode}"
-            )
-
-            return decoded_unicode.replace(" ", "+")
-        except Exception as e:
-            pass
-
-    query = query.replace(" ", "+")
-    logger.info(f"This is the query used by the University website: {query}")
-
-    return query  # Return the original string if no decoding is needed
+            logger.error(f"Error while searching the web: {e}", exc_info=True)
+            return "Error while searching the web"
 
 
-def extract_and_visit_links(rendered_html: str, max_num_links: int = 2):
-    """
-    Extract the content from the search result  and visit the links to extract the content.
-    :param rendered_html: The rendered HTML of the search result page (e.g., a set of links).
-    :param max_num_links: The number of links to visit and extract the content from.
-    """
-    contents = []
-    taken_from = "Information taken from:"
-    search_result_text = "Content not found"
-    visited_links = set()
-    soup = BeautifulSoup(rendered_html, "html.parser")
-    # 'gs-title' is the class of the anchor tag that contains the search result (University website search result page)
-    anchor_tags = set(soup.find_all("a", class_="gs-title"))  # search result links
-    for tag in anchor_tags:
-        href = tag.get("href")
-        response = requests.get(href)
-        if response.status_code == 200:
-            visited_links.add(href)
-            # if the link is a pdf file
-            if href.endswith(".pdf"):
-                text = read_pdf_from_url(response)
-                text = re.sub(
-                    r"(\n\s*|\n\s+\n\s+)", "\n", text.strip()
-                )  # remove extra spaces
-                logger.info(f"Information extracted from pdf file: {href}")
-
-            else:
-
-                # TODO use the firefox driver to visit the link and extract the content
-                link_soup = BeautifulSoup(response.content, "html.parser")
-                # 'eb2' is the class of the div tag that contains the content of the search result (University website)
-                div_content = link_soup.find("div", class_="eb2")
-                if div_content:
-                    text = re.sub(r"\n+", "\n", div_content.text.strip())
-
-                    content_with_link = ""
-
-                    for link in div_content.find_all("a", href=True):
-                        text_anchor_tag = re.sub(
-                            r"\n+", "\n", link.text.strip()
-                        )  # Extract the text
-                        content_with_link += f" - {text_anchor_tag}: {link['href']}"  # Combine the text and the link
-
-                    text += "\nHref found in the text:\n" + content_with_link
-
-                else:
-                    contents.append(f"Failed to fetch content from the link: {href}")
-                    print(f"Failed to fetch content from the link: {href}")
-
-            text = f"{taken_from}{href}\n{text}"
-            contents.append(text)
-
-        # only visit the first two links
-        if len(visited_links) >= max_num_links:
-            break
-
-    search_result_text = "\n".join(contents)
-
-    return search_result_text
+search_uni_web = SearchUniWebTool()
 
 
-def search_uni_web(query: str) -> str:
-    """
-    Searches the University of Osnabrück website based on the given query.
+if __name__ == "__main__":
+    # use for testing/ debugging
 
-    Args:
-        query (str): The query to search for.
-
-    Returns:
-        str: The search result text.
-
-    Notes:
-        - This function is specifically designed to handle questions about the University of Osnabrück, such as the application process or studying at the university.
-
-    """
     try:
-        # TODO need to check if the query is in German, if not then translate it to German
-        query = query
-        print(f"------Query--------: {query}")
-        query_url = decode_string(query)
-        print(f"------Query URL--------: {query_url}")
-        # constructs the complete URL for the search
-        firefox_options = Options()
-        firefox_options.add_argument("--headless")  # Run Firefox in headless mode
-        service = Service(SERVICE)  # path to the geckodriver
-        driver = webdriver.Firefox(service=service, options=firefox_options)
-        url = SEARCH_URL + query_url
-        driver.get(url)
-        rendered_html = driver.page_source
+        from search_sample import search_sample
+    except ImportError:
 
-        search_result_text = extract_and_visit_links(rendered_html)
-        logger.info(f"Length of the search result text: {len(search_result_text)}")
-        # TODO use algorithm from my thesis to compute exact number of tokens given length of the search result text
-        # truncate the search result text to 15000 tokens
-        if len(search_result_text) > 15000:
-            print(
-                f"-------------------------------Truncate. length of the original search result text-------------------------: {len(search_result_text)}"
-            )
-            search_result_text = search_result_text[:15000]
+        sys.path.append("./test")
+        from search_sample import search_sample
 
-        driver.quit()
-        return search_result_text
-    except Exception as e:
-        logger.error(f"Error while searching the web: {e}")
-        print(f"Error while searching the web: {e}")
-        # raise ToolException('Error while searching the web')
-        driver.quit()
-        return "Error while searching the web"
+    # content, anchor_tags = extract_and_visit_links(search_sample)
+
+    search_uni_web_instance = SearchUniWebTool()
+    # query = "PO-Bachelor-Cognitive Science pdf"
+    query = "can I study Biology?"
+    search_result = search_uni_web_instance.run(query)
+    print(search_result)

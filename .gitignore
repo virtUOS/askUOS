@@ -51,7 +51,6 @@ coverage.xml
 .hypothesis/
 
 # Translations
-*.mo
 *.pot
 
 # Django stuff:
@@ -158,6 +157,7 @@ fabric.properties
 
 # SQLite3
 db.sqlite3
+.langchain.db
 
 # Log files
 logs/
@@ -178,6 +178,5 @@ geckodriver
 
 
 log.csv
-.vscode/
 
 nginx.conf
