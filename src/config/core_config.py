@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(yaml_file="config.yaml")
     # TODO move this a global object/context
     time_request_sent: Optional[float] = None
+    # TODO remove (these are used for testing)
+    # final_output_tokens: list = []
+    # final_search_tokens: list = []
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -36,7 +39,7 @@ class Settings(BaseSettings):
     def __init__(self, **data):
         if not self.__dict__:
             super().__init__(**data)
-            logger.info(f"Settings initialized: {self.model_dump_json()}")
+            logger.debug(f"Settings initialized: {self.model_dump_json()}")
 
     @classmethod
     def settings_customise_sources(

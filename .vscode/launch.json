@@ -4,6 +4,7 @@
         {
             "name": "streamlit_app",
             "type": "debugpy",
+            "justMyCode":true,
             "request": "launch",
             "program": "/usr/local/bin/streamlit",
             "args": [

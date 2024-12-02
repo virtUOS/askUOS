@@ -57,9 +57,9 @@ class CallbackHandlerStreaming(StreamingStdOutCallbackHandler):
         if token:
 
             if self.show_time:
-                logger.info(
-                    f"Time taken to start generating answer: {time.time()-settings.time_request_sent}"
-                )
+                # TODO dependency injection (separation of concerns backend/frontend)
+                total_time = time.time() - settings.time_request_sent
+                logger.info(f"Time taken to start generating answer: {total_time}")
                 self.show_time = False
             # streaming of every line
             if "\n" in token:
@@ -253,7 +253,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
-            logger.info("Creating a new instance of CampusManagementOpenAIToolsAgent")
+            logger.debug("Creating a new instance of CampusManagementOpenAIToolsAgent")
 
         # create a new instance if the language changes
         elif (
@@ -262,7 +262,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
         ):  # TODO dependency injection (settings)
             # TODO preserve the memory of the previous agent (when the language changes and a previous conversation is still ongoing)
             cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
-            logger.info("Creating a new instance of CampusManagementOpenAIToolsAgent")
+            logger.debug("Creating a new instance of CampusManagementOpenAIToolsAgent")
 
         return cls._instance
 
@@ -270,7 +270,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
         if not self.__dict__:
             super().__init__(**data)
             self.language = settings.language
-            logger.info(f"Language set to: {self.language}")
+            logger.debug(f"Language set to: {self.language}")
             self._create_agent_executor()
 
     def _create_agent_executor(self):

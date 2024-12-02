@@ -11,8 +11,8 @@ class CsvFormatter(logging.Formatter):
 
 class CsvFilter(logging.Filter):
     def filter(self, record):
-        # save only WARNING and above levels:
-        return record.levelno >= logging.WARNING
+        # save only INFO and above levels:
+        return record.levelno >= logging.INFO
 
 
 # Create a logger

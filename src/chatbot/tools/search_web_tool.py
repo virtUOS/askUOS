@@ -63,7 +63,7 @@ class SearchUniWebTool:
 
     def generate_summary(self, text: str, question: str) -> str:
         # TODO summarize the content when it + the prompt +chat_history exceed the number of openai allowed tokens (16385 tokens)
-        logger.info("Summarizing content...")
+        logger.info(f"Summarizing content, query: {question}")
 
         # TODO solve for german
 
@@ -224,8 +224,6 @@ class SearchUniWebTool:
             self.agent_executor = CampusManagementOpenAIToolsAgent.run()
             self.query = query
             query_url = decode_string(self.query)
-            logger.info(f"Decoded query URL: {query_url}")
-
             url = SEARCH_URL + query_url
             # TODO I/O operation (use async code) During waiting time compute the number of tokens in the prompt and chat history
             self.driver.get(url)
@@ -234,10 +232,16 @@ class SearchUniWebTool:
             asyncio.run(self.visit_urls_extract(rendered_html))
 
             final_output = "\n".join(self.contents)
-            logger.info(
-                f"Search result text length (tokens): {self.agent_executor.compute_search_num_tokens(final_output)}"
-            )
+            # for tesing
+            # TODO REMOVE
+            final_output_tokens, final_search_tokens = self.compute_tokens(final_output)
+            logger.info(f"Search tokens: {final_search_tokens}")
+            logger.info(f"Final output (search + prompt): {final_output_tokens}")
+            # settings.final_output_tokens.append(final_output_tokens)
+            # settings.final_search_tokens.append(final_search_tokens)
+
             return final_output if self.contents else self.no_content_found_message
+
         except Exception as e:
             logger.error(f"Error while searching the web: {e}", exc_info=True)
             return "Error while searching the web"

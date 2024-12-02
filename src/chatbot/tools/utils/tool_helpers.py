@@ -10,7 +10,7 @@ QUERY_SPACE_REPLACEMENT = "+"
 def log_search_query(func):
     def wrapper(*args, **kwargs):
         query = func(*args, **kwargs)
-        logger.info(f"This is the query used by the University website: {query}")
+        logger.info(f"Query used by the University website: {query}")
         return query
 
     return wrapper
