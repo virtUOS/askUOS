@@ -30,6 +30,13 @@ from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 from bs4 import BeautifulSoup
 
+# https://github.com/Krukov/cashews?tab=readme-ov-file#template-keys
+from cashews import cache
+
+# cache.setup("mem://?size=1000000&check_interval=5")
+# TODO Connect cache with a DB, Redis??
+cache.setup("mem://", size=1000)
+
 dotenv.load_dotenv()
 
 
@@ -125,32 +132,48 @@ class SearchUniWebTool:
             Exception: Logs any exceptions that occur during the fetch process.
         """
 
-        taken_from = "Information taken from: "
-        try:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    # TODO pdf files need to be handled differently (Vector DB for example)
-                    if url.endswith(".pdf"):
-                        # TODO read pdf using response.stream(), so that the whole pdf is not loaded into memory. Process every stream
-                        # TODO as soon as it is available (see online algorithm)
-                        pdf_bytes = await response.read()  # Read PDF content as bytes
-                        text = f"{taken_from}{url}\n{extract_pdf_text(url, pdf_bytes)}"
-                    else:
-                        html_content = await response.text()
-                        text = (
-                            f"{taken_from}{url}\n{extract_html_text(url, html_content)}"
-                        )
-                    if text:
-                        self.contents.append(text)
-                        total_tokens, _ = self.compute_tokens("".join(self.contents))
-                        # 1 token ~= 4 chars in English  --> https://help.openai.com/en/articles/4936856-what-are-tokens-and-how-to-count-them
-                        if total_tokens > settings.model.context_window:
+        # TODO the function needs to return the text fetched from the URL
+        @cache(ttl="2h")
+        async def process_url(url):
 
-                            # TODO generate_summary must be async and the chain inside it must be awaited (use async chain.run)
-                            self.contents[-1] = self.generate_summary(text, self.query)
+            taken_from = "Information taken from: "
+            try:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        # TODO pdf files need to be handled differently (Vector DB for example)
+                        if url.endswith(".pdf"):
+                            # TODO read pdf using response.stream(), so that the whole pdf is not loaded into memory. Process every stream
+                            # TODO as soon as it is available (see online algorithm)
+                            pdf_bytes = (
+                                await response.read()
+                            )  # Read PDF content as bytes
+                            text = (
+                                f"{taken_from}{url}\n{extract_pdf_text(url, pdf_bytes)}"
+                            )
+                        else:
+                            html_content = await response.text()
+                            text = f"{taken_from}{url}\n{extract_html_text(url, html_content)}"
 
-        except Exception as e:
-            logger.error(f"Error while fetching: {url} - {e}")
+                        # if text:
+                        # self.contents.append(text)
+                        # total_tokens, _ = self.compute_tokens(
+                        #     "".join(self.contents)
+                        # )
+                        # # 1 token ~= 4 chars in English  --> https://help.openai.com/en/articles/4936856-what-are-tokens-and-how-to-count-them
+                        # if total_tokens > settings.model.context_window:
+
+                        #     # TODO generate_summary must be async and the chain inside it must be awaited (use async chain.run)
+                        #     text = self.generate_summary(text, self.query)
+                        #     self.contents[-1] = text
+
+                        return text
+                    return f"Error fetching content from: {url}"
+
+            except Exception as e:
+                logger.error(f"Error while fetching: {url} - {e}")
+                return f"Error fetching content from: {url}"
+
+        return await process_url(url)
 
     async def visit_urls_extract(
         self,
@@ -201,8 +224,27 @@ class SearchUniWebTool:
                 # Create and collect a task to fetch the URL
                 tasks.append(self.fetch_url(session, href))
 
-            # Gather the results of the tasks (text fetched from the URLs)
-            await asyncio.gather(*tasks, return_exceptions=True)
+            with cache.detect as detector:
+                # Gather the results of the tasks (text fetched from the URLs)
+                self.contents = await asyncio.gather(*tasks, return_exceptions=True)
+                if detector.calls:
+                    logger.debug("Cache hit")
+
+        # summarize the content if the total tokens exceed the limit
+        # TODO this needs to be async and generate summary cached
+        if self.contents:
+            total_tokens, _ = self.compute_tokens("".join(self.contents))
+            if total_tokens > settings.model.context_window:
+                for i, text in enumerate(reversed(self.contents)):
+                    original_index = len(self.contents) - i - 1
+                    # start summarizing from the last text fetched (assumed to be the least important/relevant)
+                    self.contents[original_index] = self.generate_summary(
+                        text, self.query
+                    )
+                    # update the total tokens
+                    total_tokens, _ = self.compute_tokens("".join(self.contents))
+                    if total_tokens <= settings.model.context_window:
+                        break
 
     def run(self, query: str) -> str:
         """
@@ -262,8 +304,19 @@ if __name__ == "__main__":
 
     # content, anchor_tags = extract_and_visit_links(search_sample)
 
+    # @cache(ttl="2h")
+    # def test_cache(user_input):
+    #     print("function called")
+
+    # for i in range(5):
+    #     test_cache("test")
+
+    # test_cache("test2")
+
     search_uni_web_instance = SearchUniWebTool()
     # query = "PO-Bachelor-Cognitive Science pdf"
     query = "can I study Biology?"
     search_result = search_uni_web_instance.run(query)
+    search_result_2 = search_uni_web_instance.run(query)
+
     print(search_result)
