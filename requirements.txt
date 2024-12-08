@@ -17,3 +17,4 @@ streamlit===1.39.0
 pydantic-settings===2.3.4
 matplotlib
 cashews
+streamlit-feedback
