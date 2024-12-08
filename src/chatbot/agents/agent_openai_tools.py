@@ -3,7 +3,7 @@ from json import JSONDecodeError
 from typing import Any, ClassVar, Dict, List, Optional, Tuple
 import time
 import streamlit as st
-from langchain.agents import AgentExecutor, load_tools
+from langchain.agents import AgentExecutor
 from langchain.agents.format_scratchpad import format_to_openai_function_messages
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 from langchain.memory.utils import get_prompt_input_key
@@ -275,9 +275,10 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
 
     def _create_agent_executor(self):
 
-        llm_with_tools = self.llm.bind_functions(
-            [*self.tools, load_tools(["human"])[0]]
-        )
+        # llm_with_tools = self.llm.bind_functions(
+        #     [*self.tools, load_tools(["human"])[0]]
+        # )
+        llm_with_tools = self.llm.bind_functions([*self.tools])
 
         agent = (
             {
