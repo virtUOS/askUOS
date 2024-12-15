@@ -9,3 +9,7 @@ model:
   context_window: 20000 #128000 # in tokens (for pricing reasons you may want to keep this low and not higher than openai max tokens)
 
 language: "Deutsch"  # Literal["Deutch", "English"]. 
+
+legal:
+  data_protection: "https://my_example.de/datenschutz/"
+  imprint: "https://my_example.de/impressum/"

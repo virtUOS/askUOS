@@ -27,7 +27,7 @@ agent_executor = CampusManagementOpenAIToolsAgent.run()
 
 # App title
 st.set_page_config(
-    page_title="Campus Management Chatbot",
+    page_title="Ask.UOS",
     page_icon="app/static/Icon-chatbot.png",
     layout="centered",
     initial_sidebar_state="collapsed",
@@ -49,7 +49,7 @@ if session_state.get("show_warning", True):
         st.rerun()
 
 
-st.title("Campus Management")
+st.title("Ask.UOS")
 
 # Store LLM generated responses
 if "messages" not in st.session_state:

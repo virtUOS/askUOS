@@ -17,3 +17,12 @@ class ModelConfig(BaseModel):
 
     model_name: str
     context_window: int  # Number of allowed tokens
+
+
+class Legal(BaseModel):
+    """
+    Configuration for legal information.
+    """
+
+    data_protection: str
+    imprint: str

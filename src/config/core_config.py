@@ -5,7 +5,7 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 from typing import Type, Tuple, Literal, ClassVar, Optional
-from .models import SearchConfig, ModelConfig
+from .models import SearchConfig, ModelConfig, Legal
 from src.chatbot_log.chatbot_logger import logger
 import time
 
@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     search_config: SearchConfig
     model: ModelConfig
     language: Literal["Deutsch", "English"]
+    legal: Optional[Legal] = (
+        None  # Optional legal information (e.g., data protection, imprint)
+    )
     model_config = SettingsConfigDict(yaml_file="config.yaml")
     # TODO move this a global object/context
     time_request_sent: Optional[float] = None
