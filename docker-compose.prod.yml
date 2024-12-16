@@ -17,6 +17,8 @@ services:
       - chromadb
     networks: 
       - net 
+    volumes:
+      - logs:/app/logs
 
   chromadb:
     image: chromadb/chroma:latest
@@ -55,4 +57,5 @@ services:
   #     - ./certbot/www/:/var/www/certbot/:rw
 volumes:  
   chroma-data:
+  logs:
 

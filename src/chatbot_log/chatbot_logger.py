@@ -1,5 +1,5 @@
 import logging
-import csv
+import os
 import sys
 
 
@@ -19,9 +19,22 @@ class CsvFilter(logging.Filter):
 logger = logging.getLogger("chatbot_logger")
 logger.setLevel(logging.DEBUG)  # Set the logging level
 
+# Define the logs directory and file
+log_dir = "logs"
+log_file = os.path.join(log_dir, "log.csv")
 
-# Create a CSV file handler and set the formatter
-csv_handler = logging.FileHandler("log.csv")
+# Create the logs directory if it doesn't exist
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
+
+# Create a rotating CSV file handler and set the formatter
+max_bytes = 1024 * 1024 * 250  # 250 MB
+backup_count = 7
+
+csv_handler = logging.handlers.RotatingFileHandler(
+    log_file, maxBytes=max_bytes, backupCount=backup_count
+)
 csv_handler.setLevel(logging.DEBUG)
 csv_formatter = CsvFormatter()
 csv_handler.setFormatter(csv_formatter)
