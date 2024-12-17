@@ -59,4 +59,4 @@ with st.container(
     if st.button(session_state["_"]("Start Chatting"), type="primary"):
         session_state.show_warning = False
         sleep(0.5)
-        st.switch_page("pages/streamlit_chat.py")
+        st.switch_page("pages/ask_uos_chat.py")
