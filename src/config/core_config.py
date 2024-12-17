@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # TODO remove (these are used for testing)
     # final_output_tokens: list = []
     # final_search_tokens: list = []
+    # TODO move to a global object/context
+    # if the llm summarization mode is active the summarization result will be not sent to the user
+    llm_summarization_mode: bool = False
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:

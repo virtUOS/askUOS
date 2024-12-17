@@ -107,8 +107,10 @@ class SearchUniWebTool:
         )
 
         # TODO use aync chain.run?
+        settings.llm_summarization_mode = True
         summary = chain.run(input_documents=docs, question=question)
         # TODO the summary does not include the Taking from: url
+        settings.llm_summarization_mode = False
         return summary
 
     def compute_tokens(self, search_result_text: str):

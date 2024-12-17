@@ -109,7 +109,7 @@ if st.session_state.messages[-1]["role"] != "assistant":
             # check if the response contains a PDF file
 
             if visited_links():
-                with st.expander("Sources"):
+                with st.expander(session_state["_"]("Sources")):
                     for link in visited_links():
                         st.write("- " + link)
                 visited_links.clear()

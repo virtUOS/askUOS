@@ -32,7 +32,7 @@ class CustomMemoryCache(InMemoryCache):
 
 # set_llm_cache(CustomMemoryCache())
 
-set_llm_cache(SQLiteCache(database_path=".langchain.db"))
+# set_llm_cache(SQLiteCache(database_path=".langchain.db"))
 
 OPEN_AI_MODEL = settings.model.model_name
 

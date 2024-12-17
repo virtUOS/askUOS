@@ -34,6 +34,9 @@ msgstr ""
 "\n\nBei Interesse folgen Sie bitte den Links, um weitere Informationen über unsere [Datenschutzrichtlinien]({}) und [Impressum]({}) zu erhalten.\n"
 
 
+msgid "Sources"
+msgstr "Quellen"
+
 msgid "Start Chatting"
 msgstr "Chatten beginnen"
 
