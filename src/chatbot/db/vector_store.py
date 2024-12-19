@@ -74,7 +74,7 @@ def get_chroma_client() -> chromadb.HttpClient:
         client = chromadb.HttpClient(
             host="chromadb", settings=Settings(allow_reset=True)
         )
-        logger.info("Connected to chromadb service")
+        logger.debug("Connected to chromadb service")
     except Exception as e:
         logger.warning(
             f"Failed to connect to chromadb service: {e}. Using default settings."
@@ -109,32 +109,32 @@ def create_db_from_documents(db, data_dir: DirectoryPath) -> None:
 client = get_chroma_client()
 db = Chroma(client=client, embedding_function=embeddings)
 
-# if __name__ == "__main__":
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument(
-#         "--create_db",
-#         type=str,
-#         default="true",
-#         help="Flag to create the database",
-#     )
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--create_db",
+        type=str,
+        default="true",
+        help="Flag to create the database",
+    )
 
-#     parser.add_argument(
-#         "--custom_data_dir",
-#         type=str,
-#         default=DEFAULT_DATA_DIR,
-#         help="Directory containing documents",
-#     )
-#     args = parser.parse_args()
+    parser.add_argument(
+        "--custom_data_dir",
+        type=str,
+        default=DEFAULT_DATA_DIR,
+        help="Directory containing documents",
+    )
+    args = parser.parse_args()
 
-#     if args.create_db.lower() == "true":
-#         create_db_from_documents(db, args.custom_data_dir)
-#     else:
-#         logger.info("DB loaded from disk")
+    if args.create_db.lower() == "true":
+        create_db_from_documents(db, args.custom_data_dir)
+    else:
+        logger.debug("DB loaded from disk")
 
 
 # TODO: set the threshold for the similarity search. Too many unrelated documents are returned
 retriever = db.as_retriever(search_type="similarity", search_kwargs={"k": 7})
-logger.info("Retriever created/loaded")
+logger.debug("Retriever created/loaded")
 
 # Example usage of the retriever
 # results = retriever.retrieve("sample query")
