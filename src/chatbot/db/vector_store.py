@@ -136,6 +136,6 @@ if __name__ == "__main__":
 retriever = db.as_retriever(search_type="similarity", search_kwargs={"k": 7})
 logger.debug("Retriever created/loaded")
 
-# Example usage of the retriever
-# results = retriever.retrieve("sample query")
+# Example: usage of the retriever
+# results = retriever.invoke("I finished my application but I did not receive a confirmation email")
 # logger.info(f"Retrieved documents: {results}")
