@@ -1,4 +1,6 @@
 networks:
+  milvus:
+    external: true
   net:
     driver: bridge
     
@@ -17,6 +19,7 @@ services:
       - chromadb
     networks: 
       - net 
+      - milvus
 
   chromadb:
     image: chromadb/chroma:latest
