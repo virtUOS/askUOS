@@ -54,7 +54,7 @@ def initialize_language() -> None:
         horizontal=True,
         key="selected_language",
         on_change=change_language,
-        index=0,
+        index=1 if settings.language == "English" else 0,
         label_visibility="hidden",
     )
 

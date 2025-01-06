@@ -55,8 +55,13 @@ st.markdown(
 with st.container(
     key="start-chat"
 ):  # the key is used to identify the container in the page with the class st-key-start
+    if session_state.chat_started:
+        button_name = session_state["_"]("Continue Chatting")
+    else:
+        button_name = session_state["_"]("Start Chatting")
 
-    if st.button(session_state["_"]("Start Chatting"), type="primary"):
+    if st.button(button_name, type="primary"):
         session_state.show_warning = False
+        session_state.chat_started = True
         sleep(0.5)
         st.switch_page("pages/ask_uos_chat.py")

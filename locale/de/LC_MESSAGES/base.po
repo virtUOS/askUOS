@@ -40,6 +40,9 @@ msgstr "Quellen"
 msgid "Start Chatting"
 msgstr "Chatten beginnen"
 
+msgid "Continue Chatting"
+msgstr "Weiter chatten"
+
 msgid "How can I help you?"
 msgstr "Wie kann ich Ihnen helfen?"
 

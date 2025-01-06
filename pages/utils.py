@@ -9,12 +9,12 @@ def initialize_session_sate() -> None:
     # Initialization
     defaults = {
         "_": translate(),
-        "selected_language": "Deutsch",
         "show_warning": True,
         "user_feedback": None,
         "user_query": None,
         "response": None,
         "time_taken": None,
+        "chat_started": False,
     }
 
     for key, value in defaults.items():
