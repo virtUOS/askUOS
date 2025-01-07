@@ -75,3 +75,8 @@ background-image: url('app/static/Icon-Daumen-h-2.png'); /* Path to your png fil
 
 background-image: url('app/static/Icon-Daumen-u-2.png'); /* Path to your png file */
 }
+
+/* Hide link to headings */
+span[data-testid="stHeaderActionElements"] a {
+    display: none !important;
+}
