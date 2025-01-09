@@ -51,7 +51,9 @@ class ChatApp:
     def initialize_chat(self):
         """Initialize the chat messages in session state if not present."""
         if "messages" not in st.session_state:
-            greeting_message = session_state["_"]("How can I help you?")
+            greeting_message = session_state["_"](
+                "Hello! I am happy to assist you with questions about the University of Osnabrück, including information about study programs, application processes, admission requirements and other university-related topics. \n How can I help you today?"
+            )
             st.session_state["messages"] = [
                 {
                     "role": "assistant",
