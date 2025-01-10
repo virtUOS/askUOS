@@ -26,17 +26,23 @@ def display_welcome_message():
 ### We are excited to assist you with this first experimental release! 
 
 We take precautions to ensure a low rate of inaccurate answers. However, for your safety and to ensure the reliability of any information you receive, we recommend using human oversight in your decision-making processes, as this helps confirm that the information is safe, accurate, and appropriate for your needs.
-If you're ever unsure about an answer, please check the provided sources.
+If you're ever unsure about an answer, please check the provided sources. You can also refer directly to the [university's website]({}).
+
+If you need personal assistance regarding studying at the university, you can visit the [StudiOS]({}) (Studierenden-Information Osnabrück) or [ZSB]({}) (Zentrale Studienberatung Osnabrück) website.
 
 Please note that the University of Osnabrück cannot be held liable for any actions, losses, or damages that may arise from the use of the chatbot. 
 
-If you're interested, please follow the links to find more information about our [data protection policies]({}) and [imprint]({}).
+While interacting with the Chatbot, avoid sharing personal information. If you're interested, please follow the links to find more information about our [data protection policies]({}) and [imprint]({}).
 """
 
     translated_start_message = session_state["_"](start_message)
     st.markdown(
         translated_start_message.format(
-            settings.legal.data_protection, settings.legal.imprint
+            "https://www.uni-osnabrueck.de/startseite/",
+            "https://www.uni-osnabrueck.de/universitaet/organisation/studierenden-information-osnabrueck-studios/",
+            "https://www.zsb-os.de/",
+            settings.legal.data_protection,
+            settings.legal.imprint,
         )
     )
 

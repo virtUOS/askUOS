@@ -51,7 +51,9 @@ class ChatApp:
     def initialize_chat(self):
         """Initialize the chat messages in session state if not present."""
         if "messages" not in st.session_state:
-            greeting_message = session_state["_"]("How can I help you?")
+            greeting_message = session_state["_"](
+                "Hello! I am happy to assist you with questions about the University of Osnabrück, including information about study programs, application processes, admission requirements and other university-related topics. \n How can I help you today?"
+            )
             st.session_state["messages"] = [
                 {
                     "role": "assistant",
@@ -115,9 +117,19 @@ class ChatApp:
 
     def display_visited_links(self):
         """Display the links visited for the current user query."""
+
         with st.expander(session_state["_"]("Sources")):
             for link in visited_links():
-                st.write("- " + link)
+                st.markdown(
+                    f"""
+                    
+                        <div class="truncate">
+                            <span>&#8226;</span> <a href="{link}" target="_blank" rel="noopener noreferrer">{link}</a>
+                        </div>
+                    
+                        """,
+                    unsafe_allow_html=True,
+                )
         visited_links.clear()
 
     def store_response(self, output, prompt):

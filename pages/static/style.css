@@ -80,3 +80,15 @@ background-image: url('app/static/Icon-Daumen-u-2.png'); /* Path to your png fil
 span[data-testid="stHeaderActionElements"] a {
     display: none !important;
 }
+
+
+/* Prevents that urls displayed in the st.expander overflow the container  */
+.truncate {
+    width: 100%; /* Allow full width of the container */
+    max-width: 100%; /* Prevent exceeding the container */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block; /* Use inline-block to allow the bullet and link in one line */
+    margin-bottom: 10px; /* Space between items (line break) */
+}
