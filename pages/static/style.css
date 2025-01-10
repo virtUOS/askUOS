@@ -92,3 +92,34 @@ span[data-testid="stHeaderActionElements"] a {
     display: inline-block; /* Use inline-block to allow the bullet and link in one line */
     margin-bottom: 10px; /* Space between items (line break) */
 }
+
+.stChatMessage {
+    hyphens: auto; /* Allow hyphenation */
+}
+
+
+/* Adjust the width of the chat message (on mobile view) */
+@media (max-width: 600px) { 
+    .stMainBlockContainer {
+        max-width: inherit !important;  
+   
+    }
+}
+
+/* Adjust the width of the chat message  (on mobile view) */
+@media (max-width: 600px) { 
+    .stChatMessage {
+        max-width: 100% !important;  /* Set the max-width to 95% */
+        width: 100% !important;       /* Set the width to 95% */
+        margin-left: auto;           /* Center the chat message */
+        margin-right: auto;          /* Center the chat message */
+    }
+}
+
+/* Fix the position of the input */
+.stChatInput {
+    position: fixed; 
+    bottom: 30px;    /* Distance from the bottom */
+    z-index: 1000;   /* Ensure it stays on top of other elements */
+
+}
