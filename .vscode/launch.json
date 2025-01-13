@@ -41,6 +41,18 @@
 
 
         {
+            "name": "agent_lang_graph",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./src/chatbot/agents/agent_lang_graph.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+
+        {
             "name": "test_time_gen",
             "type": "debugpy",
             "request": "launch",
