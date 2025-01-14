@@ -4,10 +4,14 @@ import streamlit as st
 from streamlit import session_state
 from src.config.core_config import settings
 from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.agent_lang_graph import graph
 from src.chatbot.tools.utils.tool_helpers import visited_links
 from src.chatbot_log.chatbot_logger import logger
 from pages.utils import initialize_session_sate, setup_page, load_css
 from streamlit_feedback import streamlit_feedback
+from src.chatbot.prompt.main import get_prompt
+from langchain_core.messages import HumanMessage
+import uuid
 
 
 class ChatApp:
@@ -94,6 +98,32 @@ class ChatApp:
 
     def generate_response(self, prompt):
         """Generate a response from the assistant based on user prompt."""
+
+        def stream_graph_updates(user_input):
+            final_answer = ""
+            to_stream = ""
+            thread_id = uuid.uuid4()
+            config = {"configurable": {"thread_id": thread_id}}
+            config = {"configurable": {"thread_id": "1"}}
+            prompt = get_prompt([("user", user_input)])
+            for msg, metadata in graph.stream(
+                {"messages": prompt}, stream_mode="messages", config=config
+            ):
+                if (
+                    msg.content
+                    and not isinstance(msg, HumanMessage)
+                    and metadata["langgraph_node"] == "final_answer"
+                ):
+                    final_answer += msg.content
+                    # streaming of every line
+                    if "\n" in msg.content:
+                        to_stream += msg.content
+                        st.markdown(to_stream)
+                        to_stream = ""
+                    else:
+                        to_stream += msg.content
+            return final_answer, to_stream
+
         with st.chat_message("assistant", avatar="./static/Icon-chatbot.svg"):
             with st.spinner(session_state["_"]("Generating response...")):
                 logger.info(f"User's query: {prompt}")
@@ -101,8 +131,11 @@ class ChatApp:
                 start_time = time.time()
                 settings.time_request_sent = start_time
 
-                response = self.agent_executor(prompt)
-
+                # response = self.agent_executor(prompt)
+                response, to_stream = stream_graph_updates(prompt)
+                # if there is content left, stream it
+                if to_stream:
+                    st.markdown(to_stream)
                 end_time = time.time()
                 time_taken = end_time - start_time
                 session_state["time_taken"] = time_taken

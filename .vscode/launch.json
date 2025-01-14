@@ -21,7 +21,7 @@
             "env":{ "PYTHONPATH": "/app"},
             "args": [
                 "run",
-                "./pages/streamlit_chat.py"
+                "./pages/ask_uos_chat.py"
             ],
         
         },
