@@ -102,9 +102,8 @@ class ChatApp:
         def stream_graph_updates(user_input):
             final_answer = ""
             to_stream = ""
-            thread_id = uuid.uuid4()
+            thread_id = 1
             config = {"configurable": {"thread_id": thread_id}}
-            config = {"configurable": {"thread_id": "1"}}
             prompt = get_prompt([("user", user_input)])
             for msg, metadata in graph.stream(
                 {"messages": prompt}, stream_mode="messages", config=config
@@ -122,6 +121,8 @@ class ChatApp:
                         to_stream = ""
                     else:
                         to_stream += msg.content
+
+                    print(msg.content, end="|", flush=True)
             return final_answer, to_stream
 
         with st.chat_message("assistant", avatar="./static/Icon-chatbot.svg"):
@@ -146,7 +147,7 @@ class ChatApp:
                 if visited_links():
                     self.display_visited_links()
 
-            self.store_response(response["output"], prompt)
+            self.store_response(response, prompt)
 
     def display_visited_links(self):
         """Display the links visited for the current user query."""

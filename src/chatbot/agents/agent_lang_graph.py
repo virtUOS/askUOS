@@ -127,13 +127,15 @@ class ToolNode:
 
 def final_answer(state: State):
     # TODO create prompt for final answer generation. This LLM does not know about tools
+    # TODO if a tool was called, only pass the tool message, system message and human messages
+    # TODO Assess the effect of exlcluding AI messages from the input
     last_ai_message = state["messages"][-1]
     response = llm.invoke(state["messages"])
     response.id = last_ai_message.id
     return {"messages": [response]}
 
 
-def chatbot(state: State):
+def agent(state: State):
     # TODO if a tool was called, only pass the tool message, system message and human messageS
     messages = filter_messages(state["messages"], 5)
     return {"messages": [llm_with_tools.invoke(messages)]}
@@ -164,16 +166,20 @@ tool_node = ToolNode(tools=tools)
 
 graph_builder = StateGraph(State)
 
-graph_builder.add_node("chatbot", chatbot)
+graph_builder.add_node("agent", agent)
 
 graph_builder.add_node("tools", tool_node)
 
+# graph_builder.add_node("tools", "chatbot")
+
 graph_builder.add_node("final_answer", final_answer)
 
-graph_builder.add_edge(START, "chatbot")
+graph_builder.add_edge("tools", "agent")
+
+graph_builder.add_edge(START, "agent")
 
 graph_builder.add_conditional_edges(
-    "chatbot",
+    "agent",
     route_tools,
     {
         "tools": "tools",
@@ -188,6 +194,26 @@ graph = graph_builder.compile(checkpointer=memory)
 
 
 if __name__ == "__main__":
+
+    def print_graph(graph, filename="graph.png"):
+        from IPython.display import Image, display
+
+        try:
+            # Generate the PNG from the graph
+            png_data = graph.get_graph().draw_mermaid_png()
+
+            # Save the PNG data to a file
+            with open(filename, "wb") as f:
+                f.write(png_data)
+
+            # Display the image
+            display(Image(filename))
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            # Optional: handle any additional logic or fallback
+
+    # print_graph(graph)
+
     thread_id = uuid.uuid4()
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -210,9 +236,9 @@ if __name__ == "__main__":
 
     response = stream_graph_updates(user_input)
 
-    stream_graph_updates("yes i want to sign for the bachelors")
-    stream_graph_updates("how much does it cost?")
-    stream_graph_updates("what are the requirements?")
+    # stream_graph_updates("yes i want to sign for the bachelors")
+    stream_graph_updates("Tell me about the computer science program at the uni?")
+    # stream_graph_updates("what are the requirements?")
     print("Done")
 
 
