@@ -250,6 +250,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
 
     # (not part of the model schema)
     _agent_executor: AgentExecutor = PrivateAttr(default=None)
+    _chat_history: List[Dict] = PrivateAttr(default=None)
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -274,6 +275,31 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
             logger.debug(f"Language set to: {self.language}")
             self._create_agent_executor()
 
+    def _get_chat_history(self, messages: List[Dict[str, str]], k=5):
+        """
+        Retrieve and store the last k messages from the chat history.
+
+        Args:
+            messages (List[Dict[str, str]]): A list of message dictionaries, where each dictionary contains
+                                             'role', 'content' and 'avatar' keys representing the role of the message
+                                             sender and the message content respectively. The 'avatar' key represents the icon used when displaying the message.
+            k (int, optional): The number of most recent messages to retain. Defaults to 5.
+
+        Returns:
+            None
+        """
+        self._chat_history = messages
+
+        if len(self._chat_history) > k:
+            self._chat_history = self._chat_history[-k:]  # get the last k messages
+
+        self._chat_history = [
+            {"role": record["role"], "content": record["content"]}
+            for record in self._chat_history
+        ]
+
+        logger.debug(f"Chat History -------{self._chat_history}--------")
+
     def _create_agent_executor(self):
 
         # llm_with_tools = self.llm.bind_functions(
@@ -284,7 +310,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
         agent = (
             {
                 "input": lambda x: x["input"],
-                "chat_history": lambda x: x["chat_history"],
+                "chat_history": lambda x: self._chat_history,
                 "agent_scratchpad": lambda x: format_to_openai_function_messages(
                     x["intermediate_steps"]
                 ),
@@ -299,7 +325,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
             tools=self.tools,
             return_intermediate_steps=False,
             verbose=True,
-            memory=self.memory,
+            # memory=self.memory,
             handle_parsing_errors=True,
             max_execution_time=60,  # Agent stops after 60 seconds
         )
@@ -307,11 +333,14 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
     def compute_internal_tokens(self, query: str) -> int:
         # extract the chat history from the memory
         # TODO BUG: Agent's scratchpad tokens are not being counted (fix sum(count_tokens_history) * 2)
-        history = self._agent_executor.memory.dict()["chat_memory"][
-            "messages"
-        ]  # this is a list [{'content':'', 'additional_kwargs':{},...}, {}...]
+        # history = self._agent_executor.memory.dict()["chat_memory"][
+        #     "messages"
+        # ]  # this is a list [{'content':'', 'additional_kwargs':{},...}, {}...]
+        # history = self._get_chat_history()
 
-        count_tokens_history = [self.llm.get_num_tokens(c["content"]) for c in history]
+        count_tokens_history = [
+            self.llm.get_num_tokens(c["content"]) for c in self._chat_history
+        ]
         # TODO multiply by 2 to account for agent's scratchpad (Improvement: use tokenization algorithm to count tokens)
         internal_tokens = (
             sum(count_tokens_history) * 2
@@ -326,10 +355,14 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
 
         return search_result_text_tokens
 
-    def __call__(self, input: str):
-
+    def __call__(self, input: str, messages: List[Dict[str, str]] = None):
+        if messages:
+            self._get_chat_history(messages)
+        else:
+            self._chat_history = None
         config = {"callbacks": [CallbackHandlerStreaming()]}
         response = self._agent_executor.invoke({"input": input}, config=config)
+        self._chat_history = None
         return response
 
     @classmethod

@@ -30,11 +30,8 @@ class ChatApp:
     def __init__(self):
         if not self.__dict__:
             setup_page()
-            initialize_session_sate()
             self.agent_executor = CampusManagementOpenAIToolsAgent.run()
             load_css()
-            self.show_warning()
-            self.initialize_chat()
 
     def show_warning(self):
         """Display a warning message to the user."""
@@ -101,7 +98,7 @@ class ChatApp:
                 start_time = time.time()
                 settings.time_request_sent = start_time
 
-                response = self.agent_executor(prompt)
+                response = self.agent_executor(prompt, st.session_state.messages)
 
                 end_time = time.time()
                 time_taken = end_time - start_time
@@ -147,6 +144,9 @@ class ChatApp:
     def run(self):
         """Main method to run the application logic."""
         st.title("Ask.UOS")
+        initialize_session_sate()
+        self.show_warning()
+        self.initialize_chat()
         self.display_chat_messages()
         self.handle_user_input()
         self.log_feedback()
