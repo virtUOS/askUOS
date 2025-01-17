@@ -8,11 +8,10 @@ from langchain.prompts.chat import (
 )
 from src.chatbot_log.chatbot_logger import logger
 import src.chatbot.utils.prompt_text as text
-from src.config.core_config import settings
 from src.chatbot.utils.agent_helpers import llm
 
 
-def translate_prompt() -> Dict[str, str]:
+def translate_prompt(language) -> Dict[str, str]:
     """
     Translates the prompt text based on the configured language.
 
@@ -20,20 +19,18 @@ def translate_prompt() -> Dict[str, str]:
         A dictionary containing the translated prompt text.
     """
 
-    if settings.language == "Deutsch":
+    if language == "Deutsch":
         prompt_text = text.prompt_text_deutsch
-    elif settings.language == "English":
+    elif language == "English":
         prompt_text = text.prompt_text_english
     else:
         prompt_text = text.prompt_text_deutsch
 
-        logger.warning(
-            f'Language "{settings.language}" not supported. Defaulting to "Deutsch"'
-        )
+        logger.warning(f'Language "{language}" not supported. Defaulting to "Deutsch"')
     return prompt_text
 
 
-def get_prompt() -> ChatPromptTemplate:
+def get_prompt(language) -> ChatPromptTemplate:
     """
     Generates a chat prompt template based on the provided prompt text.
 
@@ -41,7 +38,7 @@ def get_prompt() -> ChatPromptTemplate:
         ChatPromptTemplate: The generated chat prompt template.
     """
 
-    prompt_text = translate_prompt()
+    prompt_text = translate_prompt(language)
 
     template_messages = [
         SystemMessagePromptTemplate(
@@ -60,7 +57,7 @@ def get_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages(template_messages)
 
 
-def get_prompt_length() -> int:
+def get_prompt_length(language) -> int:
     """
     Calculates the length of the prompt based on the provided text.
 
@@ -69,7 +66,7 @@ def get_prompt_length() -> int:
 
     """
 
-    prompt_text = translate_prompt()
+    prompt_text = translate_prompt(language)
 
     # formula to roughly compute the number of tokens: https://stackoverflow.com/questions/70060847/how-to-work-with-openai-maximum-context-length-is-2049-tokens
 

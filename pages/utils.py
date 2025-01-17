@@ -1,6 +1,7 @@
 from pages.language import translate
 from streamlit import session_state
 import streamlit as st
+from src.config.core_config import settings
 
 
 def initialize_session_sate() -> None:
@@ -16,6 +17,7 @@ def initialize_session_sate() -> None:
         "response": None,
         "time_taken": None,
         "chat_started": False,
+        "selected_language": settings.language,
     }
 
     for key, value in defaults.items():

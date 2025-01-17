@@ -16,7 +16,6 @@ class ChatApp:
 
     Attributes:
         _instance (Optional[ChatApp]): Instance of the ChatApp class.
-        agent_executor (Callable): Function to execute the chat agent.
 
     """
 
@@ -30,7 +29,6 @@ class ChatApp:
     def __init__(self):
         if not self.__dict__:
             setup_page()
-            self.agent_executor = CampusManagementOpenAIToolsAgent.run()
             load_css()
 
     def show_warning(self):
@@ -97,8 +95,10 @@ class ChatApp:
 
                 start_time = time.time()
                 settings.time_request_sent = start_time
-
-                response = self.agent_executor(prompt, st.session_state.messages)
+                agent_executor = CampusManagementOpenAIToolsAgent.run(
+                    language=session_state["selected_language"]
+                )
+                response = agent_executor(prompt, st.session_state.messages)
 
                 end_time = time.time()
                 time_taken = end_time - start_time

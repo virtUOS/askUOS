@@ -29,32 +29,33 @@ def initialize_language() -> None:
     The function also updates the session state and configuration based on the
     selected language.
     """
-    languages = {"Deutsch": "de", "English": "en"}
+    # languages = {"Deutsch": "de", "English": "en"}
 
     def change_language():
-        if session_state["selected_language"] == "English":
-            set_language(language="en")
-            settings.language = "English"
-            session_state["_"] = gettext.gettext
-
-        else:
-            session_state["selected_language"] = "Deutsch"
+        if st.session_state["chosen_language"] == "Deutsch":
             set_language(language="de")
-            settings.language = "Deutsch"
+            st.session_state["selected_language"] = "Deutsch"
             session_state["_"] = translate()
+
+        elif st.session_state["chosen_language"] == "English":
+            set_language(language="en")
+            st.session_state["selected_language"] = "English"
+            session_state["_"] = gettext.gettext
 
     # If no language is chosen yet set it to German
     if "selected_language" not in st.session_state or "lang" not in st.query_params:
 
         st.query_params["lang"] = "de"
 
+    language_options = ["Deutsch", "English"]
+    index_language = st.session_state.get("selected_language", settings.language)
     st.radio(
         "Language",
-        options=languages,
-        horizontal=True,
-        key="selected_language",
+        options=language_options,
         on_change=change_language,
-        index=1 if settings.language == "English" else 0,
+        key="chosen_language",
+        index=language_options.index(index_language),
+        horizontal=True,
         label_visibility="hidden",
     )
 
