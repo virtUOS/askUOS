@@ -40,7 +40,7 @@ class AgentExecutorTest(unittest.TestCase):
         english_prompt = get_prompt()
         agent_executor = CampusManagementOpenAIToolsAgent.run()
         self.assertEqual(
-            agent_executor.prompt.pretty_print(),
+            agent_executor._prompt.pretty_print(),
             english_prompt.pretty_print(),
             "The prompt is not in English.",
         )
@@ -50,7 +50,7 @@ class AgentExecutorTest(unittest.TestCase):
         german_prompt = get_prompt()
         agent_executor = CampusManagementOpenAIToolsAgent.run()
         self.assertEqual(
-            agent_executor.prompt.pretty_print(),
+            agent_executor._prompt.pretty_print(),
             german_prompt.pretty_print(),
             "The prompt is not in German.",
         )

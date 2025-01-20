@@ -20,7 +20,6 @@ class ChatApp:
 
     Attributes:
         _instance (Optional[ChatApp]): Instance of the ChatApp class.
-        agent_executor (Callable): Function to execute the chat agent.
 
     """
 
@@ -34,11 +33,7 @@ class ChatApp:
     def __init__(self):
         if not self.__dict__:
             setup_page()
-            initialize_session_sate()
-            self.agent_executor = CampusManagementOpenAIToolsAgent.run()
             load_css()
-            self.show_warning()
-            self.initialize_chat()
 
     def show_warning(self):
         """Display a warning message to the user."""
@@ -131,12 +126,16 @@ class ChatApp:
 
                 start_time = time.time()
                 settings.time_request_sent = start_time
+                agent_executor = CampusManagementOpenAIToolsAgent.run(
+                    language=session_state["selected_language"]
+                )
+                response = agent_executor(prompt, st.session_state.messages)
 
-                # response = self.agent_executor(prompt)
-                response, to_stream = stream_graph_updates(prompt)
-                # if there is content left, stream it
-                if to_stream:
-                    st.markdown(to_stream)
+                # response, to_stream = stream_graph_updates(prompt)
+                # # if there is content left, stream it
+                # if to_stream:
+                #     st.markdown(to_stream)
+
                 end_time = time.time()
                 time_taken = end_time - start_time
                 session_state["time_taken"] = time_taken
@@ -181,6 +180,9 @@ class ChatApp:
     def run(self):
         """Main method to run the application logic."""
         st.title("Ask.UOS")
+        initialize_session_sate()
+        self.show_warning()
+        self.initialize_chat()
         self.display_chat_messages()
         self.handle_user_input()
         self.log_feedback()

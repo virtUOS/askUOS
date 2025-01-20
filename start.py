@@ -14,9 +14,9 @@ load_dotenv()
 # Initialization
 def initialize_app():
     setup_page()
+    load_css()
     initialize_session_sate()
     initialize_language()
-    load_css()
 
 
 def display_welcome_message():

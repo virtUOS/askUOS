@@ -149,16 +149,6 @@ class CustomSaveMemory(ConversationBufferWindowMemory):
 
 
 class Defaults:
-    @staticmethod
-    def create_prompt() -> ChatPromptTemplate:
-        """
-        Creates a chatbot prompt using the `get_prompt` function.
-
-        Returns:
-            ChatPromptTemplate: The generated chatbot prompt.
-        """
-
-        return get_prompt()
 
     @staticmethod
     def create_llm() -> ChatOpenAI:
@@ -179,7 +169,7 @@ class Defaults:
         return llm()
 
     @staticmethod
-    def create_tools() -> List[BaseTool]:
+    def create_tools(language) -> List[BaseTool]:
         """
         Creates a list of tools for the chatbot agent.
 
@@ -194,12 +184,14 @@ class Defaults:
             create_retriever_tool(
                 retriever,
                 "technical_troubleshooting_questions",
-                translate_prompt()["description_technical_troubleshooting"],
+                translate_prompt(language)["description_technical_troubleshooting"],
             ),
             StructuredTool.from_function(
                 name="custom_university_web_search",
                 func=search_uni_web.run,
-                description=translate_prompt()["description_university_web_search"],
+                description=translate_prompt(language)[
+                    "description_university_web_search"
+                ],
                 handle_tool_errors=True,
             ),
         ]
@@ -241,65 +233,97 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
     # Singleton instance
     _instance: ClassVar[Optional["CampusManagementOpenAIToolsAgent"]] = None
 
-    prompt: ChatPromptTemplate = Field(default_factory=Defaults.create_prompt)
-    prompt_length: int = Field(default_factory=get_prompt_length)
-    language: Optional[str] = None
+    language: str = Field(default=settings.language)
     llm: ChatOpenAI = Field(default_factory=Defaults.create_llm)
-    tools: List[BaseTool] = Field(default_factory=Defaults.create_tools)
     memory: BaseMemory = Field(default_factory=Defaults.create_memory)
 
     # (not part of the model schema)
     _agent_executor: AgentExecutor = PrivateAttr(default=None)
+    _chat_history: List[Dict] = PrivateAttr(default=[])
+    _prompt: ChatPromptTemplate = PrivateAttr(default=None)
+    _prompt_length: int = PrivateAttr(default=None)
+    _tools: List[BaseTool] = PrivateAttr(default=None)
 
     def __new__(cls, *args, **kwargs):
+
         if cls._instance is None:
             cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
             logger.debug("Creating a new instance of CampusManagementOpenAIToolsAgent")
 
         # create a new instance if the language changes
-        elif (
-            hasattr(cls._instance, "language")
-            and cls._instance.language != settings.language
-        ):  # TODO dependency injection (settings)
+        elif hasattr(
+            cls._instance, "language"
+        ) and cls._instance.language != kwargs.get("language", settings.language):
             # TODO preserve the memory of the previous agent (when the language changes and a previous conversation is still ongoing)
+            # TODO provicional solution: chat history is being kept in the session state
             cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
-            logger.debug("Creating a new instance of CampusManagementOpenAIToolsAgent")
+            logger.debug(
+                "Language changed: creating a new instance of CampusManagementOpenAIToolsAgent"
+            )
 
         return cls._instance
 
     def __init__(self, **data):
+        # data: key-value pairs passed through the run method, e.g., CampusManagementOpenAIToolsAgent.run(language='Deutsch')
         if not self.__dict__:
             super().__init__(**data)
-            self.language = settings.language
             logger.debug(f"Language set to: {self.language}")
+            self._prompt = get_prompt(self.language)
+            self._prompt_length = get_prompt_length(self.language)
+            self._tools = Defaults.create_tools(self.language)
             self._create_agent_executor()
+
+    def _get_chat_history(self, messages: List[Dict[str, str]], k=5):
+        """
+        Retrieve and store the last k messages from the chat history.
+
+        Args:
+            messages (List[Dict[str, str]]): A list of message dictionaries, where each dictionary contains
+                                             'role', 'content' and 'avatar' keys representing the role of the message
+                                             sender and the message content respectively. The 'avatar' key represents the icon used when displaying the message.
+            k (int, optional): The number of most recent messages to retain. Defaults to 5.
+
+        Returns:
+            None
+        """
+        self._chat_history = messages
+
+        if len(self._chat_history) > k:
+            self._chat_history = self._chat_history[-k:]  # get the last k messages
+
+        self._chat_history = [
+            {"role": record["role"], "content": record["content"]}
+            for record in self._chat_history
+        ]
+
+        logger.debug(f"Chat History -------{self._chat_history}--------")
 
     def _create_agent_executor(self):
 
         # llm_with_tools = self.llm.bind_functions(
         #     [*self.tools, load_tools(["human"])[0]]
         # )
-        llm_with_tools = self.llm.bind_functions([*self.tools])
+        llm_with_tools = self.llm.bind_functions([*self._tools])
 
         agent = (
             {
                 "input": lambda x: x["input"],
-                "chat_history": lambda x: x["chat_history"],
+                "chat_history": lambda x: self._chat_history,
                 "agent_scratchpad": lambda x: format_to_openai_function_messages(
                     x["intermediate_steps"]
                 ),
             }
-            | self.prompt
+            | self._prompt
             | llm_with_tools
             | parse
         )
 
         self._agent_executor = AgentExecutor(
             agent=agent,
-            tools=self.tools,
+            tools=self._tools,
             return_intermediate_steps=False,
             verbose=True,
-            memory=self.memory,
+            # memory=self.memory,
             handle_parsing_errors=True,
             max_execution_time=60,  # Agent stops after 60 seconds
         )
@@ -307,15 +331,18 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
     def compute_internal_tokens(self, query: str) -> int:
         # extract the chat history from the memory
         # TODO BUG: Agent's scratchpad tokens are not being counted (fix sum(count_tokens_history) * 2)
-        history = self._agent_executor.memory.dict()["chat_memory"][
-            "messages"
-        ]  # this is a list [{'content':'', 'additional_kwargs':{},...}, {}...]
+        # history = self._agent_executor.memory.dict()["chat_memory"][
+        #     "messages"
+        # ]  # this is a list [{'content':'', 'additional_kwargs':{},...}, {}...]
+        # history = self._get_chat_history()
 
-        count_tokens_history = [self.llm.get_num_tokens(c["content"]) for c in history]
+        count_tokens_history = [
+            self.llm.get_num_tokens(c["content"]) for c in self._chat_history
+        ]
         # TODO multiply by 2 to account for agent's scratchpad (Improvement: use tokenization algorithm to count tokens)
         internal_tokens = (
             sum(count_tokens_history) * 2
-            + self.prompt_length
+            + self._prompt_length
             + self.llm.get_num_tokens(query)
         )
         return internal_tokens
@@ -326,16 +353,28 @@ class CampusManagementOpenAIToolsAgent(BaseModel):
 
         return search_result_text_tokens
 
-    def __call__(self, input: str):
-
+    def __call__(self, input: str, messages: List[Dict[str, str]] = None):
+        if messages:
+            self._get_chat_history(messages)
+        else:
+            self._chat_history = []
         config = {"callbacks": [CallbackHandlerStreaming()]}
-        response = self._agent_executor.invoke({"input": input}, config=config)
-        return response
+        try:
+            response = self._agent_executor.invoke({"input": input}, config=config)
+            self._chat_history = []
+
+            return response
+
+        except Exception as e:
+            logger.error(f"An error occurred: {e}")
+            return {
+                "output": "An error has occurred while trying to connect to the data source or APIs. Please try asking the question again."
+            }
 
     @classmethod
-    def run(cls, **kwargs):
+    def run(cls, *args, **kwargs):
 
-        instance = cls(**kwargs)
+        instance = cls(*args, **kwargs)
         return instance
 
 
