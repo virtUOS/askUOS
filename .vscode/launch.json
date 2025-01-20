@@ -40,6 +40,22 @@
         },
 
 
+
+
+        {
+            "name": "client_db",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./src/chatbot/db/main.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+
+
+
         {
             "name": "agent_lang_graph",
             "type": "debugpy",
