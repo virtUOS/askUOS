@@ -5,8 +5,10 @@ from typing import Annotated, Any, ClassVar, Dict, List, Optional, Tuple
 import streamlit as st
 from langchain.tools.retriever import create_retriever_tool
 from langchain_core.agents import AgentActionMessageLog, AgentFinish
-from langchain_core.callbacks import (StdOutCallbackHandler,
-                                      StreamingStdOutCallbackHandler)
+from langchain_core.callbacks import (
+    StdOutCallbackHandler,
+    StreamingStdOutCallbackHandler,
+)
 from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
 from langchain_core.tools import BaseTool
@@ -20,6 +22,7 @@ from typing_extensions import TypedDict
 # from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.db.vector_store import retriever
 from src.chatbot.prompt.main import get_prompt
+
 # from src.chatbot.utils.agent_helpers import llm
 from src.chatbot.utils.prompt import get_prompt_length, translate_prompt
 from src.chatbot_log.chatbot_logger import logger
@@ -103,10 +106,6 @@ class GraphNodesMixin:
         return {
             "messages": [reponse],
         }
-
-        # return {
-        #     "messages": [self._llm_with_tools.invoke(messages)],
-        # }
 
     def tool_node(self, inputs: dict):
         if messages := inputs.get("messages", []):
@@ -354,5 +353,3 @@ if __name__ == "__main__":
     stream_graph_updates("Tell me about the computer science program at the uni?")
     # stream_graph_updates("what are the requirements?")
     print("Done")
-
-

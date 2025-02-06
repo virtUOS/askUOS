@@ -1,6 +1,6 @@
 import time
 import uuid
-from typing import Optional
+from typing import Dict, List, Optional
 
 import streamlit as st
 from langchain_core.messages import HumanMessage
@@ -137,7 +137,11 @@ class ChatApp:
                 # ------------------
                 thread_id = 1
                 config = {"configurable": {"thread_id": thread_id}}
-                system_user_prompt = get_prompt([("user", prompt)])
+                # TODO add history here
+                history = self._get_chat_history(st.session_state["messages"])
+
+                system_user_prompt = get_prompt(history + [("user", prompt)])
+
                 graph_response = graph._graph.invoke(
                     {"messages": system_user_prompt}, config=config
                 )
@@ -161,6 +165,34 @@ class ChatApp:
                     self.display_visited_links()
 
             self.store_response(response, prompt)
+
+    def _get_chat_history(self, messages: List[Dict[str, str]], k=5):
+        """
+        Retrieve and store the last k messages from the chat history.
+
+        Args:
+            messages (List[Dict[str, str]]): A list of message dictionaries, where each dictionary contains
+                                             'role', 'content' and 'avatar' keys representing the role of the message
+                                             sender and the message content respectively. The 'avatar' key represents the icon used when displaying the message.
+            k (int, optional): The number of most recent messages to retain. Defaults to 5.
+
+        Returns:
+            None
+        """
+
+        if not messages:
+            return []
+
+        if len(messages) > k:
+            messages = messages[-k:]  # get the last k messages
+
+        chat_history = [
+            {"role": record["role"], "content": record["content"]}
+            for record in messages
+        ]
+
+        logger.debug(f"Chat History -------{chat_history}--------")
+        return chat_history
 
     def display_visited_links(self):
         """Display the links visited for the current user query."""
