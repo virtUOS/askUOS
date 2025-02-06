@@ -19,3 +19,5 @@ matplotlib
 cashews
 streamlit-feedback
 langchain-milvus
+langgraph
+ipython
