@@ -34,7 +34,7 @@ from pydantic import DirectoryPath, FilePath, validate_call
 
 # Configurations
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
-DEFAULT_DATA_DIR = "./data/documents/"
+DEFAULT_DATA_DIR = "./data/troubleshooting/"
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 0
 
@@ -85,7 +85,7 @@ def get_milvus_client():
     vector_store = Milvus(
         embedding_function=embeddings,
         connection_args={"uri": URI},
-        collection_name="test_documents",
+        collection_name="troubleshooting",  # TODO make this configurable
     )
 
     return vector_store
@@ -103,6 +103,7 @@ def create_db_from_documents(db, data_dir: DirectoryPath) -> None:
     Returns:
         None
     """
+    # TODO: Needs to be done asynchronously
     for filename in os.listdir(data_dir):
         file_path = os.path.join(data_dir, filename)
 
@@ -115,7 +116,8 @@ def create_db_from_documents(db, data_dir: DirectoryPath) -> None:
 
 
 db = get_milvus_client()
-
+# retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 7})
+# logger.debug("Retriever created/loaded")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -141,8 +143,8 @@ if __name__ == "__main__":
 
 
 # TODO: set the threshold for the similarity search. Too many unrelated documents are returned
-retriever = db.as_retriever(search_type="similarity", search_kwargs={"k": 7})
-logger.debug("Retriever created/loaded")
+# retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 7})
+# logger.debug("Retriever created/loaded")
 
 # Example: usage of the retriever
 # results = retriever.invoke("I finished my application but I did not receive a confirmation email")

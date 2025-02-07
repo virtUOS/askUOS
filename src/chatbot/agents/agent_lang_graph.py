@@ -20,7 +20,8 @@ from langgraph.prebuilt import create_react_agent
 from typing_extensions import TypedDict
 
 # from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
-from src.chatbot.db.vector_store import retriever
+# from src.chatbot.db.vector_store import retriever
+from src.chatbot.db.clients import get_milvus_client_retriever
 from src.chatbot.prompt.main import get_prompt
 from src.chatbot.utils.agent_helpers import llm
 from src.chatbot.utils.prompt import get_prompt_length, translate_prompt
@@ -74,7 +75,9 @@ class GraphNodesMixin:
 
         return [
             create_retriever_tool(
-                retriever,
+                get_milvus_client_retriever(
+                    "troubleshooting"
+                ),  # TODO make this configurable
                 "technical_troubleshooting_questions",
                 translate_prompt(settings.language)[
                     "description_technical_troubleshooting"
