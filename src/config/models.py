@@ -26,3 +26,11 @@ class Legal(BaseModel):
 
     data_protection: str
     imprint: str
+
+
+class ApplicationConfig(BaseModel):
+    """
+    Configuration for the application.
+    """
+
+    debug: bool

@@ -28,6 +28,7 @@ from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
 OPEN_AI_MODEL = settings.model.model_name
+DEBUG = settings.application.debug
 
 
 class State(TypedDict):
@@ -214,7 +215,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
 
         # Memory is currently handled using streamlit session state
         # memory = MemorySaver()
-        self._graph = graph_builder.compile()
+        self._graph = graph_builder.compile(debug=DEBUG)
 
     def compute_search_num_tokens(self, search_result_text: str) -> int:
 

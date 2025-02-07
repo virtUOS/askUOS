@@ -1,13 +1,16 @@
+import time
+from typing import ClassVar, Literal, Optional, Tuple, Type
+
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
     YamlConfigSettingsSource,
 )
-from typing import Type, Tuple, Literal, ClassVar, Optional
-from .models import SearchConfig, ModelConfig, Legal
+
 from src.chatbot_log.chatbot_logger import logger
-import time
+
+from .models import ApplicationConfig, Legal, ModelConfig, SearchConfig
 
 
 class Settings(BaseSettings):
@@ -23,6 +26,7 @@ class Settings(BaseSettings):
 
     search_config: SearchConfig
     model: ModelConfig
+    application: ApplicationConfig
     language: Literal["Deutsch", "English"]
     legal: Optional[Legal] = (
         None  # Optional legal information (e.g., data protection, imprint)

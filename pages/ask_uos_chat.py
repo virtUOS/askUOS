@@ -146,7 +146,16 @@ class ChatApp:
                     {"messages": system_user_prompt}, config=config
                 )
                 response = graph_response["messages"][-1].content
-                st.markdown(response)
+
+                def stream():
+                    for word in response.split(" "):
+                        yield word + " "
+                        time.sleep(0.02)
+
+                # TODO temporary fix: simulate streaming with streamlit. Get all answer and then stream it
+                st.write_stream(stream)
+
+                # st.markdown(response)
 
                 # ------------------
                 # response, to_stream = stream_graph_updates(prompt)

@@ -13,3 +13,6 @@ language: "Deutsch"  # Literal["Deutch", "English"].
 legal:
   data_protection: "https://my_example.de/datenschutz/"
   imprint: "https://my_example.de/impressum/"
+
+application:
+  debug: True
