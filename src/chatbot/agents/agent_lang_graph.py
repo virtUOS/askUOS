@@ -22,15 +22,12 @@ from typing_extensions import TypedDict
 # from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.db.vector_store import retriever
 from src.chatbot.prompt.main import get_prompt
-
-# from src.chatbot.utils.agent_helpers import llm
+from src.chatbot.utils.agent_helpers import llm
 from src.chatbot.utils.prompt import get_prompt_length, translate_prompt
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
 OPEN_AI_MODEL = settings.model.model_name
-LANGUAGE = settings.language
-# agent_executor = CampusManagementOpenAIToolsAgent.run()
 
 
 class State(TypedDict):
@@ -78,12 +75,14 @@ class GraphNodesMixin:
             create_retriever_tool(
                 retriever,
                 "technical_troubleshooting_questions",
-                translate_prompt(LANGUAGE)["description_technical_troubleshooting"],
+                translate_prompt(settings.language)[
+                    "description_technical_troubleshooting"
+                ],
             ),
             StructuredTool.from_function(
                 name="custom_university_web_search",
                 func=search_uni_web.run,
-                description=translate_prompt(LANGUAGE)[
+                description=translate_prompt(settings.language)[
                     "description_university_web_search"
                 ],
                 handle_tool_errors=True,
@@ -181,12 +180,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             super().__init__(**data)
             logger.debug(f"Language set to: {self.language}")
 
-            self._llm = ChatOpenAI(
-                model=OPEN_AI_MODEL,
-                temperature=0,
-                streaming=True,
-                callbacks=[StdOutCallbackHandler()],
-            )
+            self._llm = llm()
 
             tools = GraphNodesMixin.create_tools()
             self._tools_by_name = {tool.name: tool for tool in tools}
@@ -218,12 +212,13 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             },  # if route_tools returns "tool_node", the graph will route to the "tool_node" node, else it will route to the END node
         )
 
-        memory = MemorySaver()
-        self._graph = graph_builder.compile(checkpointer=memory)
+        # Memory is currently handled using streamlit session state
+        # memory = MemorySaver()
+        self._graph = graph_builder.compile()
 
     def compute_search_num_tokens(self, search_result_text: str) -> int:
 
-        search_result_text_tokens = self.llm.get_num_tokens(search_result_text)
+        search_result_text_tokens = self._llm.get_num_tokens(search_result_text)
 
         return search_result_text_tokens
 
@@ -236,7 +231,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
         # history = self._get_chat_history()
 
         count_tokens_history = [
-            self.llm.get_num_tokens(c["content"]) for c in self._chat_history
+            self._llm.get_num_tokens(c["content"]) for c in self._chat_history
         ]
         # TODO multiply by 2 to account for agent's scratchpad (Improvement: use tokenization algorithm to count tokens)
         internal_tokens = (
