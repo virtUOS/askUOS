@@ -66,3 +66,6 @@ msgstr "Klicken Sie hier, wenn Ihnen die Antwort nicht gefällt"
 
 msgid "Message"
 msgstr "Nachricht"
+
+msgid "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+msgstr "Es tut mir leid, aber ich kann Ihre Anfrage momentan nicht bearbeiten. Bitte versuchen Sie es später erneut oder formulieren Sie Ihre Frage um."

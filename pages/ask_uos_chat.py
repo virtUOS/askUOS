@@ -136,16 +136,26 @@ class ChatApp:
                 # TODO temporary fix: simulate streaming with streamlit. Get all answer and then stream it
                 # ------------------
                 thread_id = 1
-                config = {"configurable": {"thread_id": thread_id}}
+                config = {
+                    "configurable": {"thread_id": thread_id},
+                    "recursion_limit": 10,
+                }
                 # TODO add history here
                 history = self._get_chat_history(st.session_state["messages"])
 
                 system_user_prompt = get_prompt(history + [("user", prompt)])
 
-                graph_response = graph._graph.invoke(
-                    {"messages": system_user_prompt}, config=config
-                )
-                response = graph_response["messages"][-1].content
+                try:
+
+                    graph_response = graph._graph.invoke(
+                        {"messages": system_user_prompt}, config=config
+                    )
+                    response = graph_response["messages"][-1].content
+                except Exception as e:
+                    logger.error(f"Error while processing the user's query: {e}")
+                    response = session_state["_"](
+                        "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+                    )
 
                 def stream():
                     for word in response.split(" "):
