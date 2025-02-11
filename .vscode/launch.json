@@ -39,23 +39,6 @@
    
         },
 
-
-
-
-        {
-            "name": "client_db",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "./src/chatbot/db/main.py",
-            "cwd": "${workspaceFolder}",
-            "env":{ "PYTHONPATH": "/app"},
-            "console": "integratedTerminal",
-   
-        },
-
-
-
-
         {
             "name": "agent_lang_graph",
             "type": "debugpy",
@@ -93,10 +76,20 @@
 
 
         {
-            "name": "chromadb",
+            "name": "index_docs_milvus",
             "type": "debugpy",
             "request": "launch",
-            "program": "./src/chatbot/db/vector_store.py",
+            "program": "./src/chatbot/db/index_docs_milvus.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+
+        },
+
+        {
+            "name": "clientdb",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./src/chatbot/db/clients.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
 
@@ -118,6 +111,15 @@
             "type": "debugpy",
             "request": "launch",
             "program": "./test/test_chatbot.py",
+            "console": "integratedTerminal",
+            "env":{ "PYTHONPATH": "./src"}
+        },
+
+        {
+            "name": "test_general_code",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./test_me.py",
             "console": "integratedTerminal",
             "env":{ "PYTHONPATH": "./src"}
         },

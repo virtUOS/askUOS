@@ -66,6 +66,7 @@ class GraphEdgesMixin:
         return END
 
 
+# TODO need to control execution time per tool and overall.
 class GraphNodesMixin:
 
     @staticmethod
@@ -331,7 +332,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
         internal_tokens = (
             sum(count_tokens_history) * 2
             + self._prompt_length
-            + self.llm.get_num_tokens(query)
+            + self._llm.get_num_tokens(query)
         )
         return internal_tokens
 
