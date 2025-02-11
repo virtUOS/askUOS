@@ -1,8 +1,9 @@
 import json
 import uuid
-from typing import Annotated, Any, ClassVar, Dict, List, Optional, Tuple
+from typing import Annotated, Any, ClassVar, Dict, List, Literal, Optional
 
 import streamlit as st
+from langchain.prompts.chat import ChatPromptTemplate
 from langchain.tools.retriever import create_retriever_tool
 from langchain_core.agents import AgentActionMessageLog, AgentFinish
 from langchain_core.callbacks import (
@@ -37,6 +38,7 @@ class State(TypedDict):
     # in the annotation defines how this state key should be updated
     # (in this case, it appends messages to the list, rather than overwriting them)
     messages: Annotated[list, add_messages]
+    pass_hallucinate_check: Literal["yes", "no"]
 
 
 class GraphEdgesMixin:
@@ -56,6 +58,11 @@ class GraphEdgesMixin:
             raise ValueError(f"No messages found in input state to tool_edge: {state}")
         if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
             return "tool_node"
+        return "hallucination_checker_node"
+
+    def route_end(self, state: State):
+        if state["pass_hallucinate_check"] == "no":
+            return "agent_node"
         return END
 
 
@@ -78,9 +85,9 @@ class GraphNodesMixin:
                 get_milvus_client_retriever(
                     "troubleshooting"
                 ),  # TODO make this configurable
-                "technical_troubleshooting_questions",
+                "HISinOne_troubleshooting_questions",
                 translate_prompt(settings.language)[
-                    "description_technical_troubleshooting"
+                    "HISinOne_troubleshooting_questions"
                 ],
             ),
             StructuredTool.from_function(
@@ -129,6 +136,67 @@ class GraphNodesMixin:
             )
         return {"messages": outputs}
 
+    def hallucination_checker_node(self, state: State):
+
+        messages = state["messages"]
+        ai_message = messages[-1] if len(messages) > 1 else None
+        tool_message = [i for i in messages if isinstance(i, ToolMessage)]
+        # get the last tool message
+        tool_message = tool_message[-1] if tool_message else None
+        user_query = [i for i in messages if isinstance(i, HumanMessage)][0].content
+        # We only check for hallucination if a tool was called. To avoid checking for hallucination in the first message
+        # TODO evaluate if this is the best approach. Maybe check if the model was right not to call a tool (e.g., if the user query was not clear)
+        if not tool_message:
+            return {"pass_hallucinate_check": "yes"}
+        # prompt for the grader
+        system = """
+        
+        You are a grader assessing the fullfillment of the two conditions listed below: 
+        1. **Relevance of the Retrieved Document:** Assess the relevance of the retrieved document to a user question. If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. 
+          - Retrieved document: {tool_message}\n
+          - User question: {question} \n\n
+        2. **Relevance of the Generated Answer:** Evaluate the generated answer to ensure it adequately responds to the user's query. Does the generated
+        answer reponse to the user's query? 
+        - Generated answer: {generation} \n\n
+        
+        Provide a score of 'yes' if both conditions are satisfied. Otherwise, provide a score of 'no' if at least one condition is not met.
+ 
+        """
+        answer_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system),
+                (
+                    "human",
+                    "User's query: \n\n {question} \n\n Information retrieved {tool_message} \n\n LLM generation: {generation}",
+                ),
+            ]
+        )
+
+        answer_grader = answer_prompt | self._llm_answer_grader
+        score = answer_grader.invoke(
+            {
+                "question": user_query,
+                "tool_message": tool_message,
+                "generation": ai_message,
+            }
+        )
+        if score.binary_score == "no":
+
+            feedback_message = [
+                HumanMessage(
+                    content=f"""The generated answer is not correct. Please try again, e.g., use the tools at your disposal.
+                    Look at the question and try to reason about the underlying semantic intent / meaning. \n 
+                    Here is again the initial question: {user_query} \n
+                    """
+                )
+            ]
+            return {
+                "pass_hallucinate_check": score.binary_score.lower(),
+                "messages": feedback_message,
+            }
+
+        return {"pass_hallucinate_check": score.binary_score.lower()}
+
     def final_answer_node(self, state: State):
         # TODO create prompt for final answer generation. This LLM does not know about tools
         # TODO if a tool was called, only pass the tool message, system message and human messages
@@ -138,6 +206,14 @@ class GraphNodesMixin:
         response = self._llm.invoke(prompt)
         response.id = last_ai_message.id
         return {"messages": [response]}
+
+
+class GradeAnswer(BaseModel):
+
+    binary_score: Literal["yes", "no"] = Field(
+        description="""Generated answer is grounded on the 
+        retrieved documents AND the generated answer addresses the user's query, 'yes' or 'no'?"""
+    )
 
 
 class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMixin):
@@ -151,6 +227,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
     _llm: ChatOpenAI = PrivateAttr(default=None)
     # important: the code uses function calling as opposed to tool calling. (DEPENDS ON THE MODEL and how it was fine tuned)
     _llm_with_tools: ChatOpenAI = PrivateAttr(default=None)
+    _llm_answer_grader: ChatOpenAI = PrivateAttr(default=None)
     language: str = Field(default=settings.language)
     # TODO shold not be a private attribute
     _graph: StateGraph = PrivateAttr(default=None)
@@ -190,6 +267,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             self._tools_by_name = {tool.name: tool for tool in tools}
             # important: the code uses function calling as opposed to tool calling. (DEPENDS ON THE MODEL and how it was fine tuned)
             self._llm_with_tools = self._llm.bind_tools(tools)
+            self._llm_answer_grader = self._llm.with_structured_output(GradeAnswer)
 
             self._prompt_length = get_prompt_length(self.language)
             self._create_graph()
@@ -201,6 +279,9 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
 
         graph_builder.add_node("tool_node", self.tool_node)
 
+        graph_builder.add_node(
+            "hallucination_checker_node", self.hallucination_checker_node
+        )
         # graph_builder.add_node("final_answer_node", self.final_answer_node)
 
         graph_builder.add_edge(START, "agent_node")
@@ -212,8 +293,17 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             self.route_tools,
             {
                 "tool_node": "tool_node",
+                "hallucination_checker_node": "hallucination_checker_node",
+            },
+        )
+
+        graph_builder.add_conditional_edges(
+            "hallucination_checker_node",
+            self.route_end,
+            {
+                "agent_node": "agent_node",
                 END: END,
-            },  # if route_tools returns "tool_node", the graph will route to the "tool_node" node, else it will route to the END node
+            },
         )
 
         # Memory is currently handled using streamlit session state
@@ -296,6 +386,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
 
 
 if __name__ == "__main__":
+    from src.chatbot.prompt.main import get_prompt
 
     graph = CampusManagementOpenAIToolsAgent.run()
 
@@ -316,14 +407,18 @@ if __name__ == "__main__":
             print(f"An error occurred: {e}")
             # Optional: handle any additional logic or fallback
 
-    print_graph(graph._graph)
-
-    response = graph("Tell me about the biology program?")
+    # print_graph(graph._graph)
 
     thread_id = uuid.uuid4()
     config = {
         "configurable": {"thread_id": thread_id},
     }
+
+    user_input = "How can i change the password of my stud.ip account?"
+    # user_input = "Tell me about the biology program?"
+    prompt = get_prompt([("user", user_input)])
+
+    response = graph._graph.invoke({"messages": prompt}, config=config)
 
     user_input = "Tell me about the biology program?"
 
@@ -352,3 +447,8 @@ if __name__ == "__main__":
     stream_graph_updates("Tell me about the computer science program at the uni?")
     # stream_graph_updates("what are the requirements?")
     print("Done")
+
+
+# "As a grader, your task is to evaluate whether an LLM generated answer effectively addresses and resolves a user's query while being based on the retrieved information. Assign a binary score:
+# 'yes' if the answer fulfills both criteria (it resolves the user query
+# and is grounded in the retrieved information) or 'no' if it fails to meet either or both criteria."

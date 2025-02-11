@@ -138,7 +138,7 @@ class ChatApp:
                 thread_id = 1
                 config = {
                     "configurable": {"thread_id": thread_id},
-                    "recursion_limit": 10,
+                    "recursion_limit": 25,
                 }
                 # TODO add history here
                 history = self._get_chat_history(st.session_state["messages"])
