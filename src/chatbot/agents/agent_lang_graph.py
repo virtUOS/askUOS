@@ -177,8 +177,8 @@ class GraphNodesMixin:
         score = answer_grader.invoke(
             {
                 "question": user_query,
-                "tool_message": tool_message,
-                "generation": ai_message,
+                "tool_message": tool_message.content,
+                "generation": ai_message.content,
             }
         )
         if score.binary_score == "no":
