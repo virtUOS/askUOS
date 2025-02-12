@@ -3,7 +3,7 @@ import uuid
 from typing import Dict, List, Optional
 
 import streamlit as st
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from streamlit import session_state
 from streamlit_feedback import streamlit_feedback
 
@@ -102,30 +102,49 @@ class ChatApp:
         )
 
         def stream_graph_updates(user_input):
-            final_answer = ""
+            response = ""
             to_stream = ""
             thread_id = 1
-            config = {"configurable": {"thread_id": thread_id}}
-            prompt = get_prompt([("user", user_input)])
-            for msg, metadata in graph._graph.stream(
-                {"messages": prompt}, stream_mode="messages", config=config
-            ):
-                if (
-                    msg.content
-                    and not isinstance(msg, HumanMessage)
-                    and metadata["langgraph_node"] == "final_answer_node"
-                ):
-                    final_answer += msg.content
-                    # streaming of every line
-                    if "\n" in msg.content:
-                        to_stream += msg.content
-                        st.markdown(to_stream)
-                        to_stream = ""
-                    else:
-                        to_stream += msg.content
+            config = {
+                "configurable": {"thread_id": thread_id},
+                "recursion_limit": 25,
+            }
+            history = self._get_chat_history(st.session_state["messages"])
+            system_user_prompt = get_prompt(history + [("user", user_input)])
 
-                    print(msg.content, end="|", flush=True)
-            return final_answer, to_stream
+            try:
+                for msg, metadata in graph._graph.stream(
+                    {"messages": system_user_prompt},
+                    stream_mode="messages",
+                    config=config,
+                ):
+
+                    if (
+                        msg.content
+                        and not isinstance(msg, HumanMessage)
+                        and not isinstance(msg, ToolMessage)
+                        and (
+                            metadata["langgraph_node"] == "generate"
+                            or metadata["langgraph_node"] == "agent_node"
+                        )
+                    ):
+                        response += msg.content
+                        # streaming of every line
+                        if "\n" in msg.content:
+                            to_stream += msg.content
+                            st.markdown(to_stream)
+                            to_stream = ""
+                        else:
+                            to_stream += msg.content
+
+                        print(msg.content, end="|", flush=True)
+
+            except Exception as e:
+                logger.error(f"Error while processing the user's query: {e}")
+                response = session_state["_"](
+                    "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+                )
+            return response, to_stream
 
         with st.chat_message("assistant", avatar="./static/Icon-chatbot.svg"):
             with st.spinner(session_state["_"]("Generating response...")):
@@ -135,43 +154,43 @@ class ChatApp:
                 settings.time_request_sent = start_time
                 # TODO temporary fix: simulate streaming with streamlit. Get all answer and then stream it
                 # ------------------
-                thread_id = 1
-                config = {
-                    "configurable": {"thread_id": thread_id},
-                    "recursion_limit": 25,
-                }
-                # TODO add history here
-                history = self._get_chat_history(st.session_state["messages"])
+                # thread_id = 1
+                # config = {
+                #     "configurable": {"thread_id": thread_id},
+                #     "recursion_limit": 25,
+                # }
+                # # TODO add history here
+                # history = self._get_chat_history(st.session_state["messages"])
 
-                system_user_prompt = get_prompt(history + [("user", prompt)])
+                # system_user_prompt = get_prompt(history + [("user", prompt)])
 
-                try:
+                # try:
 
-                    graph_response = graph._graph.invoke(
-                        {"messages": system_user_prompt}, config=config
-                    )
-                    response = graph_response["messages"][-1].content
-                except Exception as e:
-                    logger.error(f"Error while processing the user's query: {e}")
-                    response = session_state["_"](
-                        "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
-                    )
+                #     graph_response = graph._graph.invoke(
+                #         {"messages": system_user_prompt}, config=config
+                #     )
+                #     response = graph_response["messages"][-1].content
+                # except Exception as e:
+                #     logger.error(f"Error while processing the user's query: {e}")
+                #     response = session_state["_"](
+                #         "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+                #     )
 
-                def stream():
-                    for word in response.split(" "):
-                        yield word + " "
-                        time.sleep(0.02)
+                # def stream():
+                #     for word in response.split(" "):
+                #         yield word + " "
+                #         time.sleep(0.02)
 
                 # TODO temporary fix: simulate streaming with streamlit. Get all answer and then stream it
-                st.write_stream(stream)
+                # st.write_stream(stream)
 
                 # st.markdown(response)
 
                 # ------------------
-                # response, to_stream = stream_graph_updates(prompt)
+                response, to_stream = stream_graph_updates(prompt)
                 # if there is content left, stream it
-                # if to_stream:
-                #     st.markdown(to_stream)
+                if to_stream:
+                    st.markdown(to_stream)
 
                 end_time = time.time()
                 time_taken = end_time - start_time

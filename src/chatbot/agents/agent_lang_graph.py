@@ -11,6 +11,8 @@ from langchain_core.callbacks import (
     StreamingStdOutCallbackHandler,
 )
 from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import PromptTemplate
 from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
 from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
@@ -32,13 +34,15 @@ from src.config.core_config import settings
 OPEN_AI_MODEL = settings.model.model_name
 DEBUG = settings.application.debug
 
+# TODO bug: humman message is repeated
+
 
 class State(TypedDict):
     # Messages have the type "list". The `add_messages` function
     # in the annotation defines how this state key should be updated
     # (in this case, it appends messages to the list, rather than overwriting them)
     messages: Annotated[list, add_messages]
-    pass_hallucinate_check: Literal["yes", "no"]
+    search_query: Optional[list]  # query used to search the web or db
 
 
 class GraphEdgesMixin:
@@ -58,12 +62,72 @@ class GraphEdgesMixin:
             raise ValueError(f"No messages found in input state to tool_edge: {state}")
         if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
             return "tool_node"
-        return "hallucination_checker_node"
+        return END
 
     def route_end(self, state: State):
         if state["pass_hallucinate_check"] == "no":
             return "agent_node"
         return END
+
+    def grade_documents(self, state) -> Literal["generate", "rewrite"]:
+        """
+        Determines whether the retrieved documents are relevant to the question.
+
+        Args:
+            state (messages): The current state
+
+        Returns:
+            str: A decision for whether the documents are relevant or not
+        """
+
+        logger.debug("---CHECK RELEVANCE---")
+
+        messages = state["messages"]
+
+        tool_message = [i for i in messages if isinstance(i, ToolMessage)]
+        # get the last tool message
+        tool_message = tool_message[-1] if tool_message else None
+
+        # TODO if the bot asks something back, and the user says 'yes', then 'yes' is not the actual user query
+        # TODO but rather the query used by the tool node.
+        # user_query = [i for i in messages if isinstance(i, HumanMessage)][-1].content
+        tool_query = " ".join(state["search_query"])
+
+        # Data model
+        class grade(BaseModel):
+            """Binary score for relevance check."""
+
+            binary_score: str = Field(description="Relevance score 'yes' or 'no'")
+
+        llm_with_str_output = self._llm.with_structured_output(grade)
+
+        # Prompt
+        prompt = PromptTemplate(
+            template="""You are a grader assessing relevance of a retrieved document to a user question. \n 
+            Here is the retrieved document: \n\n {context} \n\n
+            Here is the user question: {question} \n
+            If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. \n
+            Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question.""",
+            input_variables=["context", "question"],
+        )
+
+        # Chain
+        chain = prompt | llm_with_str_output
+
+        scored_result = chain.invoke(
+            {"question": tool_query, "context": tool_message.content}
+        )
+
+        score = scored_result.binary_score
+
+        if score == "yes":
+            logger.debug("---DECISION: DOCS RELEVANT---")
+            return "generate"
+
+        else:
+            logger.debug("---DECISION: DOCS NOT RELEVANT---")
+            print(score)
+            return "rewrite"
 
 
 # TODO need to control execution time per tool and overall.
@@ -113,9 +177,11 @@ class GraphNodesMixin:
         messages = GraphNodesMixin.filter_messages(state["messages"], 5)
         # TODO pass callback to the llm_with_tools object, to detect when the tokens are generated and stream them
         # detect when AI message contains 'finish_reason':'stop' and start streaming the tokens
+
         reponse = self._llm_with_tools.invoke(messages)
         return {
             "messages": [reponse],
+            "search_query": [],
         }
 
     def tool_node(self, inputs: dict):
@@ -124,6 +190,7 @@ class GraphNodesMixin:
         else:
             raise ValueError("No message found in input")
         outputs = []
+        search_query = []
         for tool_call in message.tool_calls:
             tool_result = self._tools_by_name[tool_call["name"]].invoke(
                 tool_call["args"]
@@ -135,7 +202,8 @@ class GraphNodesMixin:
                     tool_call_id=tool_call["id"],
                 )
             )
-        return {"messages": outputs}
+            search_query.append(tool_call["args"].get("query", ""))
+        return {"messages": outputs, "search_query": search_query}
 
     def hallucination_checker_node(self, state: State):
 
@@ -198,14 +266,55 @@ class GraphNodesMixin:
 
         return {"pass_hallucinate_check": score.binary_score.lower()}
 
-    def final_answer_node(self, state: State):
-        # TODO create prompt for final answer generation. This LLM does not know about tools
-        # TODO if a tool was called, only pass the tool message, system message and human messages
-        # TODO Assess the effect of exlcluding AI messages from the input
-        prompt = get_prompt(state["messages"], "system_message")
-        last_ai_message = state["messages"][-1]
-        response = self._llm.invoke(prompt)
-        response.id = last_ai_message.id
+    def rewrite(self, state):
+        """
+        Transform the query to produce a better question.
+
+        Args:
+            state (messages): The current state
+
+        Returns:
+            dict: The updated state with re-phrased question
+        """
+
+        logger.debug("---TRANSFORM QUERY---")
+        # TODO get directly from chat
+        user_query = [i for i in state["messages"] if isinstance(i, HumanMessage)][
+            -1
+        ].content
+
+        msg = [
+            HumanMessage(
+                content=f""" \n 
+        The retrieved docuements do not provide the information needed to answer the user's question.
+        Look at the user's query (and previous messages, if necessary) again and try to reason about the underlying semantic intent / meaning. \n 
+        Here is the initial question:
+        \n ------- \n
+        {user_query} 
+        \n ------- \n
+        Formulate an improved query""",
+            )
+        ]
+
+        # response = self._llm.invoke(msg)
+        # return {"messages": [response]}
+        return {"messages": msg}
+
+    def generate(self, state):
+        """
+        Generate answer
+
+        Args:
+            state (messages): The current state
+
+        Returns:
+            dict: The updated state with re-phrased question
+        """
+        logger.debug("---GENERATE---")
+        messages = state["messages"]
+
+        # TODO delete the dismissed tool messages and the rephrased question
+        response = self._llm.invoke(messages)
         return {"messages": [response]}
 
 
@@ -280,35 +389,33 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
 
         graph_builder.add_node("tool_node", self.tool_node)
 
+        graph_builder.add_node("rewrite", self.rewrite)  # Re-writing the question
         graph_builder.add_node(
-            "hallucination_checker_node", self.hallucination_checker_node
-        )
-        # graph_builder.add_node("final_answer_node", self.final_answer_node)
-
+            "generate", self.generate
+        )  # Generating a response after we know the documents are relevant
+        # Call agent node to decide to retrieve or not
         graph_builder.add_edge(START, "agent_node")
 
-        graph_builder.add_edge("tool_node", "agent_node")
-
+        # Decide whether to retrieve
         graph_builder.add_conditional_edges(
             "agent_node",
+            # Assess agent decision
             self.route_tools,
             {
+                # Translate the condition outputs to nodes in our graph
                 "tool_node": "tool_node",
-                "hallucination_checker_node": "hallucination_checker_node",
-            },
-        )
-
-        graph_builder.add_conditional_edges(
-            "hallucination_checker_node",
-            self.route_end,
-            {
-                "agent_node": "agent_node",
                 END: END,
             },
         )
 
-        # Memory is currently handled using streamlit session state
-        # memory = MemorySaver()
+        # Edges taken after the `action` node is called.
+        graph_builder.add_conditional_edges(
+            "tool_node",
+            # Assess agent decision
+            self.grade_documents,
+        )
+        graph_builder.add_edge("generate", END)
+        graph_builder.add_edge("rewrite", "agent_node")
         self._graph = graph_builder.compile(debug=DEBUG)
 
     def compute_search_num_tokens(self, search_result_text: str) -> int:
@@ -408,7 +515,7 @@ if __name__ == "__main__":
             print(f"An error occurred: {e}")
             # Optional: handle any additional logic or fallback
 
-    # print_graph(graph._graph)
+    print_graph(graph._graph)
 
     thread_id = uuid.uuid4()
     config = {
