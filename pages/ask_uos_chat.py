@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 
 import streamlit as st
 from langchain_core.messages import HumanMessage, ToolMessage
+from langgraph.errors import GraphRecursionError
 from streamlit import session_state
 from streamlit_feedback import streamlit_feedback
 
@@ -107,14 +108,17 @@ class ChatApp:
             thread_id = 1
             config = {
                 "configurable": {"thread_id": thread_id},
-                "recursion_limit": 25,
+                "recursion_limit": 12,  # This amounts to two laps of the graph (+2 supersteps), since we have 5 super steps, # https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
             }
             history = self._get_chat_history(st.session_state["messages"])
-            system_user_prompt = get_prompt(history + [("user", user_input)])
-
+            # system_user_prompt = get_prompt(history + [("user", user_input)])
+            system_user_prompt = get_prompt(history)
             try:
                 for msg, metadata in graph._graph.stream(
-                    {"messages": system_user_prompt},
+                    {
+                        "messages": system_user_prompt,
+                        "user_initial_query": user_input,
+                    },
                     stream_mode="messages",
                     config=config,
                 ):
@@ -138,6 +142,13 @@ class ChatApp:
                             to_stream += msg.content
 
                         print(msg.content, end="|", flush=True)
+
+            except GraphRecursionError as e:
+                # TODO handle recursion limit error
+                logger.error(f"Recursion Limit reahed: {e}")
+                response = session_state["_"](
+                    "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+                )
 
             except Exception as e:
                 logger.error(f"Error while processing the user's query: {e}")

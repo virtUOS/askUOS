@@ -43,13 +43,14 @@ class State(TypedDict):
     # (in this case, it appends messages to the list, rather than overwriting them)
     messages: Annotated[list, add_messages]
     search_query: Optional[list]  # query used to search the web or db
+    user_initial_query: Optional[str]  # user's initial query
 
 
 class GraphEdgesMixin:
     def route_tools(
         self,
         state: State,
-    ):
+    ) -> Literal["tool_node", END]:
         """
         Use in the conditional_edge to route to the ToolNode if the last message
         has tool calls. Otherwise, route to the end.
@@ -126,7 +127,6 @@ class GraphEdgesMixin:
 
         else:
             logger.debug("---DECISION: DOCS NOT RELEVANT---")
-            print(score)
             return "rewrite"
 
 
@@ -279,9 +279,11 @@ class GraphNodesMixin:
 
         logger.debug("---TRANSFORM QUERY---")
         # TODO get directly from chat
-        user_query = [i for i in state["messages"] if isinstance(i, HumanMessage)][
-            -1
-        ].content
+        # user_query = [i for i in state["messages"] if isinstance(i, HumanMessage)][
+        #     -1
+        # ].content
+
+        user_query = state["user_initial_query"]
 
         msg = [
             HumanMessage(
@@ -292,7 +294,7 @@ class GraphNodesMixin:
         \n ------- \n
         {user_query} 
         \n ------- \n
-        Formulate an improved query""",
+        Formulate an improved query and try to find the information needed to answer the question""",
             )
         ]
 
