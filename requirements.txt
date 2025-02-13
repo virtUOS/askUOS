@@ -21,3 +21,4 @@ streamlit-feedback
 langchain-milvus
 langgraph
 ipython
+tqdm

@@ -37,6 +37,8 @@ def get_milvus_client_retriever(collection_name: str) -> VectorStoreRetriever:
     return retriever
 
 
+print()
+
 # web_index_retriever = get_milvus_client_retriever("web_index")
 
 # print()
@@ -44,3 +46,9 @@ def get_milvus_client_retriever(collection_name: str) -> VectorStoreRetriever:
 # results = web_index_retriever.invoke(
 #     "I finished my application but I did not receive a confirmation email"
 # )
+
+# Example
+# results[0]
+# Document(metadata={'pk': '6977ea0d-f95c-45c2-b6a8-854386a59084',
+#                    'source': 'data/troubleshooting/application.txt'},
+#          page_content='1 Technische Voraussetzungen\n1.1 Welche Browser werden derzeit unterstützt?\n\nWenn Sie das Bewerbungsportal mit dem Browser „Microsoft Edge“ benutzen, funktionieren einige Funktionen derzeit nicht. Bitte benutzen Sie einen anderen Browser, wie z.B. Mozilla Firefox, Internet Explorer oder Chrome.\n\nZurück nach oben\n\n2 Probleme bei der Registrierung / mit dem Login\n2.1 Bei der erstmaligen Registrierung, nach dem Klick auf „Registrieren“, komme ich nicht weiter. Die Seite wird ohne Fehler nochmal geladen. Wieso?\n\nWenn Sie das Bewerbungsportal mit dem Browser „Microsoft Edge“ benutzen, funktioniert die Registrierung derzeit nicht. Bitte benutzen Sie für unser Portal einen anderen Browser, wie z.B. Mozilla Firefox, Internet Explorer oder Chrome.\n\nZurück nach oben\n\n2.2 Warum bekomme ich nach der Registrierung keine Bestätigungsmail?')

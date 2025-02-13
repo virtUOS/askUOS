@@ -7,34 +7,24 @@ import dotenv
 dotenv.load_dotenv()
 
 
-# client = MilvusClient(uri=os.getenv("MILVUS_URL"), port="19530")
-
-
-# print()
-
 import argparse
 import logging
 import os
 from typing import List, Optional
 
-import chromadb
-from chromadb.config import Settings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
-from langchain_community.embeddings import OllamaEmbeddings
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
-from langchain_community.embeddings.sentence_transformer import (
-    SentenceTransformerEmbeddings,
-)
-from langchain_community.vectorstores import Chroma
 from langchain_core.documents.base import Document
 from langchain_core.vectorstores import VectorStore
 from langchain_milvus import Milvus
 from pydantic import DirectoryPath, FilePath, validate_call
+from tqdm import tqdm
 
 # Configurations
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
 DEFAULT_DATA_DIR = "./data/troubleshooting/"
+DEFAULT_COLLECTION_NAME = "troubleshooting"
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 0
 
@@ -80,12 +70,12 @@ def split_embed_to_db(path_doc: FilePath) -> Optional[List[Document]]:
 
 
 # Function to create or load the database client
-def get_milvus_client():
+def get_milvus_client(collection_name: str):
 
     vector_store = Milvus(
         embedding_function=embeddings,
         connection_args={"uri": URI},
-        collection_name="troubleshooting",  # TODO make this configurable
+        collection_name=collection_name,  # TODO make this configurable
     )
 
     return vector_store
@@ -104,7 +94,12 @@ def create_db_from_documents(db, data_dir: DirectoryPath) -> None:
         None
     """
     # TODO: Needs to be done asynchronously
-    for filename in os.listdir(data_dir):
+    files = os.listdir(data_dir)
+    for filename in tqdm(
+        files,
+        desc="Processing files: Embedding, Indexing and Storing...",
+        total=len(files),
+    ):
         file_path = os.path.join(data_dir, filename)
 
         documents = split_embed_to_db(path_doc=FilePath(file_path))
@@ -115,7 +110,6 @@ def create_db_from_documents(db, data_dir: DirectoryPath) -> None:
     logger.info("DB creation completed")
 
 
-db = get_milvus_client()
 # retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 7})
 # logger.debug("Retriever created/loaded")
 
@@ -129,6 +123,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--collection_name",
+        type=str,
+        default=DEFAULT_COLLECTION_NAME,
+        help="Database collection name",
+    )
+
+    parser.add_argument(
         "--custom_data_dir",
         type=str,
         default=DEFAULT_DATA_DIR,
@@ -136,6 +137,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    collection_name = args.collection_name
+    db = get_milvus_client(collection_name)
     if args.create_db.lower() == "true":
         create_db_from_documents(db, args.custom_data_dir)
     else:
