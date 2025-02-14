@@ -21,8 +21,8 @@ def initialize_app():
 
 def display_welcome_message():
     start_message = """
-## Welcome to Ask.UOS!
-### Ask.UOS is a chatbot powered by OpenAI's GPT-4. 
+## Welcome to ask.UOS!
+### ask.UOS is a chatbot powered by OpenAI's GPT-4. 
 ### We are excited to assist you with this first experimental release! 
 
 We take precautions to ensure a low rate of inaccurate answers. However, for your safety and to ensure the reliability of any information you receive, we recommend using human oversight in your decision-making processes, as this helps confirm that the information is safe, accurate, and appropriate for your needs.

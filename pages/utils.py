@@ -28,7 +28,7 @@ def initialize_session_sate() -> None:
 def setup_page() -> None:
     """Set up the Streamlit page configuration."""
     st.set_page_config(
-        page_title="Ask.UOS",
+        page_title="ask.UOS",
         page_icon="app/static/Icon-chatbot.png",
         layout="centered",
         initial_sidebar_state="collapsed",

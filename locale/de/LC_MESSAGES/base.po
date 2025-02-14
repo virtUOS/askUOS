@@ -17,8 +17,8 @@ msgstr ""
 
 
 msgid ""
-"\n## Welcome to Ask.UOS!\n###"
-" Ask.UOS is a chatbot powered by OpenAI's GPT-4. \n### We are excited to assist you with this first experimental release!"
+"\n## Welcome to ask.UOS!\n###"
+" ask.UOS is a chatbot powered by OpenAI's GPT-4. \n### We are excited to assist you with this first experimental release!"
 " \n\nWe take precautions to ensure a low rate of inaccurate answers. However, for your safety and to ensure the reliability of any information you receive, we recommend using human oversight in your decision-making processes, as this helps confirm that the information is safe, accurate, and appropriate for your needs."
 "\nIf you're ever unsure about an answer, please check the provided sources. You can also refer directly to the [university's website]({})."
 "\n\nIf you need personal assistance regarding studying at the university, you can visit the [StudiOS]({}) (Studierenden-Information Osnabrück) or [ZSB]({}) (Zentrale Studienberatung Osnabrück) website."
@@ -27,8 +27,8 @@ msgid ""
 
 
 msgstr ""
-"\n## Willkommen bei Ask.UOS!\n### "
-"Ask.UOS ist ein Chatbot, der auf OpenAIs GPT-4 basiert. \n### Wir freuen uns, Ihnen mit dieser ersten experimentellen Version zur Seite zu stehen!"
+"\n## Willkommen bei ask.UOS!\n### "
+"ask.UOS ist ein Chatbot, der auf OpenAIs GPT-4 basiert. \n### Wir freuen uns, Ihnen mit dieser ersten experimentellen Version zur Seite zu stehen!"
 "\n\nWir arbeiten daran, die Anzahl ungenauer Antworten so gering wie möglich zu halten. Um jedoch sicherzustellen, dass die Informationen verlässlich und auf Ihre Bedürfnisse abgestimmt sind, empfehlen wir, sich zu wichtigen Entscheidungen menschliche Unterstützung holen."
 " Wenn Sie sich bei einer Antwort unsicher sind, überprüfen Sie bitte die angegebenen Quellen. Sie können auch direkt die Website der [Universität Osnabrück]({}) besuchen"
 "\n\nWenn Sie persönliche Unterstützung zum Studium an der Universität benötigen, können Sie die Website des [StudiOS]({}) (Studierenden-Information Osnabrück) oder der [ZSB]({}) (Zentrale Studienberatung Osnabrück) besuchen."
@@ -45,8 +45,8 @@ msgstr "Chatten beginnen"
 msgid "Continue Chatting"
 msgstr "Weiter chatten"
 
-msgid "Hello! I am happy to assist you with questions about the University of Osnabrück, including information about study programs, application processes, admission requirements and other university-related topics. \n How can I help you today?"
-msgstr "Hallo! Ich unterstütze Sie gerne bei Fragen zur Universität Osnabrück, einschließlich Informationen zu Studiengängen, Bewerbungsprozessen, Zulassungsvoraussetzungen und anderen universitätsbezogenen Themen.\n Wie kann ich Ihnen heute helfen?"
+msgid  "Hello! I am happy to assist you with questions about the University of Osnabrück, including information about study programs, application processes, and admission requirements. \n How can I help you today?"
+msgstr "Hallo! Ich unterstütze Sie gerne bei Fragen zur Universität Osnabrück, einschließlich Informationen zu Studiengängen, Bewerbungsprozessen und Zulassungsvoraussetzungen.\n Wie kann ich Ihnen heute helfen?"
 
 
 msgid "The responses from the chat assistant may be incorrect - therefore, please verify the answers for their correctness."

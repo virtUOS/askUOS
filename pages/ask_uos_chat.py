@@ -47,7 +47,7 @@ class ChatApp:
         """Initialize the chat messages in session state if not present."""
         if "messages" not in st.session_state:
             greeting_message = session_state["_"](
-                "Hello! I am happy to assist you with questions about the University of Osnabrück, including information about study programs, application processes, admission requirements and other university-related topics. \n How can I help you today?"
+                "Hello! I am happy to assist you with questions about the University of Osnabrück, including information about study programs, application processes, and admission requirements. \n How can I help you today?"
             )
             st.session_state["messages"] = [
                 {
@@ -143,7 +143,7 @@ class ChatApp:
 
     def run(self):
         """Main method to run the application logic."""
-        st.title("Ask.UOS")
+        st.title("ask.UOS")
         initialize_session_sate()
         self.show_warning()
         self.initialize_chat()
