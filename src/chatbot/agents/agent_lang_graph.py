@@ -5,25 +5,15 @@ from typing import Annotated, Any, ClassVar, Dict, List, Literal, Optional
 import streamlit as st
 from langchain.prompts.chat import ChatPromptTemplate
 from langchain.tools.retriever import create_retriever_tool
-from langchain_core.agents import AgentActionMessageLog, AgentFinish
-from langchain_core.callbacks import (
-    StdOutCallbackHandler,
-    StreamingStdOutCallbackHandler,
-)
 from langchain_core.messages import HumanMessage, ToolMessage
-from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
 from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
-from langgraph.prebuilt import create_react_agent
 from typing_extensions import TypedDict
 
-# from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
-# from src.chatbot.db.vector_store import retriever
 from src.chatbot.db.clients import get_milvus_client_retriever
 from src.chatbot.prompt.main import get_prompt
 from src.chatbot.utils.agent_helpers import llm
@@ -33,8 +23,6 @@ from src.config.core_config import settings
 
 OPEN_AI_MODEL = settings.model.model_name
 DEBUG = settings.application.debug
-
-# TODO bug: humman message is repeated
 
 
 class State(TypedDict):
@@ -130,7 +118,6 @@ class GraphEdgesMixin:
             return "rewrite"
 
 
-# TODO need to control execution time per tool and overall.
 class GraphNodesMixin:
 
     @staticmethod
@@ -147,12 +134,21 @@ class GraphNodesMixin:
 
         return [
             create_retriever_tool(
-                get_milvus_client_retriever(
+                retriever=get_milvus_client_retriever(
                     "troubleshooting"
                 ),  # TODO make this configurable
-                "HISinOne_troubleshooting_questions",
-                translate_prompt(settings.language)[
+                name="HISinOne_troubleshooting_questions",
+                description=translate_prompt(settings.language)[
                     "HISinOne_troubleshooting_questions"
+                ],
+            ),
+            create_retriever_tool(
+                retriever=get_milvus_client_retriever(
+                    "examination_regulations"
+                ),  # TODO make this configurable
+                name="examination_regulations",
+                description=translate_prompt(settings.language)[
+                    "examination_regulations"
                 ],
             ),
             StructuredTool.from_function(

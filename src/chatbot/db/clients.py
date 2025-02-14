@@ -20,15 +20,15 @@ EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
 embeddings = FastEmbedEmbeddings(model_name=EMBEDDING_MODEL)
 
 URI = os.getenv("MILVUS_URL")
+MILVUS_USER = os.getenv("MILVUS_USER")
+MILVUS_PASSWORD = os.getenv("MILVUS_PASSWORD")
 
 
 def get_milvus_client_retriever(collection_name: str) -> VectorStoreRetriever:
 
     vector_store = Milvus(
         embedding_function=embeddings,
-        connection_args={
-            "uri": URI,
-        },
+        connection_args={"uri": URI, "token": f"{MILVUS_USER}:{MILVUS_PASSWORD}"},
         collection_name=collection_name,
     )
 
@@ -49,6 +49,13 @@ print()
 
 # Example
 # results[0]
-# Document(metadata={'pk': '6977ea0d-f95c-45c2-b6a8-854386a59084',
-#                    'source': 'data/troubleshooting/application.txt'},
-#          page_content='1 Technische Voraussetzungen\n1.1 Welche Browser werden derzeit unterstützt?\n\nWenn Sie das Bewerbungsportal mit dem Browser „Microsoft Edge“ benutzen, funktionieren einige Funktionen derzeit nicht. Bitte benutzen Sie einen anderen Browser, wie z.B. Mozilla Firefox, Internet Explorer oder Chrome.\n\nZurück nach oben\n\n2 Probleme bei der Registrierung / mit dem Login\n2.1 Bei der erstmaligen Registrierung, nach dem Klick auf „Registrieren“, komme ich nicht weiter. Die Seite wird ohne Fehler nochmal geladen. Wieso?\n\nWenn Sie das Bewerbungsportal mit dem Browser „Microsoft Edge“ benutzen, funktioniert die Registrierung derzeit nicht. Bitte benutzen Sie für unser Portal einen anderen Browser, wie z.B. Mozilla Firefox, Internet Explorer oder Chrome.\n\nZurück nach oben\n\n2.2 Warum bekomme ich nach der Registrierung keine Bestätigungsmail?')
+# [Document(metadata={
+#     'page': 21,
+#     'pk': '40a0a328-5ba7-415b-bef9-893d996cb160',
+#     'source'...o \nRequirements for participation  None'), Document(metadata={'page': 6, 'pk': '0e976935-15bc-46bc-af3a-83995732107f', 'source':...onsideration in the selection procedure.'), Document(metadata={'page': 128, 'pk': 'bf96418c-0e82-4d66-8964-592bc7d4b0cb', 'source...y requirements for participation  \nnone'), Document(metadata={'page': 20, 'pk': 'bb4e3774-591f-48ad-86be-70275a893a5e', 'source'...ion to a problem was judged incorrect or"), Document(metadata={'page': 4, 'pk': 'd9f25985-debf-4432-bf2c-f1fd728e5a72', 'source':...sten berufsqualifizierenden Abschlüssen,'), Document(metadata={'page': 14, 'pk': '2fea2926-558d-4275-b3b5-e6e6d32c03dc', 'source'...nce  (mandatory  module  / Pflichtmodul)'), Document(metadata={'page': 7, 'pk': 'bdf13523-8b68-4bfb-9f89-e62f505f91e2', 'source':...The provision in accordance with Section')]
+
+# print(results[0])
+# page_content='22
+# Does the examination grade
+# count towards the final grade?  No
+# Requirements for participation  None' metadata={'page': 21, 'pk': '40a0a328-5ba7-415b-bef9-893d996cb160', 'source': 'data/documents/Modulbeschreibungen_ConflictStudiesPeacebuilding_EN_2021-03.pdf'}

@@ -10,6 +10,7 @@ You are an AI assistant of the University of Osnabrück in Germany. You speciali
 - **Use of Tools:** You have access to the following tools:
     - **HISinOne_troubleshooting_questions:** For answering **technical questions** about the HISinOne software, which is used by the University of Osnabrück to manage the application process. For questions about other software used by the university (e.g., Stud.IP, Element, SOgo), use the **custom_university_web_search** tool.
     - **custom_university_web_search:** Here you can find up-to-date information about the University of Osnabrück, such as details on the application process, admissions, degree programs, academic information, current events, job offers, and more.
+    - **examination_regulations**: Use this tool whenever you need information or need to answer questions about **legally binding** regulations related to specific degree programs (Bachelors or Masters). The applicable examination regulations depend on the respective degree program.
 
 ## Guidelines:
 1. **Scope of Support:**
@@ -47,8 +48,7 @@ Question:
 {input}
 
 {agent_scratchpad}
-"""
-,
+""",
     "description_university_web_search": """
     Useful for when you need to answer questions about the University of Osnabruek. For example questions about 
     the application process or studying at the university in general. This tool is also useful to access updated application dates
@@ -63,12 +63,18 @@ Question:
          
          
          """,
+    "examination_regulations": """
+         This tool provides students and prospective students with access to all relevant regulations, sorted by degree programs. The admission regulations determine the prerequisites that must be met for enrolling in Bachelor’s or Master’s programs. They also outline how study places are allocated in programs with restricted admissions.
+The examination regulations contain legally binding rules regarding the temporal, content, and organizational structure of each degree program. This includes information about the required study contents (mandatory and elective modules) and details about examinations (procedure, repeatability, free attempts).
+Use this tool whenever you need information or need to answer questions about legally binding regulations related to specific degree programs (Bachelors or Masters). The applicable examination regulations depend on the respective degree program.
+         
+         """,
     "response_output_description": "The final answer to respond to the user",
     "response_sources_description": "The sources used to generate the answer. The sources should consist of a list of URLs. Only include the sources if the answer was extracted from the University of Osnabruek website.",
 }
 
 prompt_text_deutsch = {
-  "system_message": """
+    "system_message": """
 Sie sind ein KI-Assistent der Universität Osnabrück in Deutschland. Sie sind spezialisiert auf die umfassende Unterstützung und Beratung von:
 - Studieninteressierten (z. B. Personen, die sich für ein Studium an der Universität bewerben möchten)
 - Aktuellen Studierenden
@@ -79,6 +85,7 @@ Sie sind ein KI-Assistent der Universität Osnabrück in Deutschland. Sie sind s
 - **Nutzung von Tools:** Sie haben Zugriff auf die folgenden Werkzeuge:
     - **HISinOne_troubleshooting_questions:** Zur Beantwortung **technischer Fragen** zur Software HISinOne, die von der Universität Osnabrück zur Verwaltung des Bewerbungsprozesses verwendet wird. Für Fragen zu anderer von der Universität verwendeter Software (z. B. Stud.IP, Element, SOgo) verwenden Sie das Tool **custom_university_web_search**.
     - **custom_university_web_search:** Hier finden Sie aktuelle Informationen zur Universität Osnabrück, wie zum Beispiel Informationen zum Bewerbungsverfahren, zur Zulassung, zu Studiengängen, zu akademischen Details, aktuellen Veranstaltungen, Stellenangeboten und mehr.
+    - **examination_regulations**: Nutzen Sie dieses Tool, wenn Sie Informationen oder Fragen zu rechtlich verbindlichen Regelungen bestimmter Studiengänge (Bachelor oder Master) benötigen. Die anzuwendenden Prüfungsordnungen sind vom jeweiligen Studiengang abhängig.
 
 ## Richtlinien:
 1. **Umfang der Unterstützung:**
@@ -130,6 +137,11 @@ Diese Plattform wird für die Einreichung von Bewerbungen an der Universität Os
     - Wie kann ich mein Passwort zurücksetzen?
     - Ist es möglich, meine Anmeldedaten aus dem vorherigen Semester zu verwenden?
  
+""",
+    "examination_regulations": """
+Mit diesem Tool erhalten Studierende und Studieninteressierte Zugriff auf alle relevanten Regelungen, sortiert nach Studiengängen. Die Zulassungsordnung legt fest, welche Voraussetzungen für die Einschreibung in Bachelor- oder Masterstudiengänge erfüllt sein müssen. Sie regelt auch, wie in zulassungsbeschränkten Studiengängen Studienplätze vergeben werden.
+Die Prüfungsordnung enthält rechtsverbindliche Regelungen zur zeitlichen, inhaltlichen und organisatorischen Ausgestaltung des jeweiligen Studiengangs. Dazu gehören Angaben zu den erforderlichen Studieninhalten (Pflicht- und Wahlpflichtmodule) sowie Einzelheiten zu Prüfungen (Ablauf, Wiederholbarkeit, Freiversuche).
+Nutzen Sie dieses Tool, wenn Sie Informationen oder Fragen zu rechtsverbindlichen Regelungen bestimmter Studiengänge (Bachelor oder Master) benötigen. Die anzuwendende Prüfungsordnung ist vom jeweiligen Studiengang abhängig.
 """,
     "response_output_description": "Die endgültige Antwort, um dem Benutzer zu antworten",
     "response_sources_description": "Die Quellen, die zur Erstellung der Antwort verwendet wurden. Die Quellen sollten aus einer Liste von URLs bestehen. Geben Sie die Quellen nur an, wenn die Antwort von der Website der Universität Osnabrück stammt.",

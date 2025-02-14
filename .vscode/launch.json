@@ -39,6 +39,19 @@
    
         },
 
+
+
+        {
+            "name": "db_utils",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./src/chatbot/db/_utils.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
         {
             "name": "agent_lang_graph",
             "type": "debugpy",

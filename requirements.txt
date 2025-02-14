@@ -22,3 +22,4 @@ langchain-milvus
 langgraph
 ipython
 tqdm
+milvus-cli

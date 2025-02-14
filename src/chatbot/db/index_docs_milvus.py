@@ -23,8 +23,8 @@ from tqdm import tqdm
 
 # Configurations
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
-DEFAULT_DATA_DIR = "./data/troubleshooting/"
-DEFAULT_COLLECTION_NAME = "troubleshooting"
+DEFAULT_DATA_DIR = "./data/documents/"
+DEFAULT_COLLECTION_NAME = "examination_regulations"
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 0
 
@@ -100,12 +100,16 @@ def create_db_from_documents(db, data_dir: DirectoryPath) -> None:
         desc="Processing files: Embedding, Indexing and Storing...",
         total=len(files),
     ):
-        file_path = os.path.join(data_dir, filename)
+        try:
 
-        documents = split_embed_to_db(path_doc=FilePath(file_path))
-        if documents:
-            uuids = [str(uuid4()) for _ in range(len(documents))]
-            db.add_documents(documents, ids=uuids)
+            file_path = os.path.join(data_dir, filename)
+
+            documents = split_embed_to_db(path_doc=FilePath(file_path))
+            if documents:
+                uuids = [str(uuid4()) for _ in range(len(documents))]
+                db.add_documents(documents, ids=uuids)
+        except Exception as e:
+            logger.error(f"An error ocurrued while processing this file: {file_path}")
 
     logger.info("DB creation completed")
 
