@@ -12,18 +12,18 @@ import logging
 import os
 from typing import List, Optional
 
+from clients import get_milvus_client
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_core.documents.base import Document
 from langchain_core.vectorstores import VectorStore
-from langchain_milvus import Milvus
 from pydantic import DirectoryPath, FilePath, validate_call
 from tqdm import tqdm
 
 # Configurations
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
-DEFAULT_DATA_DIR = "./data/documents/"
+DEFAULT_DATA_DIR = "./data/documents"
 DEFAULT_COLLECTION_NAME = "examination_regulations"
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 0
@@ -69,18 +69,6 @@ def split_embed_to_db(path_doc: FilePath) -> Optional[List[Document]]:
     return documents
 
 
-# Function to create or load the database client
-def get_milvus_client(collection_name: str):
-
-    vector_store = Milvus(
-        embedding_function=embeddings,
-        connection_args={"uri": URI},
-        collection_name=collection_name,  # TODO make this configurable
-    )
-
-    return vector_store
-
-
 @validate_call
 def create_db_from_documents(db, data_dir: DirectoryPath) -> None:
     """
@@ -109,13 +97,12 @@ def create_db_from_documents(db, data_dir: DirectoryPath) -> None:
                 uuids = [str(uuid4()) for _ in range(len(documents))]
                 db.add_documents(documents, ids=uuids)
         except Exception as e:
-            logger.error(f"An error ocurrued while processing this file: {file_path}")
+            logger.error(
+                f"An error ocurrued while processing/embedding this file: {file_path}"
+            )
 
     logger.info("DB creation completed")
 
-
-# retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 7})
-# logger.debug("Retriever created/loaded")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -14,7 +14,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
-from src.chatbot.db.clients import get_milvus_client_retriever
+from src.chatbot.db.clients import get_retriever
 from src.chatbot.prompt.main import get_prompt
 from src.chatbot.utils.agent_helpers import llm
 from src.chatbot.utils.prompt import get_prompt_length, translate_prompt
@@ -134,7 +134,7 @@ class GraphNodesMixin:
 
         return [
             create_retriever_tool(
-                retriever=get_milvus_client_retriever(
+                retriever=get_retriever(
                     "troubleshooting"
                 ),  # TODO make this configurable
                 name="HISinOne_troubleshooting_questions",
@@ -143,7 +143,7 @@ class GraphNodesMixin:
                 ],
             ),
             create_retriever_tool(
-                retriever=get_milvus_client_retriever(
+                retriever=get_retriever(
                     "examination_regulations"
                 ),  # TODO make this configurable
                 name="examination_regulations",

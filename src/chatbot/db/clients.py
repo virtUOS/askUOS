@@ -24,7 +24,7 @@ MILVUS_USER = os.getenv("MILVUS_USER")
 MILVUS_PASSWORD = os.getenv("MILVUS_PASSWORD")
 
 
-def get_milvus_client_retriever(collection_name: str) -> VectorStoreRetriever:
+def get_milvus_client(collection_name: str) -> Milvus:
 
     vector_store = Milvus(
         embedding_function=embeddings,
@@ -32,7 +32,15 @@ def get_milvus_client_retriever(collection_name: str) -> VectorStoreRetriever:
         collection_name=collection_name,
     )
 
-    retriever = vector_store.as_retriever(search_type="mmr", search_kwargs={"k": 7})
+    return vector_store
+
+
+def get_retriever(collection_name: str) -> VectorStoreRetriever:
+
+    vector_store = get_milvus_client(collection_name)
+    retriever = vector_store.as_retriever(
+        search_type="similarity", search_kwargs={"k": 5}
+    )
 
     return retriever
 

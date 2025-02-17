@@ -145,7 +145,7 @@ class ChatApp:
 
             except GraphRecursionError as e:
                 # TODO handle recursion limit error
-                logger.error(f"Recursion Limit reahed: {e}")
+                logger.error(f"Recursion Limit reached: {e}")
                 response = session_state["_"](
                     "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
                 )
