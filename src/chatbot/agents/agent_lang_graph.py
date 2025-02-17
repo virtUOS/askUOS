@@ -4,7 +4,6 @@ from typing import Annotated, Any, ClassVar, Dict, List, Literal, Optional
 
 import streamlit as st
 from langchain.prompts.chat import ChatPromptTemplate
-from langchain.tools.retriever import create_retriever_tool
 from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_core.prompts import PromptTemplate
 from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
@@ -17,6 +16,7 @@ from typing_extensions import TypedDict
 from src.chatbot.db.clients import get_retriever
 from src.chatbot.prompt.main import get_prompt
 from src.chatbot.utils.agent_helpers import llm
+from src.chatbot.utils.agent_retriever import create_retriever_tool
 from src.chatbot.utils.prompt import get_prompt_length, translate_prompt
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
@@ -191,13 +191,15 @@ class GraphNodesMixin:
             tool_result = self._tools_by_name[tool_call["name"]].invoke(
                 tool_call["args"]
             )
-            outputs.append(
-                ToolMessage(
-                    content=json.dumps(tool_result),
-                    name=tool_call["name"],
-                    tool_call_id=tool_call["id"],
-                )
+            tool_m = ToolMessage(
+                content=json.dumps(tool_result),
+                name=tool_call["name"],
+                tool_call_id=tool_call["id"],
             )
+
+            # TODO tool message is a dictionary, needs further processing
+            # TODO add the retrieved documents name and page to the visited links object
+            outputs.append(tool_m)
             search_query.append(tool_call["args"].get("query", ""))
         return {"messages": outputs, "search_query": search_query}
 

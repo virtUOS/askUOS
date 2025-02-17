@@ -108,7 +108,7 @@ class ChatApp:
             thread_id = 1
             config = {
                 "configurable": {"thread_id": thread_id},
-                "recursion_limit": 12,  # This amounts to two laps of the graph (+2 supersteps), since we have 5 super steps, # https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
+                "recursion_limit": 10,  # This amounts to two laps of the graph # https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
             }
             history = self._get_chat_history(st.session_state["messages"])
             # system_user_prompt = get_prompt(history + [("user", user_input)])
@@ -149,12 +149,14 @@ class ChatApp:
                 response = session_state["_"](
                     "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
                 )
+                st.markdown(response)
 
             except Exception as e:
                 logger.error(f"Error while processing the user's query: {e}")
                 response = session_state["_"](
                     "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
                 )
+                st.markdown(response)
             return response, to_stream
 
         with st.chat_message("assistant", avatar="./static/Icon-chatbot.svg"):
