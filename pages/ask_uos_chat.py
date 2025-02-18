@@ -13,7 +13,7 @@ from pages.utils import initialize_session_sate, load_css, setup_page
 # from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.prompt.main import get_prompt
-from src.chatbot.tools.utils.tool_helpers import visited_links
+from src.chatbot.tools.utils.tool_helpers import visited_docs, visited_links
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
@@ -212,6 +212,9 @@ class ChatApp:
                     f"Time taken to serve whole answer to the user: {time_taken} seconds"
                 )
 
+                if visited_docs():
+                    self.display_visited_docs()
+
                 if visited_links():
                     self.display_visited_links()
 
@@ -244,6 +247,21 @@ class ChatApp:
 
         logger.debug(f"Chat History -------{chat_history}--------")
         return chat_history
+
+    def display_visited_docs(self):
+        """Display the documents visited for the current user query."""
+
+        references = visited_docs.format_references()
+        for key, value in references.items():
+            # TODO add translation
+            page_label = (
+                session_state["_"]("Pages")
+                if len(value) > 1
+                else session_state["_"]("Page")
+            )
+            page_list = ", ".join(map(str, value))
+            st.markdown(f"- **{key}**,  **{page_label}**: {page_list}")
+        visited_docs.clear()
 
     def display_visited_links(self):
         """Display the links visited for the current user query."""

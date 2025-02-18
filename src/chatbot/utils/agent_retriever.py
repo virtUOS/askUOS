@@ -1,4 +1,4 @@
-# code taking from langchain.tools.retriever
+# code taking from langchain.tools.retriever. The code is modified to return the references of the documents
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ from langchain_core.callbacks import Callbacks
 from langchain_core.prompts import BasePromptTemplate, PromptTemplate, format_document
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.tools.simple import Tool
+
+from src.chatbot.tools.utils.tool_helpers import visited_docs
 
 
 def _get_relevant_documents(
@@ -23,18 +25,16 @@ def _get_relevant_documents(
 
     results = []
     # example {'pk': 'f707471d-7369-43e0-a94a-4293', 'source': 'data/documents/PVO-10-31.pdf', 'page': 38}
-    references = []
+
     for doc in docs:
-        references.append(doc.metadata)
+        # TODO consider moving this to the graph state
+        visited_docs().append(doc.metadata)
         results.append(format_document(doc, document_prompt))
 
-    return {
-        "retrieved_content": document_separator.join(results),
-        "references": references,
-    }
+    return document_separator.join(results)
 
 
-def create_retriever_tool(
+def create_retriever_tool_beta(
     retriever: BaseRetriever,
     name: str,
     description: str,

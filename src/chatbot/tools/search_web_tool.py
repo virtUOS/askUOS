@@ -7,7 +7,6 @@ import asyncio
 
 import aiohttp
 import dotenv
-import requests
 from aiohttp import ClientSession
 from bs4 import BeautifulSoup
 
@@ -16,7 +15,6 @@ from cashews import cache
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service

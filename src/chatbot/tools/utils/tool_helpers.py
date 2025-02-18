@@ -1,8 +1,11 @@
-from src.chatbot_log.chatbot_logger import logger
+import os
 import re
 import urllib.parse
-from src.chatbot.utils.pdf_reader import read_pdf_from_url
+
 from bs4 import BeautifulSoup
+
+from src.chatbot.utils.pdf_reader import read_pdf_from_url
+from src.chatbot_log.chatbot_logger import logger
 
 QUERY_SPACE_REPLACEMENT = "+"
 
@@ -105,4 +108,43 @@ class VisitedLinks:
         return self.urls
 
 
+class ReferenceRetriever:
+
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(ReferenceRetriever, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self) -> None:
+        if not self.__dict__:
+            self.docs_references = []
+
+    def format_references(self):
+        """
+        Formats the references in a human-readable format.
+        """
+        references = {}
+
+        for doc in self.docs_references:
+            source = os.path.basename(doc["source"])
+            if source not in references:
+                references[source] = [doc["page"]]
+            else:
+                references[source].append(doc["page"])
+
+        return references
+
+    def clear(self):
+        """
+        Clears the list of visited documents.
+        """
+        self.docs_references = []
+
+    def __call__(self):
+        return self.docs_references
+
+
+visited_docs = ReferenceRetriever()
 visited_links = VisitedLinks()

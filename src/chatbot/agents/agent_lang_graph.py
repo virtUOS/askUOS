@@ -4,6 +4,7 @@ from typing import Annotated, Any, ClassVar, Dict, List, Literal, Optional
 
 import streamlit as st
 from langchain.prompts.chat import ChatPromptTemplate
+from langchain.tools.retriever import create_retriever_tool
 from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_core.prompts import PromptTemplate
 from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
@@ -15,8 +16,9 @@ from typing_extensions import TypedDict
 
 from src.chatbot.db.clients import get_retriever
 from src.chatbot.prompt.main import get_prompt
+from src.chatbot.tools.utils.tool_helpers import visited_docs
 from src.chatbot.utils.agent_helpers import llm
-from src.chatbot.utils.agent_retriever import create_retriever_tool
+from src.chatbot.utils.agent_retriever import create_retriever_tool_beta
 from src.chatbot.utils.prompt import get_prompt_length, translate_prompt
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
@@ -142,7 +144,7 @@ class GraphNodesMixin:
                     "HISinOne_troubleshooting_questions"
                 ],
             ),
-            create_retriever_tool(
+            create_retriever_tool_beta(
                 retriever=get_retriever(
                     "examination_regulations"
                 ),  # TODO make this configurable
@@ -163,6 +165,8 @@ class GraphNodesMixin:
 
     @staticmethod
     def filter_messages(messages: List, k: int):
+        # TODO make sure that the system message is always kept
+
         if len(messages) <= k:
             return messages
         return messages[-k:]
@@ -170,7 +174,7 @@ class GraphNodesMixin:
     # Nodes
     def agent_node(self, state: State):
         # TODO if a tool was called, only pass the tool message, system message and human messageS
-        messages = GraphNodesMixin.filter_messages(state["messages"], 5)
+        messages = GraphNodesMixin.filter_messages(state["messages"], 7)
         # TODO pass callback to the llm_with_tools object, to detect when the tokens are generated and stream them
         # detect when AI message contains 'finish_reason':'stop' and start streaming the tokens
 
@@ -187,6 +191,7 @@ class GraphNodesMixin:
             raise ValueError("No message found in input")
         outputs = []
         search_query = []
+        visited_docs.clear()
         for tool_call in message.tool_calls:
             tool_result = self._tools_by_name[tool_call["name"]].invoke(
                 tool_call["args"]
