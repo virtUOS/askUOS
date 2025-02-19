@@ -18,7 +18,7 @@ from src.chatbot.db.clients import get_retriever
 from src.chatbot.prompt.main import get_prompt
 from src.chatbot.tools.utils.tool_helpers import visited_docs
 from src.chatbot.utils.agent_helpers import llm
-from src.chatbot.utils.agent_retriever import create_retriever_tool_beta
+from src.chatbot.utils.agent_retriever import RetrieverInput, _get_relevant_documents
 from src.chatbot.utils.prompt import get_prompt_length, translate_prompt
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
@@ -144,14 +144,14 @@ class GraphNodesMixin:
                     "HISinOne_troubleshooting_questions"
                 ],
             ),
-            create_retriever_tool_beta(
-                retriever=get_retriever(
-                    "examination_regulations"
-                ),  # TODO make this configurable
+            StructuredTool.from_function(
                 name="examination_regulations",
+                func=_get_relevant_documents,
                 description=translate_prompt(settings.language)[
                     "examination_regulations"
                 ],
+                args_schema=RetrieverInput,
+                handle_tool_errors=True,
             ),
             StructuredTool.from_function(
                 name="custom_university_web_search",
@@ -193,9 +193,13 @@ class GraphNodesMixin:
         search_query = []
         visited_docs.clear()
         for tool_call in message.tool_calls:
-            tool_result = self._tools_by_name[tool_call["name"]].invoke(
-                tool_call["args"]
-            )
+            try:
+                tool_result = self._tools_by_name[tool_call["name"]].invoke(
+                    tool_call["args"]
+                )
+            except Exception as e:
+                logger.error(f"Error invoking tool: {e}")
+                raise e
             tool_m = ToolMessage(
                 content=json.dumps(tool_result),
                 name=tool_call["name"],

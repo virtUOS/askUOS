@@ -5,23 +5,35 @@ from __future__ import annotations
 from functools import partial
 from typing import Optional
 
-from langchain.tools.retriever import RetrieverInput
+from langchain.tools import BaseTool
 from langchain_core.callbacks import Callbacks
-from langchain_core.prompts import BasePromptTemplate, PromptTemplate, format_document
-from langchain_core.retrievers import BaseRetriever
-from langchain_core.tools.simple import Tool
+from langchain_core.prompts import PromptTemplate, format_document
+from langchain_core.pydantic_v1 import BaseModel, Field
 
+from src.chatbot.db.clients import get_retriever
 from src.chatbot.tools.utils.tool_helpers import visited_docs
+
+
+class RetrieverInput(BaseModel):
+    """Input to the retriever."""
+
+    query: str = Field(description="query to look up in retriever")
+    # TODO make sure that keywords are in German
+    filter_program_name: str = Field(
+        description="Keyword to filter the documents by program name, e.g. Biologie, Informatik, Kognitionswissenschaft "
+    )
 
 
 def _get_relevant_documents(
     query: str,
-    retriever: BaseRetriever,
-    document_prompt: BasePromptTemplate,
-    document_separator: str,
-    callbacks: Callbacks = None,
+    filter_program_name: str,
 ) -> str:
-    docs = retriever.invoke(query, config={"callbacks": callbacks})
+    # TODO: add a filter for the program name WHEN searching
+    document_separator = "\n\n"
+    document_prompt = PromptTemplate.from_template("{page_content}")
+    retriever = retriever = get_retriever("examination_regulations")
+
+    docs = retriever.invoke(query)
 
     results = []
     # example {'pk': 'f707471d-7369-43e0-a94a-4293', 'source': 'data/documents/PVO-10-31.pdf', 'page': 38}
@@ -32,41 +44,3 @@ def _get_relevant_documents(
         results.append(format_document(doc, document_prompt))
 
     return document_separator.join(results)
-
-
-def create_retriever_tool_beta(
-    retriever: BaseRetriever,
-    name: str,
-    description: str,
-    *,
-    document_prompt: Optional[BasePromptTemplate] = None,
-    document_separator: str = "\n\n",
-) -> Tool:
-    """Create a tool to do retrieval of documents.
-
-    Args:
-        retriever: The retriever to use for the retrieval
-        name: The name for the tool. This will be passed to the language model,
-            so should be unique and somewhat descriptive.
-        description: The description for the tool. This will be passed to the language
-            model, so should be descriptive.
-        document_prompt: The prompt to use for the document. Defaults to None.
-        document_separator: The separator to use between documents. Defaults to "\n\n".
-
-    Returns:
-        Tool class to pass to an agent.
-    """
-    document_prompt = document_prompt or PromptTemplate.from_template("{page_content}")
-    func = partial(
-        _get_relevant_documents,
-        retriever=retriever,
-        document_prompt=document_prompt,
-        document_separator=document_separator,
-    )
-
-    return Tool(
-        name=name,
-        description=description,
-        func=func,
-        args_schema=RetrieverInput,
-    )

@@ -150,12 +150,16 @@ class ChatApp:
                     "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
                 )
                 st.markdown(response)
+                # clear the docs references
+                visited_docs.clear()
 
             except Exception as e:
                 logger.error(f"Error while processing the user's query: {e}")
                 response = session_state["_"](
                     "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
                 )
+                # clear the docs references
+                visited_docs.clear()
                 st.markdown(response)
             return response, to_stream
 
@@ -252,6 +256,12 @@ class ChatApp:
         """Display the documents visited for the current user query."""
 
         references = visited_docs.format_references()
+        reference_examination_regulations = "https://www.uni-osnabrueck.de/studium/im-studium/zugangs-zulassungs-und-pruefungsordnungen/"
+        message = session_state["_"](
+            "The information provided draws on the documents below that can be found in the [University Website]({}). We encourage you to visit the site to explore these resources for additional details and insights!"
+        )
+
+        st.markdown(message.format(reference_examination_regulations))
         for key, value in references.items():
             # TODO add translation
             page_label = (
@@ -294,7 +304,7 @@ class ChatApp:
 
     def run(self):
         """Main method to run the application logic."""
-        st.title("Ask.UOS")
+        st.title("ask.UOS")
         initialize_session_sate()
         self.show_warning()
         self.initialize_chat()
