@@ -107,10 +107,10 @@ class ChatApp:
                     f"Time taken to serve whole answer to the user: {time_taken} seconds"
                 )
 
+                self.store_response(response["output"], prompt)
+
                 if visited_links():
                     self.display_visited_links()
-
-            self.store_response(response["output"], prompt)
 
     def display_visited_links(self):
         """Display the links visited for the current user query."""
@@ -139,7 +139,30 @@ class ChatApp:
             }
         )
         st.session_state.user_query = prompt
-        streamlit_feedback(feedback_type="faces", key="user_feedback")
+
+        with st.popover(session_state["_"]("Feedback")):
+
+            if st.button("hi"):
+                print("hi")
+
+            with st.form(key="feedback_form"):
+                st.write(session_state["_"]("#### Rate the response"))
+                rate_value = streamlit_feedback(
+                    feedback_type="faces",
+                    key="user_feedback",
+                )
+                text_rating = st.text_area(
+                    "text_rating",
+                    label_visibility="hidden",
+                    placeholder=session_state["_"](
+                        "[Optional] Please share any additional thoughts or insights, such as an explanation for your rating."
+                    ),
+                    height=150,
+                )
+                submitted = st.form_submit_button(session_state["_"]("Submit"))
+
+                if submitted:
+                    print(f"Feedback submitted   {text_rating}, {rate_value}")
 
     def run(self):
         """Main method to run the application logic."""
