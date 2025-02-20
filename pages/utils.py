@@ -12,8 +12,10 @@ def initialize_session_sate() -> None:
     defaults = {
         "_": translate(),
         "show_warning": True,
-        "user_feedback": None,
+        "user_feedback_faces": None,
+        "user_feedback_form": {},
         "user_query": None,
+        "feedback_saved": False,
         "response": None,
         "time_taken": None,
         "chat_started": False,
