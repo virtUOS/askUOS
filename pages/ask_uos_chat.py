@@ -28,6 +28,7 @@ class ChatApp:
 
     def __init__(self):
         if not self.__dict__:
+
             setup_page()
             load_css()
 
@@ -66,6 +67,12 @@ class ChatApp:
     def handle_user_input(self):
         """Handle user input and generate a response."""
         if prompt := st.chat_input(placeholder=session_state["_"]("Message")):
+            if not session_state.feedback_saved:
+                self.log_feedback()
+            st.session_state.feedback_saved = False
+            st.session_state.user_feedback_faces = None
+            st.session_state.user_feedback_form = None
+
             st.session_state.messages.append(
                 {"role": "user", "content": prompt, "avatar": "./static/Icon-User.svg"}
             )
@@ -74,18 +81,6 @@ class ChatApp:
 
             if st.session_state.messages[-1]["role"] != "assistant":
                 self.generate_response(prompt)
-
-    def log_feedback(self):
-        """Log user feedback."""
-        if session_state.user_feedback:
-            feedback = {
-                "user_query": session_state.user_query,
-                "response": st.session_state.messages[-1]["content"],
-                "time_taken": session_state.time_taken,
-                "rate": session_state.user_feedback["score"],
-            }
-            session_state.user_feedback = None
-            logger.info(f"Feedback= {feedback}")
 
     def generate_response(self, prompt):
         """Generate a response from the assistant based on user prompt."""
@@ -140,17 +135,19 @@ class ChatApp:
         )
         st.session_state.user_query = prompt
 
-        with st.popover(session_state["_"]("Feedback")):
+    def show_feedback_faces(self):
+        streamlit_feedback(
+            feedback_type="faces",
+            key="user_feedback_faces",
+        )
 
-            if st.button("hi"):
-                print("hi")
+    def ask_further_feedback(self):
+        if session_state.user_feedback_faces:
 
-            with st.form(key="feedback_form"):
+            with st.popover(session_state["_"]("Feedback")):
+
                 st.write(session_state["_"]("#### Rate the response"))
-                rate_value = streamlit_feedback(
-                    feedback_type="faces",
-                    key="user_feedback",
-                )
+
                 text_rating = st.text_area(
                     "text_rating",
                     label_visibility="hidden",
@@ -159,10 +156,30 @@ class ChatApp:
                     ),
                     height=150,
                 )
-                submitted = st.form_submit_button(session_state["_"]("Submit"))
 
-                if submitted:
-                    print(f"Feedback submitted   {text_rating}, {rate_value}")
+                if st.button(session_state["_"]("Submit")):
+
+                    session_state.user_feedback_form = text_rating
+                    self.log_feedback()
+
+    def log_feedback(self):
+
+        feedback = {}
+
+        if session_state.user_feedback_faces:
+            feedback["score"] = session_state.user_feedback_faces["score"]
+
+        if session_state.user_feedback_form:
+            feedback["text_rating"] = session_state.user_feedback_form
+
+        if session_state.user_feedback_faces or session_state.user_feedback_form:
+
+            feedback["user_query"] = session_state.user_query
+            feedback["response"] = st.session_state.messages[-1]["content"]
+            feedback["time_taken"] = session_state.time_taken
+
+            logger.info(f"Feedback= {feedback}")
+            session_state.feedback_saved = True
 
     def run(self):
         """Main method to run the application logic."""
@@ -172,7 +189,8 @@ class ChatApp:
         self.initialize_chat()
         self.display_chat_messages()
         self.handle_user_input()
-        self.log_feedback()
+        self.show_feedback_faces()
+        self.ask_further_feedback()
 
 
 if __name__ == "__main__":
