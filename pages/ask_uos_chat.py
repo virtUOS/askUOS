@@ -144,23 +144,34 @@ class ChatApp:
     def ask_further_feedback(self):
         if session_state.user_feedback_faces:
 
-            with st.popover(session_state["_"]("Feedback")):
+            with st.expander(session_state["_"]("Feedback")):
 
-                st.write(session_state["_"]("#### Rate the response"))
+                with st.form("feedback_form", clear_on_submit=True):
+                    st.write(session_state["_"]("#### Rate the response"))
 
-                text_rating = st.text_area(
-                    "text_rating",
-                    label_visibility="hidden",
-                    placeholder=session_state["_"](
-                        "[Optional] Please share any additional thoughts or insights, such as an explanation for your rating."
-                    ),
-                    height=150,
-                )
+                    text_rating = st.text_area(
+                        "text_rating",
+                        label_visibility="hidden",
+                        placeholder=session_state["_"](
+                            "[Optional] Please share any additional thoughts or insights, such as an explanation for your rating."
+                        ),
+                        height=150,
+                    )
 
-                if st.button(session_state["_"]("Submit")):
+                    if st.form_submit_button(session_state["_"]("Submit")):
+                        session_state.user_feedback_form = text_rating
+                        self.log_feedback()
 
-                    session_state.user_feedback_form = text_rating
-                    self.log_feedback()
+                        st.markdown(
+                            """
+                            <style>
+                                .stExpander {
+                                    display: none;
+                                }
+                            </style>
+                            """,
+                            unsafe_allow_html=True,
+                        )
 
     def log_feedback(self):
 
