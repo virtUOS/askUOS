@@ -1,13 +1,21 @@
 import time
-from typing import Optional
+import uuid
+from typing import Dict, List, Optional
+
 import streamlit as st
+from langchain_core.messages import HumanMessage, ToolMessage
+from langgraph.errors import GraphRecursionError
 from streamlit import session_state
-from src.config.core_config import settings
-from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
-from src.chatbot.tools.utils.tool_helpers import visited_links
-from src.chatbot_log.chatbot_logger import logger
-from pages.utils import initialize_session_sate, setup_page, load_css
 from streamlit_feedback import streamlit_feedback
+
+from pages.utils import initialize_session_sate, load_css, setup_page
+
+# from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.prompt.main import get_prompt
+from src.chatbot.tools.utils.tool_helpers import visited_docs, visited_links
+from src.chatbot_log.chatbot_logger import logger
+from src.config.core_config import settings
 
 
 class ChatApp:
@@ -84,16 +92,117 @@ class ChatApp:
 
     def generate_response(self, prompt):
         """Generate a response from the assistant based on user prompt."""
+
+        graph = CampusManagementOpenAIToolsAgent.run(
+            language=session_state["selected_language"]
+        )
+
+        def stream_graph_updates(user_input):
+            response = ""
+            to_stream = ""
+            thread_id = 1
+            config = {
+                "configurable": {"thread_id": thread_id},
+                "recursion_limit": 10,  # This amounts to two laps of the graph # https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
+            }
+            history = self._get_chat_history(st.session_state["messages"])
+            # system_user_prompt = get_prompt(history + [("user", user_input)])
+            system_user_prompt = get_prompt(history)
+            try:
+                for msg, metadata in graph._graph.stream(
+                    {
+                        "messages": system_user_prompt,
+                        "user_initial_query": user_input,
+                    },
+                    stream_mode="messages",
+                    config=config,
+                ):
+
+                    if (
+                        msg.content
+                        and not isinstance(msg, HumanMessage)
+                        and not isinstance(msg, ToolMessage)
+                        and (
+                            metadata["langgraph_node"] == "generate"
+                            or metadata["langgraph_node"] == "agent_node"
+                        )
+                    ):
+                        response += msg.content
+                        # streaming of every line
+                        if "\n" in msg.content:
+                            to_stream += msg.content
+                            st.markdown(to_stream)
+                            to_stream = ""
+                        else:
+                            to_stream += msg.content
+
+                        print(msg.content, end="|", flush=True)
+
+            except GraphRecursionError as e:
+                # TODO handle recursion limit error
+                logger.error(f"Recursion Limit reached: {e}")
+                response = session_state["_"](
+                    "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+                )
+                st.markdown(response)
+                # clear the docs references
+                visited_docs.clear()
+
+            except Exception as e:
+                logger.error(f"Error while processing the user's query: {e}")
+                response = session_state["_"](
+                    "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+                )
+                # clear the docs references
+                visited_docs.clear()
+                st.markdown(response)
+            return response, to_stream
+
         with st.chat_message("assistant", avatar="./static/Icon-chatbot.svg"):
             with st.spinner(session_state["_"]("Generating response...")):
                 logger.info(f"User's query: {prompt}")
 
                 start_time = time.time()
                 settings.time_request_sent = start_time
-                agent_executor = CampusManagementOpenAIToolsAgent.run(
-                    language=session_state["selected_language"]
-                )
-                response = agent_executor(prompt, st.session_state.messages)
+                # TODO temporary fix: simulate streaming with streamlit. Get all answer and then stream it
+                # ------------------
+                # thread_id = 1
+                # config = {
+                #     "configurable": {"thread_id": thread_id},
+                #     "recursion_limit": 25,
+                # }
+                # # TODO add history here
+                # history = self._get_chat_history(st.session_state["messages"])
+
+                # system_user_prompt = get_prompt(history + [("user", prompt)])
+
+                # try:
+
+                #     graph_response = graph._graph.invoke(
+                #         {"messages": system_user_prompt}, config=config
+                #     )
+                #     response = graph_response["messages"][-1].content
+                # except Exception as e:
+                #     logger.error(f"Error while processing the user's query: {e}")
+                #     response = session_state["_"](
+                #         "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+                #     )
+
+                # def stream():
+                #     for word in response.split(" "):
+                #         yield word + " "
+                #         time.sleep(0.02)
+
+                # TODO temporary fix: simulate streaming with streamlit. Get all answer and then stream it
+                # st.write_stream(stream)
+
+                # st.markdown(response)
+
+                # ------------------
+                response, to_stream = stream_graph_updates(prompt)
+                # if there is content left, stream it
+                if to_stream:
+                    st.markdown(to_stream)
 
                 end_time = time.time()
                 time_taken = end_time - start_time
@@ -103,9 +212,62 @@ class ChatApp:
                 )
 
                 self.store_response(response["output"], prompt)
+                if visited_docs():
+                    self.display_visited_docs()
 
                 if visited_links():
                     self.display_visited_links()
+
+            self.store_response(response, prompt)
+
+    def _get_chat_history(self, messages: List[Dict[str, str]], k=5):
+        """
+        Retrieve and store the last k messages from the chat history.
+
+        Args:
+            messages (List[Dict[str, str]]): A list of message dictionaries, where each dictionary contains
+                                             'role', 'content' and 'avatar' keys representing the role of the message
+                                             sender and the message content respectively. The 'avatar' key represents the icon used when displaying the message.
+            k (int, optional): The number of most recent messages to retain. Defaults to 5.
+
+        Returns:
+            None
+        """
+
+        if not messages:
+            return []
+
+        if len(messages) > k:
+            messages = messages[-k:]  # get the last k messages
+
+        chat_history = [
+            {"role": record["role"], "content": record["content"]}
+            for record in messages
+        ]
+
+        logger.debug(f"Chat History -------{chat_history}--------")
+        return chat_history
+
+    def display_visited_docs(self):
+        """Display the documents visited for the current user query."""
+
+        references = visited_docs.format_references()
+        reference_examination_regulations = "https://www.uni-osnabrueck.de/studium/im-studium/zugangs-zulassungs-und-pruefungsordnungen/"
+        message = session_state["_"](
+            "The information provided draws on the documents below that can be found in the [University Website]({}). We encourage you to visit the site to explore these resources for additional details and insights!"
+        )
+
+        st.markdown(message.format(reference_examination_regulations))
+        for key, value in references.items():
+            # TODO add translation
+            page_label = (
+                session_state["_"]("Pages")
+                if len(value) > 1
+                else session_state["_"]("Page")
+            )
+            page_list = ", ".join(map(str, value))
+            st.markdown(f"- **{key}**,  **{page_label}**: {page_list}")
+        visited_docs.clear()
 
     def display_visited_links(self):
         """Display the links visited for the current user query."""

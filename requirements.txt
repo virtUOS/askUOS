@@ -18,3 +18,9 @@ pydantic-settings===2.3.4
 matplotlib
 cashews
 streamlit-feedback
+langchain-milvus
+langgraph
+ipython
+tqdm
+milvus-cli
+pymilvus

@@ -1,6 +1,8 @@
+import gettext
+
 import streamlit as st
 from streamlit import session_state
-import gettext
+
 from src.config.core_config import settings
 
 
@@ -36,10 +38,12 @@ def initialize_language() -> None:
             set_language(language="de")
             st.session_state["selected_language"] = "Deutsch"
             session_state["_"] = translate()
+            settings.language = "Deutsch"
 
         elif st.session_state["chosen_language"] == "English":
             set_language(language="en")
             st.session_state["selected_language"] = "English"
+            settings.language = "English"
             session_state["_"] = gettext.gettext
 
     # If no language is chosen yet set it to German

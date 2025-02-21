@@ -67,6 +67,22 @@ msgstr "Klicken Sie hier, wenn Ihnen die Antwort nicht gefällt"
 msgid "Message"
 msgstr "Nachricht"
 
+msgid "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+msgstr "Es tut mir leid, aber ich kann Ihre Anfrage momentan nicht bearbeiten. Bitte versuchen Sie es später erneut oder formulieren Sie Ihre Frage um."
+
+msgid "The information provided draws on the documents below that can be found in the [University Website]({}). We encourage you to visit the site to explore these resources for additional details and insights!"
+msgstr "Die bereitgestellten Informationen basieren auf den untenstehenden Dokumenten, die auf der [Website der Universität]({}) zu finden sind. Wir empfehlen Ihnen, die Website zu besuchen, um diese Ressourcen für weitere Details und Einblicke zu erkunden!"
+
+msgid "Pages"
+msgstr "Seiten"
+
+msgid "Page"
+msgstr "Seite"
+
+
+
+
+
 msgid "[Optional] We look forward to your feedback"
 msgstr "[Optional] Wir freuen uns über Ihr Feedback"
 

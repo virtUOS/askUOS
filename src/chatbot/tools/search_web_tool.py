@@ -3,35 +3,33 @@ import sys
 sys.path.append("/app")
 
 
-from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
-import dotenv
-import requests
 import asyncio
+
 import aiohttp
-
-from langchain.chains.summarize import load_summarize_chain
-from langchain.prompts import PromptTemplate
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_openai import ChatOpenAI
-from selenium import webdriver
-from selenium.webdriver.firefox.options import Options
-from selenium.webdriver.firefox.service import Service
+import dotenv
 from aiohttp import ClientSession
-from src.chatbot.tools.utils.tool_helpers import (
-    decode_string,
-    extract_html_text,
-    extract_pdf_text,
-    visited_links,
-    VisitedLinks,
-)
-from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
-
-from src.chatbot_log.chatbot_logger import logger
-from src.config.core_config import settings
 from bs4 import BeautifulSoup
 
 # https://github.com/Krukov/cashews?tab=readme-ov-file#template-keys
 from cashews import cache
+from langchain.chains.summarize import load_summarize_chain
+from langchain.prompts import PromptTemplate
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
+
+# from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.tools.utils.tool_helpers import (
+    VisitedLinks,
+    decode_string,
+    extract_html_text,
+    extract_pdf_text,
+    visited_links,
+)
+from src.chatbot_log.chatbot_logger import logger
+from src.config.core_config import settings
 
 # cache.setup("mem://?size=1000000&check_interval=5")
 # TODO Connect cache with a DB, Redis??
