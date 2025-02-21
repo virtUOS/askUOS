@@ -67,11 +67,11 @@ msgstr "Klicken Sie hier, wenn Ihnen die Antwort nicht gefällt"
 msgid "Message"
 msgstr "Nachricht"
 
-msgid "[Optional] Please share any additional thoughts or insights, such as an explanation for your rating."
-msgstr "[Optional] Bitte teilen Sie weitere Gedanken oder Erkenntnisse mit uns, z. B. eine Erklärung für Ihre Bewertung."
+msgid "[Optional] We look forward to your feedback"
+msgstr "[Optional] Wir freuen uns über Ihr Feedback"
 
 msgid "Submit"
 msgstr "Absenden"
 
-msgid "#### Rate the response"
-msgstr "#### Bewerten Sie die Antwort"
+msgid "**Rate the response**"
+msgstr "**Bewerten Sie die Antwort**"

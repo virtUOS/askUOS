@@ -144,16 +144,15 @@ class ChatApp:
     def ask_further_feedback(self):
         if session_state.user_feedback_faces:
 
-            with st.expander(session_state["_"]("Feedback")):
+            with st.expander(session_state["_"]("**Rate the response**")):
 
                 with st.form("feedback_form", clear_on_submit=True):
-                    st.write(session_state["_"]("#### Rate the response"))
 
                     text_rating = st.text_area(
                         "text_rating",
                         label_visibility="hidden",
                         placeholder=session_state["_"](
-                            "[Optional] Please share any additional thoughts or insights, such as an explanation for your rating."
+                            "[Optional] We look forward to your feedback"
                         ),
                         height=150,
                     )
