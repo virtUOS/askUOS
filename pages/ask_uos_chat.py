@@ -211,7 +211,7 @@ class ChatApp:
                     f"Time taken to serve whole answer to the user: {time_taken} seconds"
                 )
 
-                self.store_response(response["output"], prompt)
+                self.store_response(response, prompt)
                 if visited_docs():
                     self.display_visited_docs()
 
