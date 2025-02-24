@@ -180,3 +180,7 @@ geckodriver
 log.csv
 
 nginx.conf
+
+hosts-production.yml
+hosts-testing.yml
+volumes/
