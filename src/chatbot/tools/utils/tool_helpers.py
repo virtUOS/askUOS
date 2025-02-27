@@ -130,9 +130,9 @@ class ReferenceRetriever:
         for doc in self.docs_references:
             source = os.path.basename(doc["source"])
             if source not in references:
-                references[source] = [doc["page"]]
+                references[source] = {doc["page"]}
             else:
-                references[source].append(doc["page"])
+                references[source].add(doc["page"])
 
         return references
 

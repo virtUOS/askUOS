@@ -1,6 +1,6 @@
 import json
 import uuid
-from typing import Annotated, Any, ClassVar, Dict, List, Literal, Optional
+from typing import Annotated, ClassVar, Dict, List, Literal, Optional
 
 import streamlit as st
 from langchain.prompts.chat import ChatPromptTemplate
@@ -88,17 +88,16 @@ class GraphEdgesMixin:
         class grade(BaseModel):
             """Binary score for relevance check."""
 
-            binary_score: str = Field(description="Relevance score 'yes' or 'no'")
+            binary_score: str = Field(
+                description=translate_prompt(settings.language)["grader_binary_score"]
+            )
 
         llm_with_str_output = self._llm.with_structured_output(grade)
 
+        # TODO translate the prompt
         # Prompt
         prompt = PromptTemplate(
-            template="""You are a grader assessing relevance of a retrieved document to a user question. \n 
-            Here is the retrieved document: \n\n {context} \n\n
-            Here is the user question: {question} \n
-            If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. \n
-            Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question.""",
+            template=translate_prompt(settings.language)["grading_llm"],
             input_variables=["context", "question"],
         )
 
@@ -110,8 +109,8 @@ class GraphEdgesMixin:
         )
 
         score = scored_result.binary_score
-
-        if score == "yes":
+        score = score.lower()
+        if score == "yes" or score == "ja":
             logger.debug("---DECISION: DOCS RELEVANT---")
             return "generate"
 
@@ -212,66 +211,66 @@ class GraphNodesMixin:
             search_query.append(tool_call["args"].get("query", ""))
         return {"messages": outputs, "search_query": search_query}
 
-    def hallucination_checker_node(self, state: State):
+    # def hallucination_checker_node(self, state: State):
 
-        messages = state["messages"]
-        ai_message = messages[-1] if len(messages) > 1 else None
-        tool_message = [i for i in messages if isinstance(i, ToolMessage)]
-        # get the last tool message
-        tool_message = tool_message[-1] if tool_message else None
-        user_query = [i for i in messages if isinstance(i, HumanMessage)][0].content
-        # We only check for hallucination if a tool was called. To avoid checking for hallucination in the first message
-        # TODO evaluate if this is the best approach. Maybe check if the model was right not to call a tool (e.g., if the user query was not clear)
-        if not tool_message:
-            return {"pass_hallucinate_check": "yes"}
-        # prompt for the grader
-        system = """
-        
-        You are a grader assessing the fullfillment of the two conditions listed below: 
-        1. **Relevance of the Retrieved Document:** Assess the relevance of the retrieved document to a user question. If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. 
-          - Retrieved document: {tool_message}\n
-          - User question: {question} \n\n
-        2. **Relevance of the Generated Answer:** Evaluate the generated answer to ensure it adequately responds to the user's query. Does the generated
-        answer reponse to the user's query? 
-        - Generated answer: {generation} \n\n
-        
-        Provide a score of 'yes' if both conditions are satisfied. Otherwise, provide a score of 'no' if at least one condition is not met.
- 
-        """
-        answer_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", system),
-                (
-                    "human",
-                    "User's query: \n\n {question} \n\n Information retrieved {tool_message} \n\n LLM generation: {generation}",
-                ),
-            ]
-        )
+    #     messages = state["messages"]
+    #     ai_message = messages[-1] if len(messages) > 1 else None
+    #     tool_message = [i for i in messages if isinstance(i, ToolMessage)]
+    #     # get the last tool message
+    #     tool_message = tool_message[-1] if tool_message else None
+    #     user_query = [i for i in messages if isinstance(i, HumanMessage)][0].content
+    #     # We only check for hallucination if a tool was called. To avoid checking for hallucination in the first message
+    #     # TODO evaluate if this is the best approach. Maybe check if the model was right not to call a tool (e.g., if the user query was not clear)
+    #     if not tool_message:
+    #         return {"pass_hallucinate_check": "yes"}
+    #     # prompt for the grader
+    #     system = """
 
-        answer_grader = answer_prompt | self._llm_answer_grader
-        score = answer_grader.invoke(
-            {
-                "question": user_query,
-                "tool_message": tool_message.content,
-                "generation": ai_message.content,
-            }
-        )
-        if score.binary_score == "no":
+    #     You are a grader assessing the fullfillment of the two conditions listed below:
+    #     1. **Relevance of the Retrieved Document:** Assess the relevance of the retrieved document to a user question. If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant.
+    #       - Retrieved document: {tool_message}\n
+    #       - User question: {question} \n\n
+    #     2. **Relevance of the Generated Answer:** Evaluate the generated answer to ensure it adequately responds to the user's query. Does the generated
+    #     answer reponse to the user's query?
+    #     - Generated answer: {generation} \n\n
 
-            feedback_message = [
-                HumanMessage(
-                    content=f"""The generated answer is not correct. Please try again, e.g., use the tools at your disposal.
-                    Look at the question and try to reason about the underlying semantic intent / meaning. \n 
-                    Here is again the initial question: {user_query} \n
-                    """
-                )
-            ]
-            return {
-                "pass_hallucinate_check": score.binary_score.lower(),
-                "messages": feedback_message,
-            }
+    #     Provide a score of 'yes' if both conditions are satisfied. Otherwise, provide a score of 'no' if at least one condition is not met.
 
-        return {"pass_hallucinate_check": score.binary_score.lower()}
+    #     """
+    #     answer_prompt = ChatPromptTemplate.from_messages(
+    #         [
+    #             ("system", system),
+    #             (
+    #                 "human",
+    #                 "User's query: \n\n {question} \n\n Information retrieved {tool_message} \n\n LLM generation: {generation}",
+    #             ),
+    #         ]
+    #     )
+
+    #     answer_grader = answer_prompt | self._llm_answer_grader
+    #     score = answer_grader.invoke(
+    #         {
+    #             "question": user_query,
+    #             "tool_message": tool_message.content,
+    #             "generation": ai_message.content,
+    #         }
+    #     )
+    #     if score.binary_score == "no":
+
+    #         feedback_message = [
+    #             HumanMessage(
+    #                 content=f"""The generated answer is not correct. Please try again, e.g., use the tools at your disposal.
+    #                 Look at the question and try to reason about the underlying semantic intent / meaning. \n
+    #                 Here is again the initial question: {user_query} \n
+    #                 """
+    #             )
+    #         ]
+    #         return {
+    #             "pass_hallucinate_check": score.binary_score.lower(),
+    #             "messages": feedback_message,
+    #         }
+
+    #     return {"pass_hallucinate_check": score.binary_score.lower()}
 
     def rewrite(self, state):
         """
@@ -294,14 +293,9 @@ class GraphNodesMixin:
 
         msg = [
             HumanMessage(
-                content=f""" \n 
-        The retrieved docuements do not provide the information needed to answer the user's question.
-        Look at the user's query (and previous messages, if necessary) again and try to reason about the underlying semantic intent / meaning. \n 
-        Here is the initial question:
-        \n ------- \n
-        {user_query} 
-        \n ------- \n
-        Formulate an improved query and try to find the information needed to answer the question""",
+                content=translate_prompt(settings.language)["rewrite_msg_human"].format(
+                    user_query,
+                )
             )
         ]
 
@@ -327,12 +321,12 @@ class GraphNodesMixin:
         return {"messages": [response]}
 
 
-class GradeAnswer(BaseModel):
+# class GradeAnswer(BaseModel):
 
-    binary_score: Literal["yes", "no"] = Field(
-        description="""Generated answer is grounded on the 
-        retrieved documents AND the generated answer addresses the user's query, 'yes' or 'no'?"""
-    )
+#     binary_score: Literal["yes", "no"] = Field(
+#         description="""Generated answer is grounded on the
+#         retrieved documents AND the generated answer addresses the user's query, 'yes' or 'no'?"""
+#     )
 
 
 class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMixin):
@@ -346,7 +340,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
     _llm: ChatOpenAI = PrivateAttr(default=None)
     # important: the code uses function calling as opposed to tool calling. (DEPENDS ON THE MODEL and how it was fine tuned)
     _llm_with_tools: ChatOpenAI = PrivateAttr(default=None)
-    _llm_answer_grader: ChatOpenAI = PrivateAttr(default=None)
+    # _llm_answer_grader: ChatOpenAI = PrivateAttr(default=None)
     language: str = Field(default=settings.language)
     # TODO shold not be a private attribute
     _graph: StateGraph = PrivateAttr(default=None)
@@ -386,7 +380,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             self._tools_by_name = {tool.name: tool for tool in tools}
             # important: the code uses function calling as opposed to tool calling. (DEPENDS ON THE MODEL and how it was fine tuned)
             self._llm_with_tools = self._llm.bind_tools(tools)
-            self._llm_answer_grader = self._llm.with_structured_output(GradeAnswer)
+            # self._llm_answer_grader = self._llm.with_structured_output(GradeAnswer)
 
             self._prompt_length = get_prompt_length(self.language)
             self._create_graph()

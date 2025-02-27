@@ -11,7 +11,7 @@ You are an AI assistant of the University of Osnabrück in Germany. You speciali
     - **HISinOne_troubleshooting_questions:** For answering **technical questions** about the HISinOne software, which is used by the University of Osnabrück to manage the application process. For questions about other software used by the university (e.g., Stud.IP, Element, SOgo), use the **custom_university_web_search** tool.
     - **custom_university_web_search:** Here you can find up-to-date information about the University of Osnabrück, such as details on the application process, admissions, degree programs, academic information, current events, job offers, and more.
     - **examination_regulations**: Use this tool whenever you need information or need to answer questions about **legally binding** regulations related to specific degree programs (Bachelors or Masters). The applicable examination regulations depend on the respective degree program, so make sure
-    that you know about which degree program (e.g., biology, cognitive science etc.) the user is asking about. Include the name of the degree program in your query.
+    that you know about which study program (e.g., biology, cognitive science, psychology, chemestry, mathematics etc.) the user is asking about. Include the name of the degree program in your query.
 
 ## Guidelines:
 1. **Scope of Support:**
@@ -72,6 +72,22 @@ Use this tool whenever you need information or need to answer questions about le
          """,
     "response_output_description": "The final answer to respond to the user",
     "response_sources_description": "The sources used to generate the answer. The sources should consist of a list of URLs. Only include the sources if the answer was extracted from the University of Osnabruek website.",
+    "grading_llm": """
+    You are a grader assessing relevance of a retrieved document to a user question. \n 
+            Here is the retrieved document: \n\n {context} \n\n
+            Here is the user question: {question} \n
+            If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. \n
+            Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question.
+    """,
+    "rewrite_msg_human": """ \n 
+        The retrieved docuements do not provide the information needed to answer the user's question.
+        Look at the user's query (and previous messages, if necessary) again and try to reason about the underlying semantic intent / meaning. \n 
+        Here is the initial question:
+        \n ------- \n
+        {} 
+        \n ------- \n
+        Formulate an improved query and try to find the information needed to answer the question""",
+    "grader_binary_score": "Relevance score 'yes' or 'no'",
 }
 
 prompt_text_deutsch = {
@@ -146,4 +162,21 @@ Nutzen Sie dieses Tool, wenn Sie Informationen oder Fragen zu rechtsverbindliche
 """,
     "response_output_description": "Die endgültige Antwort, um dem Benutzer zu antworten",
     "response_sources_description": "Die Quellen, die zur Erstellung der Antwort verwendet wurden. Die Quellen sollten aus einer Liste von URLs bestehen. Geben Sie die Quellen nur an, wenn die Antwort von der Website der Universität Osnabrück stammt.",
+    "grading_llm": """ Sie sind ein Bewerter, der die Relevanz eines abgerufenen Dokuments für eine Benutzerfrage bewertet. \n 
+            Hier ist das abgerufene Dokument: \n\n {context} \n\n
+            Hier ist die Benutzerfrage: {question} \n
+            Wenn das Dokument Schlüsselwort(e) oder semantische Bedeutung im Zusammenhang mit der Benutzerfrage enthält, bewerten Sie es als relevant. \n
+            Geben Sie eine binäre Punktzahl 'ja' oder 'nein' an, um anzuzeigen, ob das Dokument für die Frage relevant ist.
+    """,
+    "rewrite_msg_human": """
+    \n
+Die abgerufenen Dokumente liefern nicht die Informationen, die zur Beantwortung der Frage des Benutzers erforderlich sind.
+Sehen Sie sich die Abfrage des Benutzers (und ggf. vorherige Nachrichten) noch einmal an und versuchen Sie, die zugrunde liegende semantische Absicht/Bedeutung herauszufinden. \n
+Hier ist die ursprüngliche Frage:
+\n ------- \n
+{}
+\n ------- \n
+Formulieren Sie eine verbesserte Abfrage und versuchen Sie, die zur Beantwortung der Frage erforderlichen Informationen zu finden.
+    """,
+    "grader_binary_score": "Relevanzpunktzahl 'ja' oder 'nein'",
 }
