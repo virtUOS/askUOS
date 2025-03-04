@@ -1,11 +1,11 @@
 import json
 import uuid
+from collections import deque
 from typing import Annotated, ClassVar, Dict, List, Literal, Optional
 
 import streamlit as st
-from langchain.prompts.chat import ChatPromptTemplate
 from langchain.tools.retriever import create_retriever_tool
-from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import PromptTemplate
 from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
 from langchain_core.tools import BaseTool
@@ -211,67 +211,6 @@ class GraphNodesMixin:
             search_query.append(tool_call["args"].get("query", ""))
         return {"messages": outputs, "search_query": search_query}
 
-    # def hallucination_checker_node(self, state: State):
-
-    #     messages = state["messages"]
-    #     ai_message = messages[-1] if len(messages) > 1 else None
-    #     tool_message = [i for i in messages if isinstance(i, ToolMessage)]
-    #     # get the last tool message
-    #     tool_message = tool_message[-1] if tool_message else None
-    #     user_query = [i for i in messages if isinstance(i, HumanMessage)][0].content
-    #     # We only check for hallucination if a tool was called. To avoid checking for hallucination in the first message
-    #     # TODO evaluate if this is the best approach. Maybe check if the model was right not to call a tool (e.g., if the user query was not clear)
-    #     if not tool_message:
-    #         return {"pass_hallucinate_check": "yes"}
-    #     # prompt for the grader
-    #     system = """
-
-    #     You are a grader assessing the fullfillment of the two conditions listed below:
-    #     1. **Relevance of the Retrieved Document:** Assess the relevance of the retrieved document to a user question. If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant.
-    #       - Retrieved document: {tool_message}\n
-    #       - User question: {question} \n\n
-    #     2. **Relevance of the Generated Answer:** Evaluate the generated answer to ensure it adequately responds to the user's query. Does the generated
-    #     answer reponse to the user's query?
-    #     - Generated answer: {generation} \n\n
-
-    #     Provide a score of 'yes' if both conditions are satisfied. Otherwise, provide a score of 'no' if at least one condition is not met.
-
-    #     """
-    #     answer_prompt = ChatPromptTemplate.from_messages(
-    #         [
-    #             ("system", system),
-    #             (
-    #                 "human",
-    #                 "User's query: \n\n {question} \n\n Information retrieved {tool_message} \n\n LLM generation: {generation}",
-    #             ),
-    #         ]
-    #     )
-
-    #     answer_grader = answer_prompt | self._llm_answer_grader
-    #     score = answer_grader.invoke(
-    #         {
-    #             "question": user_query,
-    #             "tool_message": tool_message.content,
-    #             "generation": ai_message.content,
-    #         }
-    #     )
-    #     if score.binary_score == "no":
-
-    #         feedback_message = [
-    #             HumanMessage(
-    #                 content=f"""The generated answer is not correct. Please try again, e.g., use the tools at your disposal.
-    #                 Look at the question and try to reason about the underlying semantic intent / meaning. \n
-    #                 Here is again the initial question: {user_query} \n
-    #                 """
-    #             )
-    #         ]
-    #         return {
-    #             "pass_hallucinate_check": score.binary_score.lower(),
-    #             "messages": feedback_message,
-    #         }
-
-    #     return {"pass_hallucinate_check": score.binary_score.lower()}
-
     def rewrite(self, state):
         """
         Transform the query to produce a better question.
@@ -290,6 +229,8 @@ class GraphNodesMixin:
         # ].content
 
         user_query = state["user_initial_query"]
+
+        # TODO delete previous tool messages as they do not inform the users query
 
         msg = [
             HumanMessage(
@@ -314,19 +255,30 @@ class GraphNodesMixin:
             dict: The updated state with re-phrased question
         """
         logger.debug("---GENERATE---")
-        messages = state["messages"]
+
+        messages = state.get("messages", [])
+        if not messages:
+            logger.error("No messages found in state")
+            return {"messages": []}
 
         # TODO delete the dismissed tool messages and the rephrased question
-        response = self._llm.invoke(messages)
+        # TODO inject the original user query and tool message as context in the generation system message
+
+        message_deque = deque(messages)
+
+        generate_message = SystemMessage(
+            content=translate_prompt(settings.language)["system_message_generate"]
+        )
+
+        if isinstance(message_deque[0], SystemMessage):
+            message_deque.popleft()
+            message_deque.appendleft(generate_message)
+        else:
+            message_deque.appendleft(generate_message)
+
+        response = self._llm.invoke(list(message_deque))
+
         return {"messages": [response]}
-
-
-# class GradeAnswer(BaseModel):
-
-#     binary_score: Literal["yes", "no"] = Field(
-#         description="""Generated answer is grounded on the
-#         retrieved documents AND the generated answer addresses the user's query, 'yes' or 'no'?"""
-#     )
 
 
 class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMixin):
