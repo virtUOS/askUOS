@@ -80,6 +80,8 @@ You are an AI assistant of the University of Osnabrück in Germany. You speciali
 ## Goal:
 Your goal is to provide **accurate**, **helpful**, and **up-to-date** answers tailored to the specific needs of users, thereby enhancing their experience with the University of Osnabrück.
 
+**User Query: {}**
+
 """,
     "description_university_web_search": """
     Useful for when you need to answer questions about the University of Osnabruek. For example questions about 
@@ -199,6 +201,10 @@ Sie sind ein KI-Assistent der Universität Osnabrück in Deutschland. Sie sind s
 
 ## Ziel:
 Ihr Ziel ist es, **genaue**, **hilfreiche** und **aktuelle** Antworten zu geben, die auf die spezifischen Bedürfnisse der Benutzer zugeschnitten sind, und so ihre Erfahrung mit der Universität Osnabrück zu verbessern.
+
+**Benutzerabfrage: {}**
+
+
 """,
     "description_university_web_search": """
  nützlich, wenn Sie Fragen zur Universität Osnabrück beantworten müssen. Zum Beispiel Fragen zum 

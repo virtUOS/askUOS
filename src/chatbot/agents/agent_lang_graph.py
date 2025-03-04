@@ -71,8 +71,6 @@ class GraphEdgesMixin:
             str: A decision for whether the documents are relevant or not
         """
 
-        logger.debug("---CHECK RELEVANCE---")
-
         messages = state["messages"]
 
         tool_message = [i for i in messages if isinstance(i, ToolMessage)]
@@ -81,7 +79,7 @@ class GraphEdgesMixin:
 
         # TODO if the bot asks something back, and the user says 'yes', then 'yes' is not the actual user query
         # TODO but rather the query used by the tool node.
-        # user_query = [i for i in messages if isinstance(i, HumanMessage)][-1].content
+
         tool_query = " ".join(state["search_query"])
 
         # Data model
@@ -94,7 +92,6 @@ class GraphEdgesMixin:
 
         llm_with_str_output = self._llm.with_structured_output(grade)
 
-        # TODO translate the prompt
         # Prompt
         prompt = PromptTemplate(
             template=translate_prompt(settings.language)["grading_llm"],
@@ -222,15 +219,13 @@ class GraphNodesMixin:
             dict: The updated state with re-phrased question
         """
 
-        logger.debug("---TRANSFORM QUERY---")
-        # TODO get directly from chat
-        # user_query = [i for i in state["messages"] if isinstance(i, HumanMessage)][
-        #     -1
-        # ].content
-
         user_query = state["user_initial_query"]
 
         # TODO delete previous tool messages as they do not inform the users query
+
+        state["messages"] = [
+            i for i in state["messages"] if not isinstance(i, ToolMessage)
+        ]
 
         msg = [
             HumanMessage(
@@ -240,8 +235,6 @@ class GraphNodesMixin:
             )
         ]
 
-        # response = self._llm.invoke(msg)
-        # return {"messages": [response]}
         return {"messages": msg}
 
     def generate(self, state):
@@ -261,13 +254,17 @@ class GraphNodesMixin:
             logger.error("No messages found in state")
             return {"messages": []}
 
-        # TODO delete the dismissed tool messages and the rephrased question
         # TODO inject the original user query and tool message as context in the generation system message
 
         message_deque = deque(messages)
 
+        # shorter system prompt that does not include the tools description
         generate_message = SystemMessage(
-            content=translate_prompt(settings.language)["system_message_generate"]
+            content=translate_prompt(settings.language)[
+                "system_message_generate"
+            ].format(
+                state["user_initial_query"],
+            )
         )
 
         if isinstance(message_deque[0], SystemMessage):
