@@ -1,9 +1,3 @@
-# path to the geckodriver executable
-search_config:
-  # path to the geckodriver executable
-  service: "/usr/local/bin/geckodriver"
-  search_url: "https://www.uni-osnabrueck.de/universitaet/organisation/zentrale-verwaltung/google-suche/?q="
-
 model:
   model_name: "gpt-4o-mini"
   context_window: 20000 #128000 # in tokens (for pricing reasons you may want to keep this low and not higher than openai max tokens)
