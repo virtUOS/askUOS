@@ -1,4 +1,4 @@
-beautifulsoup4===4.12.3
+markitdown  
 langchain=== 0.2.6
 langchain-community===0.2.6
 langchain_experimental===0.0.62
