@@ -34,6 +34,7 @@ class State(TypedDict):
     messages: Annotated[list, add_messages]
     search_query: Optional[list]  # query used to search the web or db
     user_initial_query: Optional[str]  # user's initial query
+    answer_rejection: Optional[str]
 
 
 class GraphEdgesMixin:
@@ -53,7 +54,7 @@ class GraphEdgesMixin:
             raise ValueError(f"No messages found in input state to tool_edge: {state}")
         if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
             return "tool_node"
-        return END
+        return "judge_node"
 
     def route_end(self, state: State):
         if state["pass_hallucinate_check"] == "no":
@@ -114,6 +115,64 @@ class GraphEdgesMixin:
         else:
             logger.debug("---DECISION: DOCS NOT RELEVANT---")
             return "rewrite"
+
+    def judge_agent_decision(self, state: State):
+
+        class judgement(BaseModel):
+
+            judgement_binary: Literal["yes", "no"] = Field(
+                description="""
+                The agent must use a Tool 'yes', or 'no'
+                """
+            )
+            reason: str = Field(
+                description="Back up your decision with a short explanation"
+            )
+
+        llm_with_str_output = self._llm.with_structured_output(judgement)
+        prompt = PromptTemplate(
+            template="""
+            You are to act as a judge. Your task is to assess whether an agent's decision not to use a tool is appropriate.
+
+            The agent must use the tools at its disposal to address user queries, the agent should not answer questions based on its training knowledge.
+            Exceptions are only when the agent needs to ask clarification questions to the user or when the agent greets the user back.
+            Assessment Task:
+
+            The agent has decided not to use a tool.
+            Is the agent's decision correct?
+            Provide a binary score 'yes' or 'no': 
+                - 'no', the agent must have used a tool, hence the agent is wrong.
+                - 'yes', the agent is right, there was not need to a use a tool. 
+            Provide a reason for your decision. 
+            Below, you will find the agent's message and the user's query:
+
+            Agent (AI message):
+
+            {context}
+
+            User Query:
+
+            {question}
+            
+            """,
+            input_variables=["context", "question"],
+        )
+
+        chain = prompt | llm_with_str_output
+        score = chain.invoke(
+            {"question": state["user_initial_query"], "context": state["messages"][-1]}
+        )
+
+        if score.judgement_binary == "yes":
+            print(state["messages"][-1].content)
+            return END
+        else:
+
+            msg = [HumanMessage(content=score.reason)]
+            # state["answer_rejection"] = score.reason
+            state["messages"] = msg
+
+            return "agent_node"
 
 
 class GraphNodesMixin:
@@ -179,6 +238,12 @@ class GraphNodesMixin:
             "messages": [reponse],
             "search_query": [],
         }
+
+    def judge_node(self, state: State):
+
+        # msg = [HumanMessage(content=state["answer_rejection"])]
+
+        return None
 
     def tool_node(self, inputs: dict):
         if messages := inputs.get("messages", []):
@@ -340,13 +405,19 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
         graph_builder.add_node("agent_node", self.agent_node)
 
         graph_builder.add_node("tool_node", self.tool_node)
-
+        graph_builder.add_node("judge_node", self.judge_node)
         graph_builder.add_node("rewrite", self.rewrite)  # Re-writing the question
         graph_builder.add_node(
             "generate", self.generate
         )  # Generating a response after we know the documents are relevant
         # Call agent node to decide to retrieve or not
         graph_builder.add_edge(START, "agent_node")
+
+        graph_builder.add_conditional_edges(
+            "judge_node",
+            self.judge_agent_decision,
+            {"agent_node": "agent_node", END: END},
+        )
 
         # Decide whether to retrieve
         graph_builder.add_conditional_edges(
@@ -356,7 +427,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             {
                 # Translate the condition outputs to nodes in our graph
                 "tool_node": "tool_node",
-                END: END,
+                "judge_node": "judge_node",
             },
         )
 
