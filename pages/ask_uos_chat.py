@@ -123,8 +123,9 @@ class ChatApp:
                         and not isinstance(msg, HumanMessage)
                         and not isinstance(msg, ToolMessage)
                         and (
-                            metadata["langgraph_node"] == "generate"
-                            or metadata["langgraph_node"] == "agent_node"
+                            metadata["langgraph_node"]
+                            == "generate"
+                            # or metadata["langgraph_node"] == "agent_node"
                         )
                     ):
                         response += msg.content
@@ -137,6 +138,12 @@ class ChatApp:
                             to_stream += msg.content
 
                         print(msg.content, end="|", flush=True)
+
+                # the agent generates answer without consulting tools
+                if graph._agent_direct_msg:
+                    response = graph._agent_direct_msg
+                    graph._agent_direct_msg = None
+                    st.markdown(response)
 
             except GraphRecursionError as e:
                 # TODO handle recursion limit error
@@ -156,6 +163,7 @@ class ChatApp:
                 # clear the docs references
                 visited_docs.clear()
                 st.markdown(response)
+
             return response, to_stream
 
         with st.chat_message("assistant", avatar="./static/Icon-chatbot.svg"):

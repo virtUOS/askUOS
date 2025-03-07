@@ -35,6 +35,7 @@ class State(TypedDict):
     search_query: Optional[list]  # query used to search the web or db
     user_initial_query: Optional[str]  # user's initial query
     answer_rejection: Optional[str]
+    score_judgement_binary = Optional[str]
 
 
 class GraphEdgesMixin:
@@ -118,60 +119,11 @@ class GraphEdgesMixin:
 
     def judge_agent_decision(self, state: State):
 
-        class judgement(BaseModel):
-
-            judgement_binary: Literal["yes", "no"] = Field(
-                description="""
-                The agent must use a Tool 'yes', or 'no'
-                """
-            )
-            reason: str = Field(
-                description="Back up your decision with a short explanation"
-            )
-
-        llm_with_str_output = self._llm.with_structured_output(judgement)
-        prompt = PromptTemplate(
-            template="""
-            You are to act as a judge. Your task is to assess whether an agent's decision not to use a tool is appropriate.
-
-            The agent must use the tools at its disposal to address user queries, the agent should not answer questions based on its training knowledge.
-            Exceptions are only when the agent needs to ask clarification questions to the user or when the agent greets the user back.
-            Assessment Task:
-
-            The agent has decided not to use a tool.
-            Is the agent's decision correct?
-            Provide a binary score 'yes' or 'no': 
-                - 'no', the agent must have used a tool, hence the agent is wrong.
-                - 'yes', the agent is right, there was not need to a use a tool. 
-            Provide a reason for your decision. 
-            Below, you will find the agent's message and the user's query:
-
-            Agent (AI message):
-
-            {context}
-
-            User Query:
-
-            {question}
-            
-            """,
-            input_variables=["context", "question"],
-        )
-
-        chain = prompt | llm_with_str_output
-        score = chain.invoke(
-            {"question": state["user_initial_query"], "context": state["messages"][-1]}
-        )
-
-        if score.judgement_binary == "yes":
-            print(state["messages"][-1].content)
+        score = state.get("score_judgement_binary", "")
+        if score == "yes":
+            self._agent_direct_msg = state["messages"][-1].content
             return END
         else:
-
-            msg = [HumanMessage(content=score.reason)]
-            # state["answer_rejection"] = score.reason
-            state["messages"] = msg
-
             return "agent_node"
 
 
@@ -241,9 +193,60 @@ class GraphNodesMixin:
 
     def judge_node(self, state: State):
 
-        # msg = [HumanMessage(content=state["answer_rejection"])]
+        class judgement(BaseModel):
 
-        return None
+            judgement_binary: Literal["yes", "no"] = Field(
+                description="""
+                The agent must use a Tool 'yes', or 'no'
+                """
+            )
+            reason: str = Field(
+                description="Back up your decision with a short explanation"
+            )
+
+        llm_with_str_output = self._llm.with_structured_output(judgement)
+        prompt = PromptTemplate(
+            template="""
+            You are to act as a judge. Your task is to assess whether an agent's decision not to use a tool is appropriate.
+
+            The agent must use the tools at its disposal to address user queries, the agent should not answer questions based on its training knowledge.
+            Exceptions are: 
+                - when the agent needs to ask clarification questions to the user
+                - when the agent greets the user back.
+                - when the agent notifies the user that the agent can not help with the request as the agent is only authorized to answer questions about the University.
+            Assessment Task:
+
+            The agent has decided not to use a tool.
+            Is the agent's decision correct?
+            Provide a binary score 'yes' or 'no': 
+                - 'no', the agent must have used a tool, hence the agent is wrong.
+                - 'yes', the agent is right, there was not need to a use a tool. 
+            Provide a reason for your decision. 
+            Below, you will find the agent's message and the user's query:
+
+            Agent (AI message):
+
+            {context}
+
+            User Query:
+
+            {question}
+            
+            """,
+            input_variables=["context", "question"],
+        )
+
+        chain = prompt | llm_with_str_output
+        score = chain.invoke(
+            {"question": state["user_initial_query"], "context": state["messages"][-1]}
+        )
+
+        if score.judgement_binary == "no":
+
+            msg = [HumanMessage(content=score.reason)]
+            return {"messages": msg, "score_judgement_binary": score.judgement_binary}
+
+        return {"score_judgement_binary": score.judgement_binary}
 
     def tool_node(self, inputs: dict):
         if messages := inputs.get("messages", []):
@@ -362,6 +365,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
     # (not part of the model schema)
     _chat_history: List[Dict] = PrivateAttr(default=[])
     _prompt_length: int = PrivateAttr(default=None)
+    _agent_direct_msg: str = PrivateAttr(default=None)
 
     def __new__(cls, *args, **kwargs):
 
