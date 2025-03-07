@@ -121,6 +121,7 @@ Use this tool whenever you need information or need to answer questions about le
         \n ------- \n
         Formulate an improved query and try to find the information needed to answer the question""",
     "grader_binary_score": "Relevance score 'yes' or 'no'",
+    "use_tool_msg": "Do not answer questions based on your Training knowledge. Use the tools at your disposal to obtain the information needed to answer the user's query.",
 }
 
 prompt_text_deutsch = {
@@ -244,4 +245,5 @@ Hier ist die ursprüngliche Frage:
 Formulieren Sie eine verbesserte Abfrage und versuchen Sie, die zur Beantwortung der Frage erforderlichen Informationen zu finden.
     """,
     "grader_binary_score": "Relevanzpunktzahl 'ja' oder 'nein'",
+    "use_tool_msg": "Beantworten Sie Fragen nicht auf Grundlage Ihres Trainingswissens. Nutzen Sie die Ihnen zur Verfügung stehenden Tools, um die Informationen zu erhalten, die Sie zur Beantwortung der Benutzeranfrage benötigen.",
 }

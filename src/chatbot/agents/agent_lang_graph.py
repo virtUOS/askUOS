@@ -207,30 +207,28 @@ class GraphNodesMixin:
         llm_with_str_output = self._llm.with_structured_output(judgement)
         prompt = PromptTemplate(
             template="""
-            You are to act as a judge. Your task is to assess whether an agent's decision not to use a tool is appropriate.
+               Your role is to evaluate whether an agent's choice not to utilize a tool was justifiable in a given interaction. 
+            Tools are fundamental in ensuring responses are factual and free from errors (e.g., Hallucinations). 
+            The agent must use the tools at its disposal to address user queries, rather than defaulting to its pre-trained knowledge. 
+            **However**, there are specific scenarios where not using a tool is appropriate:
 
-            The agent must use the tools at its disposal to address user queries, the agent should not answer questions based on its training knowledge.
-            Exceptions are: 
-                - when the agent needs to ask clarification questions to the user
-                - when the agent greets the user back.
-                - when the agent notifies the user that the agent can not help with the request as the agent is only authorized to answer questions about the University.
-            Assessment Task:
+                1. When the agent needs to ask the user for more information or clarification.
+                2. When the agent acknowledges or greets the user.
+                3. When the agent informs the user that it can only respond to queries related to university matters.
+                
+                ### Evaluation Task:
+                The agent has decided not to use a tool. Is the agent's decision correct?.  Provide a binary response of 'yes' or 'no':
+                    - 'no': The agent incorrectly avoided using a tool and should have done so.
+                    - 'yes': The agent's decision was appropriate, and utilizing a tool was unnecessary.
+                
+                Offer a rationale for your decision. Below, you will find the agent's message and the user's query:
 
-            The agent has decided not to use a tool.
-            Is the agent's decision correct?
-            Provide a binary score 'yes' or 'no': 
-                - 'no', the agent must have used a tool, hence the agent is wrong.
-                - 'yes', the agent is right, there was not need to a use a tool. 
-            Provide a reason for your decision. 
-            Below, you will find the agent's message and the user's query:
+                Agent (AI message):
+                {context}
 
-            Agent (AI message):
+                User Query:
+                {question}
 
-            {context}
-
-            User Query:
-
-            {question}
             
             """,
             input_variables=["context", "question"],
@@ -243,7 +241,12 @@ class GraphNodesMixin:
 
         if score.judgement_binary == "no":
 
-            msg = [HumanMessage(content=score.reason)]
+            msg = [
+                HumanMessage(
+                    content=translate_prompt(settings.language)["use_tool_msg"]
+                )
+            ]
+
             return {"messages": msg, "score_judgement_binary": score.judgement_binary}
 
         return {"score_judgement_binary": score.judgement_binary}
