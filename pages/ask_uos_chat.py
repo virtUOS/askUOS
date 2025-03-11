@@ -142,14 +142,14 @@ class ChatApp:
                 # the agent generates answer without consulting tools
                 if graph._agent_direct_msg:
                     response = graph._agent_direct_msg
-                    graph._agent_direct_msg = None
                     st.markdown(response)
+                    graph._agent_direct_msg = None
 
             except GraphRecursionError as e:
                 # TODO handle recursion limit error
                 logger.error(f"Recursion Limit reached: {e}")
                 response = session_state["_"](
-                    "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+                    "I'm sorry, but I couldn't find enough information to fully answer your question. Could you please try rephrasing your query and ask again?"
                 )
                 st.markdown(response)
                 # clear the docs references
@@ -226,7 +226,7 @@ class ChatApp:
                 if visited_links():
                     self.display_visited_links()
 
-            self.store_response(response, prompt)
+            # self.store_response(response, prompt)
 
     def _get_chat_history(self, messages: List[Dict[str, str]], k=5):
         """
