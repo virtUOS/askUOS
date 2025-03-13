@@ -40,6 +40,30 @@
         },
 
 
+        {
+            "name": "analyze_logs",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./evaluation/analyze_logs.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+
+        {
+            "name": "test_me",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./test_me.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+
 
         {
             "name": "db_utils",
