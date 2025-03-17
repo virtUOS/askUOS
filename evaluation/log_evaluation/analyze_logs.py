@@ -187,7 +187,7 @@ def read_logs(file_path):
 def save_user_queries(df):
     # Filter for user queries and save to file
     user_queries = df[df["user_query"].notna()]["user_query"].tolist()
-    with open("evaluation/user_queries.txt", "w", encoding="utf-8") as f:
+    with open("evaluation/log_evaluation/user_queries.txt", "w", encoding="utf-8") as f:
         for query in user_queries:
             f.write(f"{query}\n")
 
@@ -217,7 +217,7 @@ def extract_feedback_to_csv(df):
     feedback_df = pd.DataFrame(feedback_data)
 
     # Save to CSV
-    feedback_df.to_csv("evaluation/feedback_data.csv", index=False)
+    feedback_df.to_csv("evaluation/log_evaluation/feedback_data.csv", index=False)
 
 
 def analyze_response_times(df):
@@ -229,7 +229,7 @@ def analyze_response_times(df):
     sns.boxplot(y=time_df["time_answer_generation"])
     plt.title("Distribution of Response Times (Generation)")
     plt.ylabel("Time (seconds)")
-    plt.savefig("evaluation/response_times_generation.png")
+    plt.savefig("evaluation/log_evaluation/response_times_generation.png")
     plt.close()
 
     # Create a box plot of serve times
@@ -238,7 +238,7 @@ def analyze_response_times(df):
     sns.boxplot(y=time_df["time_serve_answer"])
     plt.title("Distribution of Response Times (Serving)")
     plt.ylabel("Time (seconds)")
-    plt.savefig("evaluation/response_times_serving.png")
+    plt.savefig("evaluation/log_evaluation/response_times_serving.png")
     plt.close()
 
 
@@ -253,7 +253,7 @@ def analyze_user_satisfaction(df):
     plt.figure(figsize=(8, 8))
     plt.pie(rate_counts.values, labels=rate_counts.index, autopct="%1.1f%%")
     plt.title("User Satisfaction Distribution")
-    plt.savefig("evaluation/user_satisfaction.png")
+    plt.savefig("evaluation/log_evaluation/user_satisfaction.png")
     plt.close()
 
 
@@ -273,7 +273,7 @@ def analyze_query_patterns(df):
     plt.ylabel("Count")
     plt.xticks(rotation=45)
     plt.tight_layout()
-    plt.savefig("evaluation/query_patterns.png")
+    plt.savefig("evaluation/log_evaluation/query_patterns.png")
     plt.close()
 
 
@@ -291,7 +291,7 @@ def analyze_temporal_patterns(df):
     plt.xlabel("Hour of Day")
     plt.ylabel("Number of Queries")
     plt.grid(True)
-    plt.savefig("evaluation/temporal_patterns.png")
+    plt.savefig("evaluation/log_evaluation/temporal_patterns.png")
     plt.close()
 
 
@@ -328,7 +328,7 @@ def generate_summary_stats(df):
 
 def main():
     # Read the logs
-    df = read_logs("evaluation/logs_prod/logs/log.csv")
+    df = read_logs("evaluation/log_evaluation/logs_prod/log.csv")
 
     # Save user queries
     save_user_queries(df)

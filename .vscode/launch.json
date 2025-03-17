@@ -41,6 +41,18 @@
 
 
         {
+            "name": "agent_eval",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./evaluation/ragas_eval/agent_eval.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+
+        {
             "name": "analyze_logs",
             "type": "debugpy",
             "request": "launch",

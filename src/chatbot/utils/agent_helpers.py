@@ -1,12 +1,13 @@
 from typing import Any
-from langchain_core.callbacks import StdOutCallbackHandler
-from langchain_openai import ChatOpenAI
-from src.config.core_config import settings
-from langchain_core.globals import set_llm_cache
+
 from langchain_community.cache import SQLiteCache
+from langchain_core.caches import InMemoryCache
+from langchain_core.callbacks import StdOutCallbackHandler
+from langchain_core.globals import set_llm_cache
+from langchain_openai import ChatOpenAI
 
 from src.chatbot_log.chatbot_logger import logger
-from langchain_core.caches import InMemoryCache
+from src.config.core_config import settings
 
 
 # TODO the cached AI answer should contained the sources of the information.
@@ -47,6 +48,7 @@ class ChatLlm:
 
     def __init__(self):
         if not self.__dict__:
+
             self.llm_chat_open_ai = ChatOpenAI(
                 model=OPEN_AI_MODEL,
                 temperature=0,
