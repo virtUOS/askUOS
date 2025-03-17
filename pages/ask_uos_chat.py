@@ -274,7 +274,9 @@ class ChatApp:
                 else session_state["_"]("Page")
             )
             page_list = ", ".join(map(str, value))
-            st.markdown(f"- **{key}**,  **{page_label}**: {page_list}")
+            # TODO: Remove page numbers, these are wrong. Temporary
+            # st.markdown(f"- **{key}**,  **{page_label}**: {page_list}")
+            st.markdown(f"- **{key}**")
         visited_docs.clear()
 
     def display_visited_links(self):
