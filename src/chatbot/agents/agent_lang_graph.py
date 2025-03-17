@@ -1,11 +1,16 @@
 import json
 import uuid
 from collections import deque
-from typing import Annotated, ClassVar, Dict, List, Literal, Optional
+from typing import Annotated, ClassVar, Dict, List, Literal, Optional, Union
 
 import streamlit as st
 from langchain.tools.retriever import create_retriever_tool
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import (
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.prompts import PromptTemplate
 from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
 from langchain_core.tools import BaseTool
@@ -28,24 +33,40 @@ DEBUG = settings.application.debug
 
 
 class State(TypedDict):
-    # Messages have the type "list". The `add_messages` function
-    # in the annotation defines how this state key should be updated
-    # (in this case, it appends messages to the list, rather than overwriting them)
-    messages: Annotated[list, add_messages]
-    search_query: Optional[list]  # query used to search the web or db
-    user_initial_query: Optional[str]  # user's initial query
+    """State management for the graph-based agent.
+
+    Attributes:
+        messages: List of messages in the conversation, with add_messages annotation for proper state updates
+        search_query: Optional list of queries used for web/db searches
+        user_initial_query: Optional string containing the user's initial query
+        answer_rejection: Optional string for rejected answers
+        score_judgement_binary: Optional string for binary judgement scores
+    """
+
+    messages: Annotated[List[BaseMessage], add_messages]
+    search_query: Optional[List[str]]
+    user_initial_query: Optional[str]
     answer_rejection: Optional[str]
-    score_judgement_binary = Optional[str]
+    score_judgement_binary: Optional[str]
 
 
 class GraphEdgesMixin:
+    """Mixin class handling edge routing and decision making in the graph."""
+
     def route_tools(
         self,
         state: State,
-    ) -> Literal["tool_node", END]:
-        """
-        Use in the conditional_edge to route to the ToolNode if the last message
-        has tool calls. Otherwise, route to the end.
+    ) -> Literal["tool_node", "judge_node"]:
+        """Route to tool_node if last message has tool calls, otherwise to judge_node.
+
+        Args:
+            state: Current state containing messages
+
+        Returns:
+            Literal["tool_node", "judge_node"]: Next node to route to
+
+        Raises:
+            ValueError: If no messages found in state
         """
         if isinstance(state, list):
             ai_message = state[-1]
@@ -53,89 +74,90 @@ class GraphEdgesMixin:
             ai_message = messages[-1]
         else:
             raise ValueError(f"No messages found in input state to tool_edge: {state}")
+
         if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
             return "tool_node"
         return "judge_node"
 
-    def route_end(self, state: State):
+    def route_end(self, state: State) -> Union[Literal["agent_node"], Literal[END]]:
+        """Route to agent_node if hallucination check fails, otherwise to END.
+
+        Args:
+            state: Current state
+
+        Returns:
+            Union[Literal["agent_node"], Literal[END]]: Next node to route to
+        """
         if state["pass_hallucinate_check"] == "no":
             return "agent_node"
         return END
 
-    def grade_documents(self, state) -> Literal["generate", "rewrite"]:
-        """
-        Determines whether the retrieved documents are relevant to the question.
+    def grade_documents(self, state: State) -> Literal["generate", "rewrite"]:
+        """Evaluate if retrieved documents are relevant to the query.
 
         Args:
-            state (messages): The current state
+            state: Current state
 
         Returns:
-            str: A decision for whether the documents are relevant or not
+            Literal["generate", "rewrite"]: Decision on document relevance
         """
-
         messages = state["messages"]
-
-        tool_message = [i for i in messages if isinstance(i, ToolMessage)]
-        # get the last tool message
-        tool_message = tool_message[-1] if tool_message else None
-
-        # TODO if the bot asks something back, and the user says 'yes', then 'yes' is not the actual user query
-        # TODO but rather the query used by the tool node.
-
+        tool_messages = [i for i in messages if isinstance(i, ToolMessage)]
+        tool_message = tool_messages[-1] if tool_messages else None
         tool_query = " ".join(state["search_query"])
 
-        # Data model
-        class grade(BaseModel):
-            """Binary score for relevance check."""
+        class GradeResult(BaseModel):
+            """Binary score for document relevance check."""
 
             binary_score: str = Field(
                 description=translate_prompt(settings.language)["grader_binary_score"]
             )
 
-        llm_with_str_output = self._llm.with_structured_output(grade)
-
-        # Prompt
+        llm_with_str_output = self._llm.with_structured_output(GradeResult)
         prompt = PromptTemplate(
             template=translate_prompt(settings.language)["grading_llm"],
             input_variables=["context", "question"],
         )
-
-        # Chain
         chain = prompt | llm_with_str_output
-
         scored_result = chain.invoke(
             {"question": tool_query, "context": tool_message.content}
         )
 
-        score = scored_result.binary_score
-        score = score.lower()
-        if score == "yes" or score == "ja":
+        score = scored_result.binary_score.lower()
+        if score in ["yes", "ja"]:
             logger.debug("---DECISION: DOCS RELEVANT---")
             return "generate"
-
         else:
             logger.debug("---DECISION: DOCS NOT RELEVANT---")
             return "rewrite"
 
-    def judge_agent_decision(self, state: State):
+    def judge_agent_decision(
+        self, state: State
+    ) -> Union[Literal["agent_node"], Literal[END]]:
+        """Judge if agent's decision to not use tools was appropriate.
 
+        Args:
+            state: Current state containing messages and judgement score
+
+        Returns:
+            Union[Literal["agent_node"], Literal[END]]: Next node based on judgement
+        """
         score = state.get("score_judgement_binary", "")
         if score == "yes":
             self._agent_direct_msg = state["messages"][-1].content
             return END
-        else:
-            return "agent_node"
+        return "agent_node"
 
 
 class GraphNodesMixin:
+    """Mixin class handling node operations in the graph."""
 
     @staticmethod
     def create_tools() -> List[BaseTool]:
-        """
-        Creates a list of tools for the chatbot agent.
+        """Create and configure tools for the chatbot agent.
 
         Returns:
-            List[BaseTool]: A list of tools for the chatbot agent.
+            List[BaseTool]: Configured tools for the agent
         """
         from langchain.tools.base import StructuredTool
 
@@ -171,40 +193,58 @@ class GraphNodesMixin:
         ]
 
     @staticmethod
-    def filter_messages(messages: List, k: int):
-        # TODO make sure that the system message is always kept
+    def filter_messages(messages: List[BaseMessage], k: int) -> List[BaseMessage]:
+        """Filter messages to keep only the last k messages.
 
+        Args:
+            messages: List of messages to filter
+            k: Number of messages to keep
+
+        Returns:
+            List[BaseMessage]: Filtered messages
+        """
+        # TODO make sure that the system message is always kept
         if len(messages) <= k:
             return messages
         return messages[-k:]
 
-    # Nodes
-    def agent_node(self, state: State):
-        # TODO if a tool was called, only pass the tool message, system message and human messageS
-        messages = GraphNodesMixin.filter_messages(state["messages"], 7)
-        # TODO pass callback to the llm_with_tools object, to detect when the tokens are generated and stream them
-        # detect when AI message contains 'finish_reason':'stop' and start streaming the tokens
+    def agent_node(self, state: State) -> Dict:
+        """Decide course of action.
 
-        reponse = self._llm_with_tools.invoke(messages)
+        Args:
+            state: Current state containing messages
+
+        Returns:
+            Dict: Updated state with agent response
+        """
+        messages = self.filter_messages(state["messages"], 7)
+        response = self._llm_with_tools.invoke(messages)
         return {
-            "messages": [reponse],
+            "messages": [response],
             "search_query": [],
         }
 
-    def judge_node(self, state: State):
+    def judge_node(self, state: State) -> Dict:
+        """Evaluate if agent's decision to not use tools was appropriate.
 
-        class judgement(BaseModel):
+        Args:
+            state: Current state
+
+        Returns:
+            Dict: Updated state with judgement result
+        """
+
+        class JudgementResult(BaseModel):
+            """Result of agent's tool usage judgement."""
 
             judgement_binary: Literal["yes", "no"] = Field(
-                description="""
-                The agent must use a Tool 'yes', or 'no'
-                """
+                description="The agent must use a Tool 'yes', or 'no'"
             )
             reason: str = Field(
                 description="Back up your decision with a short explanation"
             )
 
-        llm_with_str_output = self._llm.with_structured_output(judgement)
+        llm_with_str_output = self._llm.with_structured_output(JudgementResult)
         prompt = PromptTemplate(
             template="""
                Your role is to evaluate whether an agent's choice not to utilize a tool was justifiable in a given interaction. 
@@ -228,8 +268,6 @@ class GraphNodesMixin:
 
                 User Query:
                 {question}
-
-            
             """,
             input_variables=["context", "question"],
         )
@@ -239,26 +277,37 @@ class GraphNodesMixin:
             {"question": state["user_initial_query"], "context": state["messages"][-1]}
         )
 
-        if score.judgement_binary == "no":
-
+        if score.judgement_binary.lower() == "no":
             msg = [
                 HumanMessage(
                     content=translate_prompt(settings.language)["use_tool_msg"]
                 )
             ]
-
             return {"messages": msg, "score_judgement_binary": score.judgement_binary}
 
         return {"score_judgement_binary": score.judgement_binary}
 
-    def tool_node(self, inputs: dict):
+    def tool_node(self, inputs: Dict) -> Dict:
+        """Process tool calls.
+
+        Args:
+            inputs: Dictionary containing messages
+
+        Returns:
+            Dict: Updated state with tool responses
+
+        Raises:
+            ValueError: If no messages found in input
+        """
         if messages := inputs.get("messages", []):
             message = messages[-1]
         else:
             raise ValueError("No message found in input")
+
         outputs = []
         search_query = []
         visited_docs.clear()
+
         for tool_call in message.tool_calls:
             try:
                 tool_result = self._tools_by_name[tool_call["name"]].invoke(
@@ -267,6 +316,7 @@ class GraphNodesMixin:
             except Exception as e:
                 logger.error(f"Error invoking tool: {e}")
                 raise e
+
             tool_m = ToolMessage(
                 content=json.dumps(tool_result),
                 name=tool_call["name"],
@@ -277,11 +327,12 @@ class GraphNodesMixin:
             # TODO add the retrieved documents name and page to the visited links object
             outputs.append(tool_m)
             search_query.append(tool_call["args"].get("query", ""))
+
         return {"messages": outputs, "search_query": search_query}
 
     def rewrite(self, state):
         """
-        Transform the query to produce a better question.
+        Instruct the agent to rephrase the question.
 
         Args:
             state (messages): The current state
@@ -308,15 +359,14 @@ class GraphNodesMixin:
 
         return {"messages": msg}
 
-    def generate(self, state):
-        """
-        Generate answer
+    def generate(self, state: State) -> Dict:
+        """Generate final answer based on retrieved documents.
 
         Args:
-            state (messages): The current state
+            state: Current state
 
         Returns:
-            dict: The updated state with re-phrased question
+            Dict: Updated state with generated response
         """
         logger.debug("---GENERATE---")
 
@@ -345,7 +395,6 @@ class GraphNodesMixin:
             message_deque.appendleft(generate_message)
 
         response = self._llm.invoke(list(message_deque))
-
         return {"messages": [response]}
 
 
@@ -362,21 +411,21 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
     _llm_with_tools: ChatOpenAI = PrivateAttr(default=None)
     # _llm_answer_grader: ChatOpenAI = PrivateAttr(default=None)
     language: str = Field(default=settings.language)
-    # TODO shold not be a private attribute
+    # TODO should not be a private attribute
     _graph: StateGraph = PrivateAttr(default=None)
-
-    # (not part of the model schema)
     _chat_history: List[Dict] = PrivateAttr(default=[])
     _prompt_length: int = PrivateAttr(default=None)
     _agent_direct_msg: str = PrivateAttr(default=None)
 
     def __new__(cls, *args, **kwargs):
+        """Create or retrieve singleton instance.
 
+        Creates a new instance if none exists or if language changes.
+        """
         if cls._instance is None:
             cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
             logger.debug("Creating a new instance of CampusManagementOpenAIToolsAgent")
 
-        # create a new instance if the language changes
         elif hasattr(
             cls._instance, "language"
         ) and cls._instance.language != kwargs.get("language", settings.language):
@@ -401,8 +450,6 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             self._tools_by_name = {tool.name: tool for tool in tools}
             # important: the code uses function calling as opposed to tool calling. (DEPENDS ON THE MODEL and how it was fine tuned)
             self._llm_with_tools = self._llm.bind_tools(tools)
-            # self._llm_answer_grader = self._llm.with_structured_output(GradeAnswer)
-
             self._prompt_length = get_prompt_length(self.language)
             self._create_graph()
 
@@ -446,6 +493,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
         )
         graph_builder.add_edge("generate", END)
         graph_builder.add_edge("rewrite", "agent_node")
+
         self._graph = graph_builder.compile(debug=DEBUG)
 
     def compute_search_num_tokens(self, search_result_text: str) -> int:
@@ -473,10 +521,15 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
         )
         return internal_tokens
 
-    def __call__(self, input: str):
+    def __call__(self, input: str) -> Union[str, Dict]:
+        """Process user input and generate response.
 
-        # TODO delete this __call__ method (or reuse stream_graph_updates fuction in ask_uos_chat.py) )
-        # TODO another option: adapt the method for debugging purposes: stream using print instead of streamlit
+        Args:
+            input: User input text
+
+        Returns:
+            Union[str, Dict]: Generated response or error message
+        """
         final_answer = ""
         content_stream = ""
         thread_id = uuid.uuid4()
@@ -484,8 +537,8 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             "configurable": {"thread_id": thread_id},
         }
         prompt = get_prompt([("user", input)])
-        try:
 
+        try:
             for msg_chunk, metadata in self._graph.stream(
                 {"messages": prompt},
                 config=config,
@@ -510,15 +563,18 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             return final_answer
 
         except Exception as e:
-            logger.error(f"An error occurred while generating reponse: {e}")
-
+            logger.error(f"An error occurred while generating response: {e}")
             return {
                 "output": "An error has occurred while trying to connect to the data source or APIs. Please try asking the question again."
             }
 
     @classmethod
-    def run(cls, *args, **kwargs):
+    def run(cls, *args, **kwargs) -> "CampusManagementOpenAIToolsAgent":
+        """Create and return an instance of the agent.
 
+        Returns:
+            CampusManagementOpenAIToolsAgent: Configured agent instance
+        """
         instance = cls(*args, **kwargs)
         return instance
 
@@ -529,21 +585,21 @@ if __name__ == "__main__":
     graph = CampusManagementOpenAIToolsAgent.run()
 
     def print_graph(graph, filename="graph.png"):
+        """Print the conversation graph as a PNG image.
+
+        Args:
+            graph: Graph to visualize
+            filename: Output filename
+        """
         from IPython.display import Image, display
 
         try:
-            # Generate the PNG from the graph
             png_data = graph.get_graph().draw_mermaid_png()
-
-            # Save the PNG data to a file
             with open(filename, "wb") as f:
                 f.write(png_data)
-
-            # Display the image
             display(Image(filename))
         except Exception as e:
             print(f"An error occurred: {e}")
-            # Optional: handle any additional logic or fallback
 
     print_graph(graph._graph)
 
@@ -553,23 +609,25 @@ if __name__ == "__main__":
     }
 
     user_input = "How can i change the password of my stud.ip account?"
-    # user_input = "Tell me about the biology program?"
     prompt = get_prompt([("user", user_input)])
-
     response = graph._graph.invoke({"messages": prompt}, config=config)
 
-    user_input = "Tell me about the biology program?"
+    def stream_graph_updates(user_input: str) -> str:
+        """Stream updates from graph processing.
 
-    def stream_graph_updates(user_input):
+        Args:
+            user_input: User query to process
+
+        Returns:
+            str: Final response
+        """
         final_answer = ""
         prompt = get_prompt([("user", user_input)])
-        # msg_chunk: token streamed by the llm
         for msg_chunk, metadata in graph.stream(
             {"messages": prompt},
             config=config,
             stream_mode="messages",
         ):
-
             if (
                 msg_chunk.content
                 and not isinstance(msg_chunk, HumanMessage)
@@ -580,10 +638,7 @@ if __name__ == "__main__":
         return final_answer
 
     response = stream_graph_updates(user_input)
-
-    # stream_graph_updates("yes i want to sign for the bachelors")
     stream_graph_updates("Tell me about the computer science program at the uni?")
-    # stream_graph_updates("what are the requirements?")
     print("Done")
 
 
