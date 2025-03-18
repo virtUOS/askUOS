@@ -1,21 +1,28 @@
-import os
 import sys
 
 sys.path.append("/app")
+
 
 import asyncio
 
 import aiohttp
 import dotenv
+import requests
 from aiohttp import ClientSession
+from bs4 import BeautifulSoup
 
 # https://github.com/Krukov/cashews?tab=readme-ov-file#template-keys
 from cashews import cache
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
+from langchain_openai import ChatOpenAI
+from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
 
-from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.tools.utils.tool_helpers import (
     VisitedLinks,
     decode_string,
@@ -32,8 +39,11 @@ cache.setup("mem://", size=1000)
 
 dotenv.load_dotenv()
 
-SEARCH_URL = os.getenv("SEARCH_URL")
+
+SEARCH_URL = settings.search_config.search_url
+SERVICE = settings.search_config.service
 MAX_NUM_LINKS = 4
+HEADLESS_OPTION = "--headless"
 
 
 class SearchUniWebTool:
@@ -50,6 +60,13 @@ class SearchUniWebTool:
     def __init__(self):
         if not self.__dict__:  # to avoid reinitializing the object
             self.no_content_found_message = "Content not found"
+            firefox_options = Options()
+            firefox_options.add_argument(HEADLESS_OPTION)
+            service = Service(SERVICE)
+            self.driver = webdriver.Firefox(service=service, options=firefox_options)
+
+    def __del__(self):
+        self.driver.quit()
 
     def generate_summary(self, text: str, question: str) -> str:
         # TODO summarize the content when it + the prompt +chat_history exceed the number of openai allowed tokens (16385 tokens)
@@ -138,7 +155,18 @@ class SearchUniWebTool:
                         else:
                             html_content = await response.text()
                             text = f"{taken_from}{url}\n{extract_html_text(url, html_content)}"
+
+                        # if text:
+                        # self.contents.append(text)
+                        # total_tokens, _ = self.compute_tokens(
+                        #     "".join(self.contents)
+                        # )
                         # # 1 token ~= 4 chars in English  --> https://help.openai.com/en/articles/4936856-what-are-tokens-and-how-to-count-them
+                        # if total_tokens > settings.model.context_window:
+
+                        #     # TODO generate_summary must be async and the chain inside it must be awaited (use async chain.run)
+                        #     text = self.generate_summary(text, self.query)
+                        #     self.contents[-1] = text
 
                         return text
                     return f"Error fetching content from: {url}"
@@ -151,11 +179,24 @@ class SearchUniWebTool:
 
     async def visit_urls_extract(
         self,
-        url: str,
+        rendered_html: str,
         max_num_links: int = MAX_NUM_LINKS,
         visited_links: VisitedLinks = visited_links,
     ) -> tuple[str, list]:
+        """
+        Extracts and visits links from rendered HTML.
 
+        Args:
+            rendered_html (str): The rendered HTML content.
+            max_num_links (int, optional): The maximum number of links to visit. Defaults to MAX_NUM_LINKS.
+            visited_links (VisitedLinks): Keeps track of the visited links (URLs used for information extraction).
+
+        Returns:
+            tuple: A tuple containing the extracted contents and the anchor tags.
+                - The extracted contents as a string. If no contents are found, returns "Content not found".
+                - The anchor tags as a list.
+
+        """
         # get num tokens (prompt + chat history+query)
         self.internal_num_tokens = self.agent_executor.compute_internal_tokens(
             self.query
@@ -163,24 +204,18 @@ class SearchUniWebTool:
         # Clear the list of visited links
         visited_links.clear()
         self.contents = []
+        soup = BeautifulSoup(rendered_html, "html.parser")
+        # 'gs-title' is the class attached to the anchor tag that contains the search result (University website search result page)
+        self.anchor_tags = soup.find_all(
+            "a", class_="gs-title"
+        )  # the search result links
 
         async with aiohttp.ClientSession() as session:
-
-            # query google search API
-            async with session.get(url) as response:
-                response.raise_for_status()
-
-                # parse json response
-                dict_reponse = await response.json()
-
-                # extract search results
-                links = [item["link"] for item in dict_reponse["items"]]
-
             tasks = []
 
             # TODO Make sure that the search result links ordered is preserved (Implement test)
-            for href in links:
-                # href = str(tag.get("href"))
+            for tag in self.anchor_tags:
+                href = str(tag.get("href"))
                 # Check for previously visited links
                 if len(visited_links()) >= max_num_links:
                     break
@@ -234,8 +269,11 @@ class SearchUniWebTool:
             self.query = query
             query_url = decode_string(self.query)
             url = SEARCH_URL + query_url
+            # TODO I/O operation (use async code) During waiting time compute the number of tokens in the prompt and chat history
+            self.driver.get(url)
+            rendered_html = self.driver.page_source
 
-            asyncio.run(self.visit_urls_extract(url))
+            asyncio.run(self.visit_urls_extract(rendered_html))
 
             final_output = "\n".join(self.contents)
             # for tesing

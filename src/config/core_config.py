@@ -1,4 +1,3 @@
-import time
 from typing import ClassVar, Literal, Optional, Tuple, Type
 
 from pydantic_settings import (
@@ -24,7 +23,7 @@ class Settings(BaseSettings):
 
     _instance: ClassVar[Optional["Settings"]] = None
 
-    search_config: SearchConfig
+    # search_config: SearchConfig
     model: ModelConfig
     application: ApplicationConfig
     language: Literal["Deutsch", "English"]
