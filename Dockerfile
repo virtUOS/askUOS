@@ -63,4 +63,3 @@ RUN  /usr/local/src/Python-3.11.0/Tools/i18n/msgfmt.py /app/locale/de/LC_MESSAGE
 # Expose the port that Streamlit will run on
 EXPOSE 8501
 
-CMD ["sh", "-c", "cd db && python3 vector_store.py --create_db true && cd .. && streamlit run start.py"]
