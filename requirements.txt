@@ -22,5 +22,4 @@ pymilvus
 pandas
 seaborn
 numpy
-crawl4ai
 crawl4AI===0.4.248
