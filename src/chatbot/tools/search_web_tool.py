@@ -104,12 +104,15 @@ class SearchUniWebTool:
         total_tokens = self.internal_num_tokens + current_search_num_tokens
         return total_tokens, current_search_num_tokens
 
-    async def fetch_url(self, session: ClientSession, url: str) -> str:
+    async def fetch_url(
+        self, session: ClientSession, url: str, index: int
+    ) -> tuple[str, int]:
         """
         Fetches the content from a given URL asynchronously.
         Args:
             session (ClientSession): The aiohttp client session to use for making the request.
             url (str): The URL to fetch content from.
+            index (int): Used to ensure the order of the links is preserved
         Returns:
             str: The extracted text content from the URL, prefixed with a source information string.
                 Returns None if an error occurs or the response status is not 200.
@@ -140,12 +143,12 @@ class SearchUniWebTool:
                             text = f"{taken_from}{url}\n{extract_html_text(url, html_content)}"
                         # # 1 token ~= 4 chars in English  --> https://help.openai.com/en/articles/4936856-what-are-tokens-and-how-to-count-them
 
-                        return text
-                    return f"Error fetching content from: {url}"
+                        return text, index
+                    return f"Error fetching content from: {url}", index
 
             except Exception as e:
                 logger.error(f"Error while fetching: {url} - {e}")
-                return f"Error fetching content from: {url}"
+                return f"Error fetching content from: {url}", index
 
         return await process_url(url)
 
@@ -179,7 +182,7 @@ class SearchUniWebTool:
             tasks = []
 
             # TODO Make sure that the search result links ordered is preserved (Implement test)
-            for href in links:
+            for i, href in enumerate(links):
                 # href = str(tag.get("href"))
                 # Check for previously visited links
                 if len(visited_links()) >= max_num_links:
@@ -189,7 +192,7 @@ class SearchUniWebTool:
 
                 visited_links().append(href)
                 # Create and collect a task to fetch the URL
-                tasks.append(self.fetch_url(session, href))
+                tasks.append(self.fetch_url(session, href, i))
 
             with cache.detect as detector:
                 # Gather the results of the tasks (text fetched from the URLs)
@@ -200,6 +203,9 @@ class SearchUniWebTool:
         # summarize the content if the total tokens exceed the limit
         # TODO this needs to be async and generate summary cached
         if self.contents:
+            # order the contents by the index
+            self.contents = sorted(self.contents, key=lambda x: x[1])
+            self.contents = [x[0] for x in self.contents]
             total_tokens, _ = self.compute_tokens("".join(self.contents))
             if total_tokens > settings.model.context_window:
                 for i, text in enumerate(reversed(self.contents)):

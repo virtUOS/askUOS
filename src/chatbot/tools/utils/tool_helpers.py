@@ -1,9 +1,9 @@
-import io
 import os
 import re
 import urllib.parse
 
-from markitdown import MarkItDown
+from crawl4ai.content_filter_strategy import PruningContentFilter
+from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 from src.chatbot.utils.pdf_reader import read_pdf_from_url
 from src.chatbot_log.chatbot_logger import logger
@@ -64,30 +64,20 @@ def extract_pdf_text(href: str, pdf_bytes: bytes) -> str:
 
 def extract_html_text(href: str, html_content: str) -> str:
 
-    md = MarkItDown()
-    temp = io.StringIO(html_content)
-    md_content = md.convert_stream(temp)
-    temp.close()
-    text_content = md_content.text_content
+    markdown_generator = DefaultMarkdownGenerator(
+        content_filter=PruningContentFilter(
+            threshold=0.48, threshold_type="fixed", min_word_threshold=0
+        )
+    )
+    result = markdown_generator.generate_markdown(
+        cleaned_html=html_content, base_url=href
+    )
+    text_content = result.fit_markdown
 
     if text_content:
         return text_content
     logger.error(f"Failed to fetch html content from: {href}")
     return ""
-
-    # link_soup = BeautifulSoup(html_content, "html.parser")
-    # div_content = link_soup.find("div", class_="eb2")
-    # if div_content:
-    #     text = re.sub(r"\n+", "\n", div_content.text.strip())
-    #     content_with_link = ""
-    #     for link in div_content.find_all("a", href=True):
-    #         text_anchor_tag = re.sub(r"\n+", "\n", link.text.strip())
-    #         content_with_link += f" - {text_anchor_tag}: {link['href']}"
-    #     # TODO These links are lost in the summarization process (need to be preserved)
-
-    #     return text + "\nHref found in the text:\n" + content_with_link
-    # logger.error(f"Failed to fetch html content from: {href}")
-    # return ""
 
 
 class VisitedLinks:
