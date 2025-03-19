@@ -167,7 +167,7 @@ class SearchUniWebTool:
 
             except Exception as e:
                 logger.error(f"Error while fetching: {url} - {e}")
-                raise e
+
                 return f"Error fetching content from: {url}", index
 
         return await process_url(url)

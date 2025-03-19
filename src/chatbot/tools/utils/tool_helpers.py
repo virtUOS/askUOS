@@ -65,7 +65,16 @@ def extract_pdf_text(href: str, pdf_bytes: bytes) -> str:
 # CrawlResultContainer
 def extract_html_text(href: str, result) -> str:
 
-    text_content = result.markdown.fit_markdown
+    text_content = ""
+    try:
+        text_content = result.markdown.fit_markdown
+    except:
+        pass
+    try:
+        text_content = result.fit_markdown
+
+    except:
+        pass
 
     if text_content:
         return text_content
