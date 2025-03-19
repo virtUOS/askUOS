@@ -62,17 +62,10 @@ def extract_pdf_text(href: str, pdf_bytes: bytes) -> str:
     return re.sub(r"(\n\s*|\n\s+\n\s+)", "\n", text.strip())
 
 
-def extract_html_text(href: str, html_content: str) -> str:
+# CrawlResultContainer
+def extract_html_text(href: str, result) -> str:
 
-    markdown_generator = DefaultMarkdownGenerator(
-        content_filter=PruningContentFilter(
-            threshold=0.48, threshold_type="fixed", min_word_threshold=0
-        )
-    )
-    result = markdown_generator.generate_markdown(
-        cleaned_html=html_content, base_url=href
-    )
-    text_content = result.fit_markdown
+    text_content = result.markdown.fit_markdown
 
     if text_content:
         return text_content

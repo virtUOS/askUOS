@@ -11,6 +11,9 @@ from aiohttp import ClientSession
 
 # https://github.com/Krukov/cashews?tab=readme-ov-file#template-keys
 from cashews import cache
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
+from crawl4ai.content_filter_strategy import BM25ContentFilter, PruningContentFilter
+from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -50,6 +53,18 @@ class SearchUniWebTool:
     def __init__(self):
         if not self.__dict__:  # to avoid reinitializing the object
             self.no_content_found_message = "Content not found"
+            self.browser_config = BrowserConfig(
+                headless=True,
+                verbose=True,
+            )
+            self.run_config = CrawlerRunConfig(
+                cache_mode=CacheMode.DISABLED,
+                markdown_generator=DefaultMarkdownGenerator(
+                    content_filter=PruningContentFilter(
+                        threshold=0.48, threshold_type="fixed", min_word_threshold=0
+                    )
+                ),
+            )
 
     def generate_summary(self, text: str, question: str) -> str:
         # TODO summarize the content when it + the prompt +chat_history exceed the number of openai allowed tokens (16385 tokens)
@@ -126,10 +141,11 @@ class SearchUniWebTool:
 
             taken_from = "Information taken from: "
             try:
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        # TODO pdf files need to be handled differently (Vector DB for example)
-                        if url.endswith(".pdf"):
+                if url.endswith(".pdf"):
+                    async with session.get(url) as response:
+                        if response.status == 200:
+                            # TODO pdf files need to be handled differently (Vector DB for example)
+
                             # TODO read pdf using response.stream(), so that the whole pdf is not loaded into memory. Process every stream
                             # TODO as soon as it is available (see online algorithm)
                             pdf_bytes = (
@@ -138,16 +154,20 @@ class SearchUniWebTool:
                             text = (
                                 f"{taken_from}{url}\n{extract_pdf_text(url, pdf_bytes)}"
                             )
-                        else:
-                            html_content = await response.text()
-                            text = f"{taken_from}{url}\n{extract_html_text(url, html_content)}"
-                        # # 1 token ~= 4 chars in English  --> https://help.openai.com/en/articles/4936856-what-are-tokens-and-how-to-count-them
+                else:
+                    async with AsyncWebCrawler(config=self.browser_config) as crawler:
+                        result = await crawler.arun(
+                            url=url,
+                            config=self.run_config,
+                        )
+                    text = f"{taken_from}{url}\n{extract_html_text(url, result)}"
+                # # 1 token ~= 4 chars in English  --> https://help.openai.com/en/articles/4936856-what-are-tokens-and-how-to-count-them
 
-                        return text, index
-                    return f"Error fetching content from: {url}", index
+                return text, index
 
             except Exception as e:
                 logger.error(f"Error while fetching: {url} - {e}")
+                raise e
                 return f"Error fetching content from: {url}", index
 
         return await process_url(url)
