@@ -185,3 +185,4 @@ hosts-production.yml
 hosts-testing.yml
 volumes/
 ansible_export/
+.roo/

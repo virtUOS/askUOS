@@ -25,7 +25,8 @@
 				"ms-python.black-formatter",
 				"ms-python.isort",
 				"ms-python.python",
-				"mechatroner.rainbow-csv"
+				"mechatroner.rainbow-csv",
+				"RooVeterinaryInc.roo-cline"
 			]
 		}
 	}
