@@ -13,6 +13,7 @@ from pages.utils import initialize_session_sate, load_css, setup_page
 # from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.prompt.main import get_prompt
+from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import visited_docs, visited_links
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
@@ -150,6 +151,14 @@ class ChatApp:
                 logger.error(f"Recursion Limit reached: {e}")
                 response = session_state["_"](
                     "I'm sorry, but I couldn't find enough information to fully answer your question. Could you please try rephrasing your query and ask again?"
+                )
+                st.markdown(response)
+                # clear the docs references
+                visited_docs.clear()
+
+            except ProgrammableSearchException as e:
+                response = session_state["_"](
+                    "I'm sorry, something went wrong while connecting to the data provided. If the error persists, please reach out to the administrators for assistance."
                 )
                 st.markdown(response)
                 # clear the docs references

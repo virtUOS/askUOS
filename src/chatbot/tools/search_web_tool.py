@@ -19,6 +19,7 @@ from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import (
     VisitedLinks,
     decode_string,
@@ -186,6 +187,7 @@ class SearchUniWebTool:
         # Clear the list of visited links
         visited_links.clear()
         self.contents = []
+        self.links_search = []
 
         async with aiohttp.ClientSession() as session:
 
@@ -193,16 +195,24 @@ class SearchUniWebTool:
             async with session.get(url) as response:
                 response.raise_for_status()
 
+                if response.status != 200:
+
+                    logger.error(
+                        f"Failed: Programmable Search Engine. Status: {response.status}"
+                    )
+                    raise ProgrammableSearchException(
+                        f"Failed: Programmable Search Engine. Status: {response.status}"
+                    )
                 # parse json response
                 dict_reponse = await response.json()
 
                 # extract search results
-                links = [item["link"] for item in dict_reponse["items"]]
+                self.links_search = [item["link"] for item in dict_reponse["items"]]
 
             tasks = []
 
             # TODO Make sure that the search result links ordered is preserved (Implement test)
-            for i, href in enumerate(links):
+            for i, href in enumerate(self.links_search):
                 # href = str(tag.get("href"))
                 # Check for previously visited links
                 if len(visited_links()) >= max_num_links:
@@ -264,15 +274,24 @@ class SearchUniWebTool:
             asyncio.run(self.visit_urls_extract(url))
 
             final_output = "\n".join(self.contents)
-            # for tesing
-            # TODO REMOVE
-            final_output_tokens, final_search_tokens = self.compute_tokens(final_output)
-            logger.info(f"Search tokens: {final_search_tokens}")
-            logger.info(f"Final output (search + prompt): {final_output_tokens}")
-            # settings.final_output_tokens.append(final_output_tokens)
-            # settings.final_search_tokens.append(final_search_tokens)
+
+            if final_output:
+                # for tesing
+                # TODO REMOVE
+                final_output_tokens, final_search_tokens = self.compute_tokens(
+                    final_output
+                )
+                logger.info(f"Search tokens: {final_search_tokens}")
+                logger.info(f"Final output (search + prompt): {final_output_tokens}")
+                # settings.final_output_tokens.append(final_output_tokens)
+                # settings.final_search_tokens.append(final_search_tokens)
 
             return final_output if self.contents else self.no_content_found_message
+
+        except ProgrammableSearchException as e:
+            raise ProgrammableSearchException(
+                f"Failed: Programmable Search Engine. Status: {e}"
+            )
 
         except Exception as e:
             logger.error(f"Error while searching the web: {e}", exc_info=True)

@@ -83,7 +83,8 @@ msgid "Page"
 msgstr "Seite"
 
 
-
+msgid "I'm sorry, something went wrong while connecting to the data provided. If the error persists, please reach out to the administrators for assistance."
+msgstr "Leider ist beim Herstellen einer Verbindung zu den bereitgestellten Daten ein Fehler aufgetreten. Sollte der Fehler weiterhin bestehen, wenden Sie sich bitte an die Administratoren."
 
 
 msgid "[Optional] We look forward to your feedback"
