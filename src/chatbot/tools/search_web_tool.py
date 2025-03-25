@@ -27,6 +27,7 @@ from src.chatbot.tools.utils.tool_helpers import (
     extract_pdf_text,
     visited_links,
 )
+from src.chatbot.utils.agent_helpers import llm as sumarize_llm
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
@@ -98,7 +99,7 @@ class SearchUniWebTool:
             template=reduce_template_string, input_variables=["text", "question"]
         )
         chain = load_summarize_chain(
-            llm=self.agent_executor.llm,
+            llm=sumarize_llm(),
             chain_type="map_reduce",
             map_prompt=reduce_template,
             combine_prompt=reduce_template,
