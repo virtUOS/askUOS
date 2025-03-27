@@ -26,6 +26,7 @@ import unittest
 """
 TODO 
 - Test that the queries are in german
+- test summarization
 """
 
 
@@ -37,20 +38,20 @@ class AgentExecutorTest(unittest.TestCase):
     def test_prompt_language(self):
         # prompt should be in english
         settings.language = "English"
-        english_prompt = get_prompt()
-        agent_executor = CampusManagementOpenAIToolsAgent.run()
+        english_prompt = get_prompt(settings.language)
+        graph = CampusManagementOpenAIToolsAgent.run()
         self.assertEqual(
-            agent_executor._prompt.pretty_print(),
+            graph._prompt.pretty_print(),
             english_prompt.pretty_print(),
             "The prompt is not in English.",
         )
 
         # prompt should be in german
         settings.language = "Deutsch"
-        german_prompt = get_prompt()
-        agent_executor = CampusManagementOpenAIToolsAgent.run()
+        german_prompt = get_prompt(settings.language)
+        graph = CampusManagementOpenAIToolsAgent.run()
         self.assertEqual(
-            agent_executor._prompt.pretty_print(),
+            graph._prompt.pretty_print(),
             german_prompt.pretty_print(),
             "The prompt is not in German.",
         )
