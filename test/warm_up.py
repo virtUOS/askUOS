@@ -2,15 +2,21 @@ import sys
 
 sys.path.append("/app")
 
-from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
-from typing import List
-from src.config.core_config import settings
 import sys
+from typing import List
 
+from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 
 warm_up_queries = [
-    "Hello! How can I get started with my application?",
-    "How do I reset my university account password?",
+    "Was muss ich in einem Masterstudium Informatik tun?",
+    "Welche Zulassungsbeschränkungen gibt es für den Masterstudiengang Informatik?",
+    "What are the application deadlines for the fall and spring semesters for the Computer Science Program?",
+    "What is the tuition fee structure for the upcoming academic year?",
+    "Bis wann kann ich mich exmatrikulieren lassen und mein Geld zurück bekommen?",
+    "Where can I find resources for mental health support on campus?",
+    "How do I apply for on-campus housing, and what meal plans are available?",
+    "Was muss ich mitbringen, wenn ich meine Masterarbeit anmelden möchte? (Informatik)",
+    "Unter welcher Telefonnummer erreiche ich die Studienberatung?",
 ]
 
 
@@ -24,10 +30,12 @@ def warm_up_agent(warm_up_queries: List[str]) -> None:
     Returns:
     None
     """
-    agent_executor = CampusManagementOpenAIToolsAgent.run()
+    graph = CampusManagementOpenAIToolsAgent.run()
     # Warm-up phase
     for q in warm_up_queries:
-        agent_executor(q)  # Execute warm-up queries, timing not recorded
+        _ = graph(q)  # Execute warm-up queries, timing not recorded
+        print("Warm-up query executed successfully.")
+    print("Warm-up phase completed successfully.")
 
 
 if __name__ == "__main__":

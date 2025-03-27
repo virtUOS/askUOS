@@ -6,7 +6,7 @@ from ragas.dataset_schema import MultiTurnSample
 from ragas.integrations.langgraph import convert_to_ragas_messages
 from ragas.metrics import ToolCallAccuracy
 
-from evaluation.ragas_eval.msg_db import queries, reference_tool_calls
+from evaluation.ragas_eval.tool_call_accuracy_db import queries, reference_tool_calls
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.prompt.main import get_prompt
 

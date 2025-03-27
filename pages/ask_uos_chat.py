@@ -104,7 +104,7 @@ class ChatApp:
             thread_id = 1
             config = {
                 "configurable": {"thread_id": thread_id},
-                "recursion_limit": 12,  # This amounts to two laps of the graph # https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
+                "recursion_limit": settings.application.recursion_limit,  # This amounts to two laps of the graph # https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
             }
             history = self._get_chat_history(st.session_state["messages"])
             # system_user_prompt = get_prompt(history + [("user", user_input)])

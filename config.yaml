@@ -10,3 +10,4 @@ legal:
 
 application:
   debug: True
+  recursion_limit: 12 # default is 12 https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/

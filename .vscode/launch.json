@@ -51,6 +51,32 @@
    
         },
 
+        {
+            "name": "topic_adherence_db",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./evaluation/ragas_eval/topic_adherence.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+
+
+        {
+            "name": "warmp_up",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./test/warm_up.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+
+
 
         {
             "name": "analyze_logs",

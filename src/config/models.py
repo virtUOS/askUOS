@@ -34,3 +34,4 @@ class ApplicationConfig(BaseModel):
     """
 
     debug: bool
+    recursion_limit: int = 12

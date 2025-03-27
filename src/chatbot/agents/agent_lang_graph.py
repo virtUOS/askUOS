@@ -530,37 +530,25 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
         Returns:
             Union[str, Dict]: Generated response or error message
         """
-        final_answer = ""
-        content_stream = ""
+
         thread_id = uuid.uuid4()
         config = {
             "configurable": {"thread_id": thread_id},
+            "recursion_limit": settings.application.recursion_limit,
         }
         prompt = get_prompt([("user", input)])
 
         try:
-            for msg_chunk, metadata in self._graph.stream(
-                {"messages": prompt},
+            response = self._graph.invoke(
+                {
+                    "messages": prompt,
+                    "user_initial_query": input,
+                },
                 config=config,
-                stream_mode="messages",
-            ):
-                if (
-                    msg_chunk.content
-                    and not isinstance(msg_chunk, HumanMessage)
-                    and metadata["langgraph_node"] == "final_answer_node"
-                ):
-                    final_answer = final_answer + msg_chunk.content
-                    # stream per line
-                    if "\n" in msg_chunk:
-                        content_stream += msg_chunk
-                        st.markdown(content_stream)
-                        self.content = ""
-                    else:
-                        content_stream += msg_chunk
-            # if there is content left, stream it
-            if content_stream:
-                st.markdown(content_stream)
-            return final_answer
+            )
+
+            # returns last message content which is the AI message
+            return response["messages"][-1].content
 
         except Exception as e:
             logger.error(f"An error occurred while generating response: {e}")

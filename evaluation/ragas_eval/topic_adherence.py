@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 
 import pandas as pd
 from langchain_openai import ChatOpenAI
@@ -11,6 +12,7 @@ from ragas.metrics import TopicAdherenceScore
 # from src.chatbot.utils.agent_helpers import llm as evaluator_llm
 
 evaluator_llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-4o"))
+
 
 read_csv = pd.read_csv("evaluation/ragas_eval/agent_logs.csv")
 REFERENCE_TOPICS = [
@@ -73,5 +75,8 @@ async def evaluate_topic_adherence():
 
 if __name__ == "__main__":
 
+    os.environ["LANGSMITH_TRACING"] = "false"
     asyncio.run(evaluate_topic_adherence())
     print("done")
+
+    os.environ["LANGSMITH_TRACING"] = "true"
