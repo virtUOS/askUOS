@@ -106,6 +106,14 @@ class ChatApp:
                 "configurable": {"thread_id": thread_id},
                 "recursion_limit": settings.application.recursion_limit,  # This amounts to two laps of the graph # https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
             }
+            if settings.application.tracing:
+                from opik.integrations.langchain import OpikTracer
+
+                tracer = OpikTracer(
+                    graph=graph._graph.get_graph(xray=True), project_name="askUOS"
+                )
+
+                config["callbacks"] = [tracer]
             history = self._get_chat_history(st.session_state["messages"])
             # system_user_prompt = get_prompt(history + [("user", user_input)])
             system_user_prompt = get_prompt(history)
@@ -181,41 +189,7 @@ class ChatApp:
 
                 start_time = time.time()
                 settings.time_request_sent = start_time
-                # TODO temporary fix: simulate streaming with streamlit. Get all answer and then stream it
-                # ------------------
-                # thread_id = 1
-                # config = {
-                #     "configurable": {"thread_id": thread_id},
-                #     "recursion_limit": 25,
-                # }
-                # # TODO add history here
-                # history = self._get_chat_history(st.session_state["messages"])
 
-                # system_user_prompt = get_prompt(history + [("user", prompt)])
-
-                # try:
-
-                #     graph_response = graph._graph.invoke(
-                #         {"messages": system_user_prompt}, config=config
-                #     )
-                #     response = graph_response["messages"][-1].content
-                # except Exception as e:
-                #     logger.error(f"Error while processing the user's query: {e}")
-                #     response = session_state["_"](
-                #         "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
-                #     )
-
-                # def stream():
-                #     for word in response.split(" "):
-                #         yield word + " "
-                #         time.sleep(0.02)
-
-                # TODO temporary fix: simulate streaming with streamlit. Get all answer and then stream it
-                # st.write_stream(stream)
-
-                # st.markdown(response)
-
-                # ------------------
                 response, to_stream = stream_graph_updates(prompt)
                 # if there is content left, stream it
                 if to_stream:

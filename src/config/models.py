@@ -35,3 +35,4 @@ class ApplicationConfig(BaseModel):
 
     debug: bool
     recursion_limit: int = 12
+    tracing: bool = False

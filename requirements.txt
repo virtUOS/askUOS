@@ -24,3 +24,4 @@ seaborn
 numpy
 crawl4AI===0.4.248
 ragas
+opik
