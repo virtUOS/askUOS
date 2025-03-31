@@ -110,7 +110,8 @@ class ChatApp:
                 from opik.integrations.langchain import OpikTracer
 
                 tracer = OpikTracer(
-                    graph=graph._graph.get_graph(xray=True), project_name="askUOS"
+                    graph=graph._graph.get_graph(xray=True),
+                    project_name=settings.application.opik_project_name,
                 )
 
                 config["callbacks"] = [tracer]
