@@ -191,10 +191,10 @@
         },
 
         {
-            "name": "test_general_code",
+            "name": "test_streamlit_chat",
             "type": "debugpy",
             "request": "launch",
-            "program": "./test_me.py",
+            "program": "./test/test_streamlit_chat.py",
             "console": "integratedTerminal",
             "env":{ "PYTHONPATH": "./src"}
         },
