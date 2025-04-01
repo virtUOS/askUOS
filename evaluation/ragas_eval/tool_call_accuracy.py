@@ -8,7 +8,7 @@ from ragas.metrics import ToolCallAccuracy
 
 from evaluation.ragas_eval.tool_call_accuracy_db import queries, reference_tool_calls
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
-from src.chatbot.prompt.main import get_prompt
+from src.chatbot.prompt.main import get_system_prompt
 
 if len(reference_tool_calls) != len(queries):
     raise ValueError("reference_tool_calls and queries must have the same length")
@@ -24,7 +24,7 @@ for query, reference_tool_call in zip(queries, reference_tool_calls):
         "recursion_limit": 4,
     }
 
-    prompt = get_prompt([("user", query)])
+    prompt = get_system_prompt([("user", query)])
 
     try:
 

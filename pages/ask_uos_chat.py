@@ -12,9 +12,10 @@ from pages.utils import initialize_session_sate, load_css, setup_page
 
 # from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
-from src.chatbot.prompt.main import get_prompt
+from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import visited_docs, visited_links
+from src.chatbot.utils.prompt_date import get_current_date
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
@@ -115,14 +116,16 @@ class ChatApp:
                 )
 
                 config["callbacks"] = [tracer]
+            current_date = get_current_date(settings.language.lower())
             history = self._get_chat_history(st.session_state["messages"])
             # system_user_prompt = get_prompt(history + [("user", user_input)])
-            system_user_prompt = get_prompt(history)
+            system_user_prompt = get_system_prompt(history, user_input, current_date)
             try:
                 for msg, metadata in graph._graph.stream(
                     {
                         "messages": system_user_prompt,
                         "user_initial_query": user_input,
+                        "current_date": current_date,
                     },
                     stream_mode="messages",
                     config=config,

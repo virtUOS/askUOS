@@ -1,14 +1,16 @@
-from typing import Optional, Union, Dict, List
-from langchain_core.messages import SystemMessage
+from typing import Dict, List, Optional, Union
+
 from langchain.prompts.chat import (
     ChatPromptTemplate,
     HumanMessagePromptTemplate,
     MessagesPlaceholder,
 )
-from src.chatbot_log.chatbot_logger import logger
+from langchain_core.messages import SystemMessage
+
 import src.chatbot.utils.prompt_text as text
-from src.config.core_config import settings
 from src.chatbot.utils.agent_helpers import llm
+from src.chatbot_log.chatbot_logger import logger
+from src.config.core_config import settings
 
 
 def translate_prompt() -> Dict[str, str]:
@@ -32,7 +34,7 @@ def translate_prompt() -> Dict[str, str]:
     return prompt_text
 
 
-def get_prompt(messages) -> List:
+def get_system_prompt(messages: List[dict], user_input: str, current_date: str) -> List:
     """
     Generates a chat prompt template based on the provided prompt text.
 
@@ -40,8 +42,11 @@ def get_prompt(messages) -> List:
     """
 
     prompt_text = translate_prompt()
-
-    return [SystemMessage(content=prompt_text["system_message"])] + messages
+    system_message_text = prompt_text["system_message"].format(
+        current_date,
+        user_input,
+    )
+    return [SystemMessage(content=system_message_text)] + messages
 
 
 def get_prompt_length() -> int:

@@ -20,7 +20,7 @@ from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
 from src.chatbot.db.clients import get_retriever
-from src.chatbot.prompt.main import get_prompt
+from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.tools.utils.tool_helpers import visited_docs
 from src.chatbot.utils.agent_helpers import llm
 from src.chatbot.utils.agent_retriever import RetrieverInput, _get_relevant_documents
@@ -46,6 +46,7 @@ class State(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     search_query: Optional[List[str]]
     user_initial_query: Optional[str]
+    current_date: Optional[str]
     answer_rejection: Optional[str]
     score_judgement_binary: Optional[str]
 
@@ -328,6 +329,7 @@ class GraphNodesMixin:
             outputs.append(tool_m)
             search_query.append(tool_call["args"].get("query", ""))
 
+        # TODO Sometines the agent calls several tools and the tokens surpass the defined context window. Do summarization here.
         return {"messages": outputs, "search_query": search_query}
 
     def rewrite(self, state):
@@ -384,6 +386,7 @@ class GraphNodesMixin:
             content=translate_prompt(settings.language)[
                 "system_message_generate"
             ].format(
+                state["current_date"],
                 state["user_initial_query"],
             )
         )
@@ -536,7 +539,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             "configurable": {"thread_id": thread_id},
             "recursion_limit": settings.application.recursion_limit,
         }
-        prompt = get_prompt([("user", input)])
+        prompt = get_system_prompt([("user", input)])
 
         try:
             response = self._graph.invoke(
@@ -568,7 +571,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
 
 
 if __name__ == "__main__":
-    from src.chatbot.prompt.main import get_prompt
+    from src.chatbot.prompt.main import get_system_prompt
 
     graph = CampusManagementOpenAIToolsAgent.run()
 
@@ -597,7 +600,7 @@ if __name__ == "__main__":
     }
 
     user_input = "How can i change the password of my stud.ip account?"
-    prompt = get_prompt([("user", user_input)])
+    prompt = get_system_prompt([("user", user_input)])
     response = graph._graph.invoke({"messages": prompt}, config=config)
 
     def stream_graph_updates(user_input: str) -> str:
@@ -610,7 +613,7 @@ if __name__ == "__main__":
             str: Final response
         """
         final_answer = ""
-        prompt = get_prompt([("user", user_input)])
+        prompt = get_system_prompt([("user", user_input)])
         for msg_chunk, metadata in graph.stream(
             {"messages": prompt},
             config=config,
