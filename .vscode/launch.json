@@ -114,6 +114,19 @@
    
         },
 
+
+        {
+            "name": "custom_crawl",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./src/chatbot/tools/utils/custom_crawl.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "justMyCode":false,
+            "console": "integratedTerminal",
+   
+        },
+
         {
             "name": "agent_lang_graph",
             "type": "debugpy",

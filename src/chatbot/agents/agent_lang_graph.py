@@ -533,13 +533,18 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
         Returns:
             Union[str, Dict]: Generated response or error message
         """
+        from src.chatbot.utils.prompt_date import get_current_date
 
         thread_id = uuid.uuid4()
         config = {
             "configurable": {"thread_id": thread_id},
             "recursion_limit": settings.application.recursion_limit,
         }
-        prompt = get_system_prompt([("user", input)])
+        prompt = get_system_prompt(
+            messages=[],
+            user_input=input,
+            current_date=get_current_date(settings.language.lower()),
+        )
 
         try:
             response = self._graph.invoke(
