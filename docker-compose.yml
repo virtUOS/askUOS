@@ -11,6 +11,7 @@ services:
       - .env.dev
     volumes:
       - .:/app
+      - sqlite-data:/root/.crawl4ai
     ports:
       - "8501:8501"
     depends_on:
@@ -83,6 +84,8 @@ services:
       - "etcd"
       - "minio"
   
+volumes:
+  sqlite-data:
 
 
 

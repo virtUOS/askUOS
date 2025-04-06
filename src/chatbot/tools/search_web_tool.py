@@ -11,14 +11,15 @@ from aiohttp import ClientSession
 
 # https://github.com/Krukov/cashews?tab=readme-ov-file#template-keys
 from cashews import cache
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
-from crawl4ai.content_filter_strategy import BM25ContentFilter, PruningContentFilter
+from crawl4ai import BrowserConfig, CacheMode, CrawlerRunConfig
+from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.tools.utils.custom_crawl import AsyncOverrideCrawler
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import (
     VisitedLinks,
@@ -60,7 +61,8 @@ class SearchUniWebTool:
                 verbose=True,
             )
             self.run_config = CrawlerRunConfig(
-                cache_mode=CacheMode.DISABLED,
+                cache_mode=CacheMode.ENABLED,
+                scan_full_page=True,
                 markdown_generator=DefaultMarkdownGenerator(
                     content_filter=PruningContentFilter(
                         threshold=0.48, threshold_type="fixed", min_word_threshold=0
@@ -157,7 +159,9 @@ class SearchUniWebTool:
                                 f"{taken_from}{url}\n{extract_pdf_text(url, pdf_bytes)}"
                             )
                 else:
-                    async with AsyncWebCrawler(config=self.browser_config) as crawler:
+                    async with AsyncOverrideCrawler(
+                        config=self.browser_config
+                    ) as crawler:
                         result = await crawler.arun(
                             url=url,
                             config=self.run_config,
