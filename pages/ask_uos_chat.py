@@ -136,9 +136,8 @@ class ChatApp:
                         and not isinstance(msg, HumanMessage)
                         and not isinstance(msg, ToolMessage)
                         and (
-                            metadata["langgraph_node"]
-                            == "generate"
-                            # or metadata["langgraph_node"] == "agent_node"
+                            metadata["langgraph_node"] == "generate"
+                            or metadata["langgraph_node"] == "generate_application"
                         )
                     ):
                         response += msg.content

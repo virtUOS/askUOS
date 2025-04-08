@@ -21,9 +21,11 @@ from typing_extensions import TypedDict
 
 from src.chatbot.db.clients import get_retriever
 from src.chatbot.prompt.main import get_system_prompt
+from src.chatbot.tools.uni_application_tool import university_applications
 from src.chatbot.tools.utils.tool_helpers import visited_docs
+from src.chatbot.tools.utils.tool_schema import RetrieverInput, SearchInputWeb
 from src.chatbot.utils.agent_helpers import llm
-from src.chatbot.utils.agent_retriever import RetrieverInput, _get_relevant_documents
+from src.chatbot.utils.agent_retriever import _get_relevant_documents
 from src.chatbot.utils.prompt import get_prompt_length, translate_prompt
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
@@ -49,6 +51,7 @@ class State(TypedDict):
     current_date: Optional[str]
     answer_rejection: Optional[str]
     score_judgement_binary: Optional[str]
+    about_application: Optional[bool] = False
 
 
 class GraphEdgesMixin:
@@ -125,12 +128,17 @@ class GraphEdgesMixin:
         )
 
         score = scored_result.binary_score.lower()
-        if score in ["yes", "ja"]:
-            logger.debug("---DECISION: DOCS RELEVANT---")
-            return "generate"
-        else:
-            logger.debug("---DECISION: DOCS NOT RELEVANT---")
-            return "rewrite"
+        try:
+            if score in ["yes", "ja"]:
+                logger.debug("---DECISION: DOCS RELEVANT---")
+                if state.get("about_application"):
+                    return "generate_application"
+                return "generate"
+            else:
+                logger.debug("---DECISION: DOCS NOT RELEVANT---")
+                return "rewrite"
+        except Exception as e:
+            raise e
 
     def judge_agent_decision(
         self, state: State
@@ -189,8 +197,16 @@ class GraphNodesMixin:
                 description=translate_prompt(settings.language)[
                     "description_university_web_search"
                 ],
+                args_schema=SearchInputWeb,
                 handle_tool_errors=True,
             ),
+            # StructuredTool.from_function(
+            #     name="university_applications",
+            #     func=university_applications,
+            #     description=translate_prompt(settings.language)[
+            #         "description_university_applications_tool"
+            #     ],  # TODO add eglish description
+            # ),
         ]
 
     @staticmethod
@@ -314,6 +330,11 @@ class GraphNodesMixin:
                 tool_result = self._tools_by_name[tool_call["name"]].invoke(
                     tool_call["args"]
                 )
+                # TODO Write test for this
+                if tool_call["name"] == "custom_university_web_search":
+                    about_application = tool_call["args"].get(
+                        "about_application", False
+                    )
             except Exception as e:
                 logger.error(f"Error invoking tool: {e}")
                 raise e
@@ -330,7 +351,11 @@ class GraphNodesMixin:
             search_query.append(tool_call["args"].get("query", ""))
 
         # TODO Sometines the agent calls several tools and the tokens surpass the defined context window. Do summarization here.
-        return {"messages": outputs, "search_query": search_query}
+        final_state = {"messages": outputs, "search_query": search_query}
+
+        if about_application:
+            final_state["about_application"] = about_application
+        return final_state
 
     def rewrite(self, state):
         """
@@ -361,6 +386,26 @@ class GraphNodesMixin:
 
         return {"messages": msg}
 
+    def generate_helper(self, state, system_message_generate):
+
+        messages = state.get("messages", [])
+        if not messages:
+            logger.error("No messages found in state")
+            return {"messages": []}
+
+        # TODO inject the original user query and tool message as context in the generation system message
+
+        message_deque = deque(messages)
+
+        if isinstance(message_deque[0], SystemMessage):
+            message_deque.popleft()
+            message_deque.appendleft(system_message_generate)
+        else:
+            message_deque.appendleft(system_message_generate)
+
+        response = self._llm.invoke(list(message_deque))
+        return {"messages": [response]}
+
     def generate(self, state: State) -> Dict:
         """Generate final answer based on retrieved documents.
 
@@ -372,17 +417,7 @@ class GraphNodesMixin:
         """
         logger.debug("---GENERATE---")
 
-        messages = state.get("messages", [])
-        if not messages:
-            logger.error("No messages found in state")
-            return {"messages": []}
-
-        # TODO inject the original user query and tool message as context in the generation system message
-
-        message_deque = deque(messages)
-
-        # shorter system prompt that does not include the tools description
-        generate_message = SystemMessage(
+        system_message_generate = SystemMessage(
             content=translate_prompt(settings.language)[
                 "system_message_generate"
             ].format(
@@ -390,15 +425,18 @@ class GraphNodesMixin:
                 state["user_initial_query"],
             )
         )
+        return self.generate_helper(state, system_message_generate)
 
-        if isinstance(message_deque[0], SystemMessage):
-            message_deque.popleft()
-            message_deque.appendleft(generate_message)
-        else:
-            message_deque.appendleft(generate_message)
-
-        response = self._llm.invoke(list(message_deque))
-        return {"messages": [response]}
+    def generate_application(self, state: State) -> Dict:
+        system_message_generate = SystemMessage(
+            content=translate_prompt(settings.language)[
+                "system_message_generate_application"
+            ].format(
+                state["current_date"],
+                state["user_initial_query"],
+            )
+        )
+        return self.generate_helper(state, system_message_generate)
 
 
 class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMixin):
@@ -468,6 +506,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             "generate", self.generate
         )  # Generating a response after we know the documents are relevant
         # Call agent node to decide to retrieve or not
+        graph_builder.add_node("generate_application", self.generate_application)
         graph_builder.add_edge(START, "agent_node")
 
         graph_builder.add_conditional_edges(
@@ -493,9 +532,15 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             "tool_node",
             # Assess agent decision
             self.grade_documents,
+            {
+                "generate": "generate",
+                "rewrite": "rewrite",
+                "generate_application": "generate_application",
+            },
         )
         graph_builder.add_edge("generate", END)
         graph_builder.add_edge("rewrite", "agent_node")
+        graph_builder.add_edge("generate_application", END)
 
         self._graph = graph_builder.compile(debug=DEBUG)
 

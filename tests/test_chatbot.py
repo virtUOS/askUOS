@@ -6,7 +6,7 @@ sys.path.append("./")
 
 from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.tools.search_web_tool import extract_and_visit_links
-from test.search_sample import search_sample, expected_result
+from tests.search_sample import search_sample, expected_result
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain.evaluation import load_evaluator
 from src.config.core_config import settings

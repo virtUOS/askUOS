@@ -1,25 +1,16 @@
 from typing import Optional, Union
-import re
-import urllib.parse
-from selenium import webdriver
-from selenium.webdriver.firefox.service import Service
-from selenium.webdriver.firefox.options import Options
-import requests
-from bs4 import BeautifulSoup
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.prompts import PromptTemplate
-import dotenv
-from src.chatbot_log.chatbot_logger import logger
-import os
-from langchain_openai import ChatOpenAI
-from langchain_core.tools import ToolException
-from src.config.settings import SEARCH_URL
 
+import dotenv
+from bs4 import BeautifulSoup
+from langchain.prompts import PromptTemplate
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+from src.chatbot_log.chatbot_logger import logger
 
 dotenv.load_dotenv()
 
 
-def application_instructions(user_input: str, **kwargs):
+def university_applications(user_input: str, **kwargs):
 
     instructions = """
      
@@ -29,5 +20,7 @@ def application_instructions(user_input: str, **kwargs):
     4. Keep track of the application status and any additional steps required. For more detailed information, you can visit the university's website or contact the Persönliche Studienberatung (personal study advisory service).
      
     """
+
+    # call web search
 
     return instructions

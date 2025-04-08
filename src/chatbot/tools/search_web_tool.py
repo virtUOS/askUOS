@@ -254,12 +254,17 @@ class SearchUniWebTool:
                     if total_tokens <= settings.model.context_window:
                         break
 
-    def run(self, query: str) -> str:
+    def run(
+        self,
+        query: str,
+        about_application: bool = False,
+    ) -> str:
         """
         Searches the University of Osnabrück website based on the given query.
 
         Args:
             query (str): The query to search for.
+
 
         Returns:
             str: The search result text.

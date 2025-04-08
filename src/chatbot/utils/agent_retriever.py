@@ -14,16 +14,6 @@ from src.chatbot.db.clients import get_milvus_client, get_retriever
 from src.chatbot.tools.utils.tool_helpers import visited_docs
 
 
-class RetrieverInput(BaseModel):
-    """Input to the retriever."""
-
-    query: str = Field(description="query to look up in retriever")
-    # TODO make sure that keywords are in German
-    filter_program_name: str = Field(
-        description="Keyword to filter the documents by study program name, e.g. Biologie, Informatik, Kognitionswissenschaft, Cognitive Science, Chemie, Mathematik, Physik, Psychologie, Wirtschaftsinformatik, Wirtschaftswissenschaften etc."
-    )
-
-
 def _get_relevant_documents(
     query: str,
     filter_program_name: str,

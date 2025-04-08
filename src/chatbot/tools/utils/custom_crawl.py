@@ -376,11 +376,15 @@ if __name__ == "__main__":
 
     async def crawl():
         async with AsyncOverrideCrawler(config=browser_config) as crawler:
-            # url = "https://www.uni-osnabrueck.de/forschen/promotion-und-postdoc-phase/promovieren-an-der-universitaet-osnabrueck"
-            # url = "https://github.com/features/discussions"
+
             # url = "https://zilliz.com/blog/sharding-partitioning-segments-get-most-from-your-database"
-            # url = "https://github.com/unclecode/crawl4ai"
-            url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-zwei-faecher#c52103"
+            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung"
+            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-zwei-faecher#c52103"
+            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/bachelorstudiengaenge-zwei-faecher-zulassungsbeschraenkt"
+            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/bachelorstudiengaenge-ein-fach-zulassungsfrei"
+            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-zwei-faecher"
+            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-ein-fach"
+            url = "https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/abschluesse-und-ordnungen/2-faecher-bachelor"
 
             result = await crawler.arun(url, config=run_config)
             print(result)
