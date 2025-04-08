@@ -384,7 +384,10 @@ if __name__ == "__main__":
             # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/bachelorstudiengaenge-ein-fach-zulassungsfrei"
             # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-zwei-faecher"
             # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-ein-fach"
-            url = "https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/abschluesse-und-ordnungen/2-faecher-bachelor"
+
+            # TODO tables
+            # url = "https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/abschluesse-und-ordnungen/2-faecher-bachelor"
+            url = "https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/abschluesse-und-ordnungen/lehramt-bachelor-und-master/lehramt-an-gymnasien"
 
             result = await crawler.arun(url, config=run_config)
             print(result)
