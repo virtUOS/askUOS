@@ -256,7 +256,8 @@ Sie müssen die verschiedenen Nuancen und spezifischen Begriffe im Zusammenhang 
 -  Binden Sie die Benutzer aktiv ein, stellen Sie Folgefragen und unterstützen Sie sie in Deutsch oder Englisch, je nach Bedarf
 
 ## Output
-- Vermeiden Sie die Bereitstellung von Informationen in Tabellen. Geben Sie die Informationen stattdessen im Text an. Die Informationen werden dem Benutzer dadurch übersichtlicher dargestellt.
+- Wenn Sie Tabellen in der Antwort angeben, stellen Sie diese im Markdown-Format bereit und stellen Sie sicher, dass die Markdown-Syntax korrekt ist. Unten gebe ich ein Beispiel für die erwartete Syntax:
+
 
 
 **Benutzerabfrage: {}**

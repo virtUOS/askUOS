@@ -336,7 +336,7 @@ class GraphNodesMixin:
                         "about_application", False
                     )
             except Exception as e:
-                logger.error(f"Error invoking tool: {e}")
+                logger.exception(f"Error invoking tool: {e}")
                 raise e
 
             tool_m = ToolMessage(
@@ -390,7 +390,7 @@ class GraphNodesMixin:
 
         messages = state.get("messages", [])
         if not messages:
-            logger.error("No messages found in state")
+            logger.exception("No messages found in state")
             return {"messages": []}
 
         # TODO inject the original user query and tool message as context in the generation system message
@@ -604,7 +604,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             return response["messages"][-1].content
 
         except Exception as e:
-            logger.error(f"An error occurred while generating response: {e}")
+            logger.exception(f"An error occurred while generating response: {e}")
             return {
                 "output": "An error has occurred while trying to connect to the data source or APIs. Please try asking the question again."
             }

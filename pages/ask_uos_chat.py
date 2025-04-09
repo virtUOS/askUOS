@@ -120,7 +120,11 @@ class ChatApp:
             history = self._get_chat_history(st.session_state["messages"])
             # system_user_prompt = get_prompt(history + [("user", user_input)])
             system_user_prompt = get_system_prompt(history, user_input, current_date)
-            try:
+            table_content = ""
+            is_table_content = False
+            # deleteme = []
+
+            def _get_stream():
                 for msg, metadata in graph._graph.stream(
                     {
                         "messages": system_user_prompt,
@@ -140,26 +144,61 @@ class ChatApp:
                             or metadata["langgraph_node"] == "generate_application"
                         )
                     ):
-                        response += msg.content
-                        # streaming of every line
-                        if "\n" in msg.content:
-                            to_stream += msg.content
-                            st.markdown(to_stream)
-                            to_stream = ""
-                        else:
-                            to_stream += msg.content
+                        # deleteme.append(msg.content)
+                        yield msg.content
 
-                        print(msg.content, end="|", flush=True)
+            try:
 
-                # the agent generates answer without consulting tools
+                gen_stream = _get_stream()
+                for msg in gen_stream:
+                    response += msg
+
+                    # streaming of every line
+                    if msg == "|":
+                        is_table_content = True
+                        table_content += msg
+                        while is_table_content:
+                            try:
+                                msg = next(gen_stream)
+                                table_content += msg
+                                response += msg
+                                # do not delete the blank space at the beginning of ' |\n\n'
+                                # it is used to identify the end of the table
+                                if msg == " |\n\n":
+                                    # end of table
+
+                                    st.markdown(table_content)
+                                    table_content = ""
+                                    is_table_content = False
+                            except StopIteration:
+                                if table_content:
+                                    st.markdown(table_content)
+                                    table_content = ""
+                                is_table_content = False
+                                break
+
+                    if "\n" in msg:
+                        to_stream += msg
+                        st.markdown(to_stream)
+                        to_stream = ""
+                    else:
+                        to_stream += msg
+
+                    print(msg, end="|", flush=True)
+
+                # the agent did not use any tools
                 if graph._agent_direct_msg:
                     response = graph._agent_direct_msg
                     st.markdown(response)
                     graph._agent_direct_msg = None
 
+                # print(
+                #     f"-----------------------------{deleteme}----------------------------"
+                # )
+
             except GraphRecursionError as e:
                 # TODO handle recursion limit error
-                logger.error(f"Recursion Limit reached: {e}")
+                logger.exception(f"Recursion Limit reached: {e}")
                 response = session_state["_"](
                     "I'm sorry, but I couldn't find enough information to fully answer your question. Could you please try rephrasing your query and ask again?"
                 )
@@ -176,7 +215,7 @@ class ChatApp:
                 visited_docs.clear()
 
             except Exception as e:
-                logger.error(f"Error while processing the user's query: {e}")
+                logger.exception(f"Error while processing the user's query: {e}")
                 response = session_state["_"](
                     "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
                 )
