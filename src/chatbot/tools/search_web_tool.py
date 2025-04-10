@@ -2,7 +2,6 @@ import os
 import sys
 
 sys.path.append("/app")
-
 import asyncio
 
 import aiohttp
@@ -37,6 +36,13 @@ from src.config.core_config import settings
 cache.setup("mem://", size=1000)
 
 dotenv.load_dotenv()
+
+# TODO Make sure that these urls are reachable
+# TODO add the urls to the config file
+APPLICATION_CONTEXT_URLS = [
+    "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/zulassungsbeschraenkungen",
+    "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung",
+]
 
 SEARCH_URL = os.getenv("SEARCH_URL")
 MAX_NUM_LINKS = 4
@@ -87,8 +93,12 @@ class SearchUniWebTool:
         docs = text_splitter.create_documents([text])
 
         reduce_template_string = """Your task it to create a concise summary of the text provided. 
-    The summary must capture the key points and concepts from the original text without adding interpretations. Focus on the information that can be helpful in order
-    to answer the question/query provided below. Make sure that you DO NOT summarize/shorten links or references to external sources.
+## Instruction: Your task is to generate a concise and accurate summary of the provided text. The summary should effectively capture the key points and concepts while strictly avoiding any interpretations or subjective additions.
+1. Focus on Relevance: Emphasize information that directly addresses the question/query specified below.
+2. Handling External Sources: Do not condense or modify links/urls or references to external sources; include them as they appear in the original text.
+3. Tables and Data: If the text includes tables, avoid summarizing their contents. Instead, include them in their entirety within the summary.
+4. Language Consistency: Ensure the summary is written in the same language as the original text.
+4. Formatting: Present the summary in markdown format, which should encompass all necessary elements, including tables and code blocks, without alterations.
 
     Summarize this text:
     {text}
@@ -181,6 +191,7 @@ class SearchUniWebTool:
     async def visit_urls_extract(
         self,
         url: str,
+        about_application: bool,
         max_num_links: int = MAX_NUM_LINKS,
         visited_links: VisitedLinks = visited_links,
     ) -> tuple[str, list]:
@@ -221,6 +232,14 @@ class SearchUniWebTool:
                 # href = str(tag.get("href"))
                 # Check for previously visited links
                 if len(visited_links()) >= max_num_links:
+                    if about_application:
+                        count = 0
+                        for url_ in APPLICATION_CONTEXT_URLS:
+                            if url_ not in visited_links():
+                                visited_links().append(url_)
+                                count += 1
+                                tasks.append(self.fetch_url(session, url_, i + count))
+
                     break
                 if href in visited_links():
                     continue
@@ -281,7 +300,9 @@ class SearchUniWebTool:
             query_url = decode_string(self.query)
             url = SEARCH_URL + query_url
 
-            asyncio.run(self.visit_urls_extract(url))
+            asyncio.run(
+                self.visit_urls_extract(url=url, about_application=about_application)
+            )
 
             final_output = "\n".join(self.contents)
 

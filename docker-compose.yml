@@ -12,6 +12,7 @@ services:
     volumes:
       - .:/app
       - sqlite-data:/root/.crawl4ai
+      - fastembed:/tmp/fastembed_cache/
     ports:
       - "8501:8501"
     depends_on:
@@ -86,6 +87,9 @@ services:
   
 volumes:
   sqlite-data:
+  fastembed:
 
 
 
+# find / -name "*.onnx_data" 
+# /tmp/fastembed_cache/models--qdrant--multilingual-e5-large-onnx/snapshots/66076b8dc6e367337e3e90e6fb309fb0f3addaf6/model.onnx_data

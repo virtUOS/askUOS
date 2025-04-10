@@ -14,7 +14,9 @@ class BaseTestStreamlitApp(unittest.TestCase):
 
         at = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=30).run()
 
-        at.chat_input[0].set_value("can I study Biology?").run()
+        at.chat_input[0].set_value(
+            "what are the application deadlines for the Biology program?"
+        ).run()
 
         # test memory
         at.chat_input[0].set_value("how long does the Master take?").run()
