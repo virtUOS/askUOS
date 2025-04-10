@@ -64,21 +64,32 @@ def extract_pdf_text(href: str, pdf_bytes: bytes) -> str:
 
 # CrawlResultContainer
 def extract_html_text(href: str, result) -> str:
+    """
+    Extracts mardown content from the result object using various fallback strategies.
+    Logs warnings or errors if extraction fails.
+    """
+    markdown_attributes = [
+        "markdown.fit_markdown",
+        "fit_markdown",
+        "markdown_v2.fit_markdown",
+        "markdown",
+    ]
 
-    text_content = ""
-    try:
-        text_content = result.markdown.fit_markdown
-    except:
-        pass
-    try:
-        text_content = result.fit_markdown
+    for attr in markdown_attributes:
+        try:
+            text_content = eval(f"result.{attr}")
+            if text_content:
+                if attr == "markdown":
+                    logger.warning(
+                        f"Markdown generation strategy, fit markdown, failed. Using raw markdown."
+                    )
+                return text_content
+        except Exception as e:
+            continue
 
-    except:
-        pass
-
-    if text_content:
-        return text_content
-    logger.error(f"Failed to fetch html content from: {href}")
+    logger.error(
+        f"Failed to fetch markdown content from (The issue may be crawl4ai related): {href}"
+    )
     return ""
 
 

@@ -9,6 +9,8 @@ from ragas.metrics import ToolCallAccuracy
 from evaluation.ragas_eval.tool_call_accuracy_db import queries, reference_tool_calls
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.prompt.main import get_system_prompt
+from src.chatbot.utils.prompt_date import get_current_date
+from src.config.core_config import settings
 
 if len(reference_tool_calls) != len(queries):
     raise ValueError("reference_tool_calls and queries must have the same length")
@@ -16,6 +18,7 @@ if len(reference_tool_calls) != len(queries):
 
 graph = CampusManagementOpenAIToolsAgent.run()
 scores = []
+fails = []
 
 for query, reference_tool_call in zip(queries, reference_tool_calls):
     thread_id = uuid.uuid4()
@@ -24,7 +27,9 @@ for query, reference_tool_call in zip(queries, reference_tool_calls):
         "recursion_limit": 4,
     }
 
-    prompt = get_system_prompt([("user", query)])
+    prompt = get_system_prompt(
+        [], query, current_date=get_current_date(settings.language.lower())
+    )
 
     try:
 
@@ -47,7 +52,7 @@ for query, reference_tool_call in zip(queries, reference_tool_calls):
         tool_accuracy_scorer = ToolCallAccuracy()
         score = tool_accuracy_scorer.multi_turn_score(sample)
         if score < 1:
-            print(
+            fails.append(
                 f"----Test failed. User query: {query}, System Query: {response['search_query']}"
             )
 
@@ -59,6 +64,5 @@ for query, reference_tool_call in zip(queries, reference_tool_calls):
     except Exception as e:
         print(f"Error: {e}")
 
-
+print(f"Failed tests: {fails}")
 print(f"Average score: {sum(scores) / len(scores)}")
-print(f"Median score: {sorted(scores)[len(scores) // 2]}")

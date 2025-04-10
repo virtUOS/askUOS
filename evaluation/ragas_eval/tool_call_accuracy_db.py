@@ -10,24 +10,29 @@ reference_tool_calls = [
     {
         "name": "examination_regulations",
         "args": {
-            "query": "Anzahl der Prüfer für die Bewertung der Bachelor- bzw. Masterarbeit",
+            "query": "Anzahl der Prüfer für die Bewertung der Bachelor- bzw. Masterarbeit. Biologie",
             "filter_program_name": "Biologie",
         },
     },
     {
         "name": "custom_university_web_search",
         "args": {
-            "query": "Zulassungsvoraussetzungen für Bachelor-Studiengänge an der Universität Osnabrück"
+            "query": "Zulassungsvoraussetzungen für Bachelor-Studiengänge an der Universität Osnabrück",
+            "about_application": "True",
         },
     },
     {
         "name": "custom_university_web_search",
-        "args": {"query": "Bewerbungsfristen Universität Osnabrück"},
+        "args": {
+            "query": "Bewerbungsfristen Universität Osnabrück",
+            "about_application": "True",
+        },
     },
     {
         "name": "custom_university_web_search",
         "args": {
-            "query": "Stipendien für internationale Studierende an der Universität Osnabrück"
+            "query": "Stipendien für internationale Studierende an der Universität Osnabrück",
+            "about_application": "False",
         },
     },
     {
