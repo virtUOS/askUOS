@@ -182,7 +182,7 @@ class SearchUniWebTool:
                 return text, index
 
             except Exception as e:
-                logger.error(f"Error while fetching: {url} - {e}")
+                logger.exception(f"Error while fetching: {url} - {e}")
 
                 return f"Error fetching content from: {url}", index
 
@@ -213,9 +213,6 @@ class SearchUniWebTool:
 
                 if response.status != 200:
 
-                    logger.error(
-                        f"Failed: Programmable Search Engine. Status: {response.status}"
-                    )
                     raise ProgrammableSearchException(
                         f"Failed: Programmable Search Engine. Status: {response.status}"
                     )
@@ -320,12 +317,13 @@ class SearchUniWebTool:
             return final_output if self.contents else self.no_content_found_message
 
         except ProgrammableSearchException as e:
+            logger.exception(f"Error: search engine: {e}", exc_info=True)
             raise ProgrammableSearchException(
                 f"Failed: Programmable Search Engine. Status: {e}"
             )
 
         except Exception as e:
-            logger.error(f"Error while searching the web: {e}", exc_info=True)
+            logger.exception(f"Error while searching the web: {e}", exc_info=True)
             return "Error while searching the web"
 
 

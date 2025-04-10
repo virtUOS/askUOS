@@ -131,7 +131,7 @@ class GraphEdgesMixin:
         try:
             if score in ["yes", "ja"]:
                 logger.debug("---DECISION: DOCS RELEVANT---")
-                if state.get("about_application"):
+                if state.get("about_application", False):
                     return "generate_application"
                 return "generate"
             else:
@@ -322,6 +322,7 @@ class GraphNodesMixin:
             raise ValueError("No message found in input")
 
         outputs = []
+        about_application = False
         search_query = []
         visited_docs.clear()
 
@@ -336,7 +337,9 @@ class GraphNodesMixin:
                         "about_application", False
                     )
             except Exception as e:
-                logger.exception(f"Error invoking tool: {e}")
+                logger.exception(
+                    f"Error invoking tool: {tool_call['name']} with args: tool_call['args']: {e}"
+                )
                 raise e
 
             tool_m = ToolMessage(
@@ -351,11 +354,11 @@ class GraphNodesMixin:
             search_query.append(tool_call["args"].get("query", ""))
 
         # TODO Sometines the agent calls several tools and the tokens surpass the defined context window. Do summarization here.
-        final_state = {"messages": outputs, "search_query": search_query}
-
-        if about_application:
-            final_state["about_application"] = about_application
-        return final_state
+        return {
+            "messages": outputs,
+            "search_query": search_query,
+            "about_application": about_application,
+        }
 
     def rewrite(self, state):
         """
@@ -390,7 +393,7 @@ class GraphNodesMixin:
 
         messages = state.get("messages", [])
         if not messages:
-            logger.exception("No messages found in state")
+            logger.error("No messages found in graph state")
             return {"messages": []}
 
         # TODO inject the original user query and tool message as context in the generation system message
@@ -421,8 +424,8 @@ class GraphNodesMixin:
             content=translate_prompt(settings.language)[
                 "system_message_generate"
             ].format(
-                state["current_date"],
-                state["user_initial_query"],
+                state.get("current_date", ""),
+                state.get("user_initial_query", ""),
             )
         )
         return self.generate_helper(state, system_message_generate)
@@ -432,8 +435,8 @@ class GraphNodesMixin:
             content=translate_prompt(settings.language)[
                 "system_message_generate_application"
             ].format(
-                state["current_date"],
-                state["user_initial_query"],
+                state.get("current_date", ""),
+                state.get("user_initial_query", ""),
             )
         )
         return self.generate_helper(state, system_message_generate)

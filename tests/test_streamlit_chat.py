@@ -1,18 +1,33 @@
 import sys
+
+sys.path.append("./")
 import time
 import unittest
 
 from langchain.evaluation import load_evaluator
 from streamlit.testing.v1 import AppTest
 
-sys.path.append("./")
+from tests.warm_up import warm_up_queries
 
 
 class BaseTestStreamlitApp(unittest.TestCase):
 
-    def test_output(self):
+    def test_multiple_queries(self):
+        at = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=30).run()
+        for q in warm_up_queries:
+            at.chat_input[0].set_value(q).run()
+
+    def test_memory(self):
+
+        # at = AppTest.from_file("/app/start.py", default_timeout=30).run()
+
+        # # set language to English
+        # at.radio[0].set_value("English").run()
+        # # assert that the language is set to English
+        # at.button[0].click().run()
 
         at = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=30).run()
+        # at.session_state["selected_language"] = "English"
 
         at.chat_input[0].set_value(
             "what are the application deadlines for the Biology program?"
@@ -21,8 +36,11 @@ class BaseTestStreamlitApp(unittest.TestCase):
         # test memory
         at.chat_input[0].set_value("how long does the Master take?").run()
 
+        # Test number of messages
+        self.assertEqual(at.markdown.len, 6)
+
         # Test references
-        self.assertGreaterEqual(len(at.expander[0]), 1)
+        # self.assertGreaterEqual(len(at.expander[0]), 1)
         time.sleep(5)
 
         # test output

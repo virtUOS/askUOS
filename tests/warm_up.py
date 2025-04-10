@@ -11,11 +11,11 @@ warm_up_queries = [
     "Was muss ich in einem Masterstudium Informatik tun?",
     "Welche Zulassungsbeschränkungen gibt es für den Masterstudiengang Informatik?",
     "What are the application deadlines for the fall and spring semesters for the Computer Science Program?",
-    "What is the tuition fee structure for the upcoming academic year?",
-    "Bis wann kann ich mich exmatrikulieren lassen und mein Geld zurück bekommen?",
+    "According to the examination regulations, what are the requirements for the Master's thesis in Biology?",
+    "According to the examination regulations, can I write my Master's thesis in English?, Mathematics",
     "Where can I find resources for mental health support on campus?",
     "How do I apply for on-campus housing, and what meal plans are available?",
-    "Was muss ich mitbringen, wenn ich meine Masterarbeit anmelden möchte? (Informatik)",
+    "According to the examination regulations, how are the thesis and oral exam graded?, Mathematics",
     "Unter welcher Telefonnummer erreiche ich die Studienberatung?",
 ]
 
