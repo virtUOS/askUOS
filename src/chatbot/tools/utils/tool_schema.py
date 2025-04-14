@@ -6,6 +6,15 @@ class SearchInputWeb(BaseModel):
     about_application: bool = Field(
         description="should be True if the user is inquiring about studying or applying to the university"
     )
+    single_subject: bool = Field(
+        description="should be True if the user wants to know about study program where students only study one subject (e.g., Biology, Computer Science, Mathematics, Cognitive Sccience, Physics, Psychology, Chemistry, etc.)"
+    )
+    two_subject: bool = Field(
+        description="should be True if the user wants to know about study program where students combine two subjects (e.g.,Core subject (Kernfach)/Core subject (Kernfach): Both subjects have the same number of credit points or Major (Hauptfach)/Minor (Nebenfach): A major has a larger number of credits than the minor."
+    )
+    teaching_degree: bool = Field(
+        description="should be True if the user wants to know about study program where students study to become a teacher (e.g., Lehramt Gymnasium, Lehramt Grundschule, etc.)"
+    )
 
 
 class RetrieverInput(BaseModel):

@@ -8,15 +8,12 @@ from typing import List
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 
 warm_up_queries = [
+    "hi",
     "Was kann ich tun, wenn ich keinen Studienplatz im Master Sport bekommen habe?",
-    "Welche Zulassungsbeschränkungen gibt es für den Masterstudiengang Informatik?",
     "What are the application deadlines for the fall and spring semesters for the Computer Science Program?",
-    "According to the examination regulations, what are the requirements for the Master's thesis in Biology?",
     "According to the examination regulations, can I write my Master's thesis in English?, Mathematics",
-    "Where can I find resources for mental health support on campus?",
     "How do I apply for on-campus housing, and what meal plans are available?",
     "According to the examination regulations, how are the thesis and oral exam graded?, Mathematics",
-    "Unter welcher Telefonnummer erreiche ich die Studienberatung?",
 ]
 
 

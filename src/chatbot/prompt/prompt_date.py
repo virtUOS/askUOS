@@ -2,7 +2,7 @@ from datetime import date
 from typing import Literal
 
 
-def get_current_date(language: Literal["english", "deutsch"] = "english") -> str:
+def get_current_date(language: Literal["English", "Deutsch"]) -> str:
 
     def get_month_name(month_number, language) -> str:
         """
@@ -10,7 +10,7 @@ def get_current_date(language: Literal["english", "deutsch"] = "english") -> str
 
         Args:
             month_number (int): The month number (1-12).
-            language (str): The language for the month name ('english' or 'german').
+            language (str): The language for the month name ('English' or 'German').
 
         Returns:
             str: The month name in the specified language.

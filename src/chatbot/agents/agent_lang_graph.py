@@ -20,8 +20,11 @@ from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
 from src.chatbot.db.clients import get_retriever
-from src.chatbot.prompt.main import get_system_prompt
-from src.chatbot.prompt.prompt import get_prompt_length, translate_prompt
+from src.chatbot.prompt.main import (
+    get_prompt_length,
+    get_system_prompt,
+    translate_prompt,
+)
 from src.chatbot.tools.utils.tool_helpers import visited_docs
 from src.chatbot.tools.utils.tool_schema import RetrieverInput, SearchInputWeb
 from src.chatbot.utils.agent_helpers import llm
@@ -113,12 +116,12 @@ class GraphEdgesMixin:
             """Binary score for document relevance check."""
 
             binary_score: str = Field(
-                description=translate_prompt(settings.language)["grader_binary_score"]
+                description=translate_prompt()["grader_binary_score"]
             )
 
         llm_with_str_output = self._llm.with_structured_output(GradeResult)
         prompt = PromptTemplate(
-            template=translate_prompt(settings.language)["grading_llm"],
+            template=translate_prompt()["grading_llm"],
             input_variables=["context", "question"],
         )
         chain = prompt | llm_with_str_output
@@ -177,25 +180,19 @@ class GraphNodesMixin:
                     "troubleshooting"
                 ),  # TODO make this configurable
                 name="HISinOne_troubleshooting_questions",
-                description=translate_prompt(settings.language)[
-                    "HISinOne_troubleshooting_questions"
-                ],
+                description=translate_prompt()["HISinOne_troubleshooting_questions"],
             ),
             StructuredTool.from_function(
                 name="examination_regulations",
                 func=_get_relevant_documents,
-                description=translate_prompt(settings.language)[
-                    "examination_regulations"
-                ],
+                description=translate_prompt()["examination_regulations"],
                 args_schema=RetrieverInput,
                 handle_tool_errors=True,
             ),
             StructuredTool.from_function(
                 name="custom_university_web_search",
                 func=search_uni_web.run,
-                description=translate_prompt(settings.language)[
-                    "description_university_web_search"
-                ],
+                description=translate_prompt()["description_university_web_search"],
                 args_schema=SearchInputWeb,
                 handle_tool_errors=True,
             ),
@@ -296,11 +293,7 @@ class GraphNodesMixin:
         )
 
         if score.judgement_binary.lower() == "no":
-            msg = [
-                HumanMessage(
-                    content=translate_prompt(settings.language)["use_tool_msg"]
-                )
-            ]
+            msg = [HumanMessage(content=translate_prompt()["use_tool_msg"])]
             return {
                 "messages": state["messages"] + msg,
                 "score_judgement_binary": score.judgement_binary,
@@ -385,7 +378,7 @@ class GraphNodesMixin:
 
         msg = [
             HumanMessage(
-                content=translate_prompt(settings.language)["rewrite_msg_human"].format(
+                content=translate_prompt()["rewrite_msg_human"].format(
                     user_query,
                     state["messages"][
                         -1
@@ -430,9 +423,7 @@ class GraphNodesMixin:
         logger.debug("---GENERATE---")
 
         system_message_generate = SystemMessage(
-            content=translate_prompt(settings.language)[
-                "system_message_generate"
-            ].format(
+            content=translate_prompt()["system_message_generate"].format(
                 state.get("current_date", ""),
                 state.get("user_initial_query", ""),
             )
@@ -441,9 +432,7 @@ class GraphNodesMixin:
 
     def generate_application(self, state: State) -> Dict:
         system_message_generate = SystemMessage(
-            content=translate_prompt(settings.language)[
-                "system_message_generate_application"
-            ].format(
+            content=translate_prompt()["system_message_generate_application"].format(
                 state.get("current_date", ""),
                 state.get("user_initial_query", ""),
             )
@@ -565,7 +554,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             self._tools_by_name = {tool.name: tool for tool in tools}
             # important: the code uses function calling as opposed to tool calling. (DEPENDS ON THE MODEL and how it was fine tuned)
             self._llm_with_tools = self._llm.bind_tools(tools)
-            self._prompt_length = get_prompt_length(self.language)
+            self._prompt_length = get_prompt_length()
             self._create_graph()
 
     def _create_graph(self):

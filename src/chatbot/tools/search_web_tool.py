@@ -275,6 +275,9 @@ class SearchUniWebTool:
         self,
         query: str,
         about_application: bool = False,
+        single_subject: bool = False,
+        two_subject: bool = False,
+        teaching_degree: bool = False,
     ) -> str:
         """
         Searches the University of Osnabrück website based on the given query.
