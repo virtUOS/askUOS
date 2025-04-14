@@ -44,6 +44,7 @@ APPLICATION_CONTEXT_URLS = [
     "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung",
 ]
 
+
 SEARCH_URL = os.getenv("SEARCH_URL")
 MAX_NUM_LINKS = 4
 

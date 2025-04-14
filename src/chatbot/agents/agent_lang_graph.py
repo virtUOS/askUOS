@@ -21,12 +21,11 @@ from typing_extensions import TypedDict
 
 from src.chatbot.db.clients import get_retriever
 from src.chatbot.prompt.main import get_system_prompt
-from src.chatbot.tools.uni_application_tool import university_applications
+from src.chatbot.prompt.prompt import get_prompt_length, translate_prompt
 from src.chatbot.tools.utils.tool_helpers import visited_docs
 from src.chatbot.tools.utils.tool_schema import RetrieverInput, SearchInputWeb
 from src.chatbot.utils.agent_helpers import llm
 from src.chatbot.utils.agent_retriever import _get_relevant_documents
-from src.chatbot.utils.prompt import get_prompt_length, translate_prompt
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
@@ -45,7 +44,7 @@ class State(TypedDict):
         score_judgement_binary: Optional string for binary judgement scores
     """
 
-    messages: Annotated[List[BaseMessage], add_messages]
+    messages: List[BaseMessage]
     search_query: Optional[List[str]]
     user_initial_query: Optional[str]
     current_date: Optional[str]
@@ -234,10 +233,12 @@ class GraphNodesMixin:
         Returns:
             Dict: Updated state with agent response
         """
-        messages = self.filter_messages(state["messages"], 7)
-        response = self._llm_with_tools.invoke(messages)
+        messages = state.get("messages", [])
+        # TODO Messages need to be mapped to langchain messages
+        filtered_messages = self.filter_messages(messages, 7)
+        response = self._llm_with_tools.invoke(filtered_messages)
         return {
-            "messages": [response],
+            "messages": filtered_messages + [response],
             "search_query": [],
         }
 
@@ -300,7 +301,10 @@ class GraphNodesMixin:
                     content=translate_prompt(settings.language)["use_tool_msg"]
                 )
             ]
-            return {"messages": msg, "score_judgement_binary": score.judgement_binary}
+            return {
+                "messages": state["messages"] + msg,
+                "score_judgement_binary": score.judgement_binary,
+            }
 
         return {"score_judgement_binary": score.judgement_binary}
 
@@ -355,7 +359,7 @@ class GraphNodesMixin:
 
         # TODO Sometines the agent calls several tools and the tokens surpass the defined context window. Do summarization here.
         return {
-            "messages": outputs,
+            "messages": messages + outputs,
             "search_query": search_query,
             "about_application": about_application,
         }
@@ -374,8 +378,8 @@ class GraphNodesMixin:
         user_query = state["user_initial_query"]
 
         # TODO delete previous tool messages as they do not inform the users query
-
-        state["messages"] = [
+        # TODO the state cannot be modified in this way because of the reducder
+        messages = state["messages"] = [
             i for i in state["messages"] if not isinstance(i, ToolMessage)
         ]
 
@@ -383,18 +387,23 @@ class GraphNodesMixin:
             HumanMessage(
                 content=translate_prompt(settings.language)["rewrite_msg_human"].format(
                     user_query,
+                    state["messages"][
+                        -1
+                    ].additional_kwargs,  # last ai message, previous tool usage
                 )
             )
         ]
 
-        return {"messages": msg}
+        # delete the previous ai message
+        messages = messages[:-1]
+        return {"messages": messages + msg}
 
     def generate_helper(self, state, system_message_generate):
 
         messages = state.get("messages", [])
         if not messages:
             logger.error("No messages found in graph state")
-            return {"messages": []}
+            return {"messages": messages}
 
         # TODO inject the original user query and tool message as context in the generation system message
 
@@ -407,7 +416,7 @@ class GraphNodesMixin:
             message_deque.appendleft(system_message_generate)
 
         response = self._llm.invoke(list(message_deque))
-        return {"messages": [response]}
+        return {"messages": messages + [response]}
 
     def generate(self, state: State) -> Dict:
         """Generate final answer based on retrieved documents.
@@ -441,6 +450,67 @@ class GraphNodesMixin:
         )
         return self.generate_helper(state, system_message_generate)
 
+    def juge_answer(self, state: State) -> Dict:
+        """Judge the generated answer."""
+
+        class JudgeAnswerResult(BaseModel):
+            """Result of answer judgement."""
+
+            new_answer: Optional[str] = Field(
+                default=None, description="The new answer to be provided to the user"
+            )
+            binary_score: Literal["yes", "no"] = Field(
+                description="The answer is correct or not"
+            )
+            reason: str = Field(
+                description="Back up your decision with a short explanation"
+            )
+
+        llm_with_str_output = self._llm.with_structured_output(JudgeAnswerResult)
+        prompt = PromptTemplate(
+            template="""
+        You are tasked with detecting hallucinations in an agent generated answer. 
+        Follow these guidelines:
+
+            1. **Verifiability Assessment**: Review the answer comprehensively. If every aspect of the answer can be verified against the provided context (tool messages), assign a score of 'yes' and back up your assessment (provide a justification).
+            2. Identification of Errors: If any of what is stated in the answer does not follow from the provided context (tool messages),  assign a score of 'no'. Explain the discrepancies you identified and state that asnwer is a hallucination. 
+            3. Correction Generation: For any incorrect answers, create a new and accurate response that strictly aligns with the information derived from the context. Ensure this revised answer is clear, concise, and fully substantiated by the original data.
+
+            Proceed with the evaluation based on these criteria.
+        
+            
+            ### AI Answer (To be evaluated):
+            {answer}
+            ### Context (From the tools):
+            {context}
+            ### User Query:
+            {question}
+            
+            """,
+            input_variables=["answer", "context", "question"],
+        )
+        chain = prompt | llm_with_str_output
+        response = chain.invoke(
+            {
+                "question": state["user_initial_query"],
+                "context": [
+                    m.content + "\n\n"
+                    for m in state["messages"]
+                    if isinstance(m, ToolMessage)
+                ],
+                "answer": state["messages"][-1].content,
+            }
+        )
+
+        if response.binary_score.lower() == "no":
+            # serve new answer
+            self._curated_answer = response.new_answer
+        else:
+            # serve the original answer
+            self._curated_answer = state["messages"][-1].content
+
+        return {}
+
 
 class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMixin):
 
@@ -460,6 +530,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
     _chat_history: List[Dict] = PrivateAttr(default=[])
     _prompt_length: int = PrivateAttr(default=None)
     _agent_direct_msg: str = PrivateAttr(default=None)
+    # _curated_answer: str = PrivateAttr(default=None)
 
     def __new__(cls, *args, **kwargs):
         """Create or retrieve singleton instance.
@@ -510,6 +581,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
         )  # Generating a response after we know the documents are relevant
         # Call agent node to decide to retrieve or not
         graph_builder.add_node("generate_application", self.generate_application)
+        # graph_builder.add_node("judge_answer", self.juge_answer)
         graph_builder.add_edge(START, "agent_node")
 
         graph_builder.add_conditional_edges(
@@ -581,7 +653,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
         Returns:
             Union[str, Dict]: Generated response or error message
         """
-        from src.chatbot.utils.prompt_date import get_current_date
+        from src.chatbot.prompt.prompt_date import get_current_date
 
         thread_id = uuid.uuid4()
         config = {

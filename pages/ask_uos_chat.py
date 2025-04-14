@@ -3,7 +3,7 @@ import uuid
 from typing import Dict, List, Optional
 
 import streamlit as st
-from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 from streamlit import session_state
 from streamlit_feedback import streamlit_feedback
@@ -13,9 +13,9 @@ from pages.utils import initialize_session_sate, load_css, setup_page
 # from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.prompt.main import get_system_prompt
+from src.chatbot.prompt.prompt_date import get_current_date
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import visited_docs, visited_links
-from src.chatbot.utils.prompt_date import get_current_date
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
@@ -196,6 +196,20 @@ class ChatApp:
                 #     f"-----------------------------{deleteme}----------------------------"
                 # )
 
+            # try:
+            #     graph._graph.invoke(
+            #         {
+            #             "messages": system_user_prompt,
+            #             "user_initial_query": user_input,
+            #             "current_date": current_date,
+            #         },
+            #         stream_mode="messages",
+            #         config=config,
+            #     )
+            #     response = graph._curated_answer
+            #     st.markdown(response)
+            #     print()
+
             except GraphRecursionError as e:
                 # TODO handle recursion limit error
                 logger.exception(f"Recursion Limit reached: {e}")
@@ -272,11 +286,24 @@ class ChatApp:
 
         if len(messages) > k:
             messages = messages[-k:]  # get the last k messages
-
-        chat_history = [
-            {"role": record["role"], "content": record["content"]}
-            for record in messages
-        ]
+        # chat_history = [
+        #     {"role": record["role"], "content": record["content"]}
+        #     for record in messages
+        # ]
+        chat_history = []
+        for record in messages:
+            if record["role"] == "user":
+                chat_history.append(
+                    HumanMessage(content=record["content"], additional_kwargs={})
+                )
+            elif record["role"] == "assistant":
+                chat_history.append(
+                    AIMessage(content=record["content"], additional_kwargs={})
+                )
+            else:
+                chat_history.append(
+                    ToolMessage(content=record["content"], additional_kwargs={})
+                )
 
         logger.debug(f"Chat History -------{chat_history}--------")
         return chat_history

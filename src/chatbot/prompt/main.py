@@ -7,7 +7,7 @@ from langchain.prompts.chat import (
 )
 from langchain_core.messages import SystemMessage
 
-import src.chatbot.utils.prompt_text as text
+import src.chatbot.prompt.prompt_text as text
 from src.chatbot.utils.agent_helpers import llm
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings

@@ -7,7 +7,7 @@ from langchain.prompts.chat import (
     MessagesPlaceholder,
 )
 from src.chatbot_log.chatbot_logger import logger
-import src.chatbot.utils.prompt_text as text
+import src.chatbot.prompt.prompt_text as text
 from src.chatbot.utils.agent_helpers import llm
 
 

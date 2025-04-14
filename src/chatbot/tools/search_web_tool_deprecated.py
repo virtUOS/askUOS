@@ -22,7 +22,9 @@ from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.firefox.service import Service
 
-from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.agent_openai_tools_deprecated import (
+    CampusManagementOpenAIToolsAgent,
+)
 from src.chatbot.tools.utils.tool_helpers import (
     VisitedLinks,
     decode_string,

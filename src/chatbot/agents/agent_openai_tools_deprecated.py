@@ -23,7 +23,7 @@ from langchain_openai import ChatOpenAI
 
 from src.chatbot.db.vector_store_deprecated import retriever
 from src.chatbot.utils.agent_helpers import llm
-from src.chatbot.utils.prompt import get_prompt, get_prompt_length, translate_prompt
+from src.chatbot.prompt.prompt import get_prompt, get_prompt_length, translate_prompt
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 

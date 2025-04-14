@@ -1,10 +1,11 @@
-from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 import time
-import numpy as np
 from typing import List, Tuple
-from src.config.core_config import settings
+
+import numpy as np
 from plot_tests import plot_result
 
+from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
+from src.config.core_config import settings
 
 queries = [
     "What are the admission requirements for undergraduate programs?",

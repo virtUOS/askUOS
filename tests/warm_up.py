@@ -8,7 +8,7 @@ from typing import List
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 
 warm_up_queries = [
-    "Was muss ich in einem Masterstudium Informatik tun?",
+    "Was kann ich tun, wenn ich keinen Studienplatz im Master Sport bekommen habe?",
     "Welche Zulassungsbeschränkungen gibt es für den Masterstudiengang Informatik?",
     "What are the application deadlines for the fall and spring semesters for the Computer Science Program?",
     "According to the examination regulations, what are the requirements for the Master's thesis in Biology?",

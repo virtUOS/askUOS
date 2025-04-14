@@ -9,7 +9,7 @@ from ragas.metrics import ToolCallAccuracy
 from evaluation.ragas_eval.tool_call_accuracy_db import queries, reference_tool_calls
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.prompt.main import get_system_prompt
-from src.chatbot.utils.prompt_date import get_current_date
+from src.chatbot.prompt.prompt_date import get_current_date
 from src.config.core_config import settings
 
 if len(reference_tool_calls) != len(queries):
