@@ -6,6 +6,7 @@ from typing import Annotated, ClassVar, Dict, List, Literal, Optional, Union
 import streamlit as st
 from langchain.tools.retriever import create_retriever_tool
 from langchain_core.messages import (
+    AIMessage,
     BaseMessage,
     HumanMessage,
     SystemMessage,
@@ -54,6 +55,8 @@ class State(TypedDict):
     answer_rejection: Optional[str]
     score_judgement_binary: Optional[str]
     about_application: Optional[bool] = False
+    tool_messages: Optional[str]
+    last_tool_usage: Optional[str]
 
 
 class GraphEdgesMixin:
@@ -107,9 +110,7 @@ class GraphEdgesMixin:
         Returns:
             Literal["generate", "rewrite"]: Decision on document relevance
         """
-        messages = state["messages"]
-        tool_messages = [i for i in messages if isinstance(i, ToolMessage)]
-        tool_message = tool_messages[-1] if tool_messages else None
+        tool_messages = state.get("tool_messages", None)
         tool_query = " ".join(state["search_query"])
 
         class GradeResult(BaseModel):
@@ -118,6 +119,9 @@ class GraphEdgesMixin:
             binary_score: str = Field(
                 description=translate_prompt()["grader_binary_score"]
             )
+            # relevant_paragraphs: Optional[str] = Field(
+            #     description="From the retrieved documents, which paragraphs are relevant to answer the user query? Extract all relevant paragraphs from the retrieved documents."
+            # )
 
         llm_with_str_output = self._llm.with_structured_output(GradeResult)
         prompt = PromptTemplate(
@@ -125,13 +129,13 @@ class GraphEdgesMixin:
             input_variables=["context", "question"],
         )
         chain = prompt | llm_with_str_output
-        scored_result = chain.invoke(
-            {"question": tool_query, "context": tool_message.content}
-        )
+        scored_result = chain.invoke({"question": tool_query, "context": tool_messages})
 
         score = scored_result.binary_score.lower()
         try:
-            if score in ["yes", "ja"]:
+            if score.lower() in ["yes", "ja"]:
+                # TODO Further process the relevant paragraphs
+                # self._clean_tool_message = scored_result.relevant_paragraphs
                 logger.debug("---DECISION: DOCS RELEVANT---")
                 if state.get("about_application", False):
                     return "generate_application"
@@ -301,24 +305,16 @@ class GraphNodesMixin:
 
         return {"score_judgement_binary": score.judgement_binary}
 
-    def tool_node(self, inputs: Dict) -> Dict:
-        """Process tool calls.
+    def tool_node(self, state: Dict) -> Dict:
+        """Process tool calls."""
 
-        Args:
-            inputs: Dictionary containing messages
-
-        Returns:
-            Dict: Updated state with tool responses
-
-        Raises:
-            ValueError: If no messages found in input
-        """
-        if messages := inputs.get("messages", []):
+        if messages := state.get("messages", []):
             message = messages[-1]
         else:
             raise ValueError("No message found in input")
 
         outputs = []
+        outputs_txt = ""
         about_application = False
         search_query = []
         visited_docs.clear()
@@ -345,14 +341,19 @@ class GraphNodesMixin:
                 tool_call_id=tool_call["id"],
             )
 
+            outputs_txt += tool_m.content + "\n\n"
             # TODO tool message is a dictionary, needs further processing
             # TODO add the retrieved documents name and page to the visited links object
             outputs.append(tool_m)
             search_query.append(tool_call["args"].get("query", ""))
 
         # TODO Sometines the agent calls several tools and the tokens surpass the defined context window. Do summarization here.
+
+        last_tool_usage = state["messages"][-1].additional_kwargs
+        state["messages"] = state["messages"][:-1]  # remove the last AI message
         return {
-            "messages": messages + outputs,
+            "tool_messages": outputs_txt,
+            "last_tool_usage": last_tool_usage,  # last ai message with previous tool usage
             "search_query": search_query,
             "about_application": about_application,
         }
@@ -372,22 +373,21 @@ class GraphNodesMixin:
 
         # TODO delete previous tool messages as they do not inform the users query
         # TODO the state cannot be modified in this way because of the reducder
-        messages = state["messages"] = [
-            i for i in state["messages"] if not isinstance(i, ToolMessage)
-        ]
+        # messages = state["messages"] = [
+        #     i for i in state["messages"] if not isinstance(i, ToolMessage)
+        # ]
 
         msg = [
             HumanMessage(
                 content=translate_prompt()["rewrite_msg_human"].format(
                     user_query,
-                    state["messages"][
-                        -1
-                    ].additional_kwargs,  # last ai message, previous tool usage
+                    state["last_tool_usage"],
                 )
             )
         ]
 
         # delete the previous ai message
+        messages = state["messages"]
         messages = messages[:-1]
         return {"messages": messages + msg}
 
@@ -408,6 +408,10 @@ class GraphNodesMixin:
         else:
             message_deque.appendleft(system_message_generate)
 
+        # the last message should be the Human message
+        if isinstance(message_deque[-1], AIMessage):
+            message_deque.pop()
+
         response = self._llm.invoke(list(message_deque))
         return {"messages": messages + [response]}
 
@@ -422,21 +426,30 @@ class GraphNodesMixin:
         """
         logger.debug("---GENERATE---")
 
+        # tool_message = self._clean_tool_message or state.get("tool_messages", None)
+        tool_message = state.get("tool_messages", None)
         system_message_generate = SystemMessage(
             content=translate_prompt()["system_message_generate"].format(
                 state.get("current_date", ""),
-                state.get("user_initial_query", ""),
+                state.get("search_query", ""),
+                tool_message,
             )
         )
+        # self._clean_tool_message = None
         return self.generate_helper(state, system_message_generate)
 
     def generate_application(self, state: State) -> Dict:
+
+        # tool_message = self._clean_tool_message or state.get("tool_messages", None)
+        tool_message = state.get("tool_messages", None)
         system_message_generate = SystemMessage(
             content=translate_prompt()["system_message_generate_application"].format(
                 state.get("current_date", ""),
-                state.get("user_initial_query", ""),
+                state.get("search_query", ""),
+                tool_message,
             )
         )
+        # self._clean_tool_message = None
         return self.generate_helper(state, system_message_generate)
 
     def juge_answer(self, state: State) -> Dict:
@@ -519,6 +532,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
     _chat_history: List[Dict] = PrivateAttr(default=[])
     _prompt_length: int = PrivateAttr(default=None)
     _agent_direct_msg: str = PrivateAttr(default=None)
+    # _clean_tool_message: str = PrivateAttr(default=None)
     # _curated_answer: str = PrivateAttr(default=None)
 
     def __new__(cls, *args, **kwargs):

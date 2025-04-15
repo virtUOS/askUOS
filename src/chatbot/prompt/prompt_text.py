@@ -137,11 +137,11 @@ Use this tool whenever you need information or need to answer questions about le
     "response_output_description": "The final answer to respond to the user",
     "response_sources_description": "The sources used to generate the answer. The sources should consist of a list of URLs. Only include the sources if the answer was extracted from the University of Osnabruek website.",
     "grading_llm": """
-    You are a grader assessing relevance of a retrieved document to a user question. \n 
-            Here is the retrieved document: \n\n {context} \n\n
-            Here is the user question: {question} \n
+    You are a grader assessing relevance of a retrieved document to a user question. 
+            ## Here is the retrieved document: {context} 
+            ## Here is the user question: {question} 
             If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. \n
-            Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question.
+            Output a binary score 'yes' or 'no' to indicate whether the document is relevant to the question.
     """,
     "rewrite_msg_human": """ \n 
         The retrieved docuements do not provide the information needed to answer the user's question.
@@ -157,7 +157,7 @@ Use this tool whenever you need information or need to answer questions about le
         \n ------- \n
         
         Formulate an improved query and try to find the information needed to answer the question""",
-    "grader_binary_score": "Relevance score 'yes' or 'no'",
+    "grader_binary_score": "Documents are relevant to the user's question, 'yes' or 'no'",
     "use_tool_msg": "Do not answer questions based on your Training knowledge. Use the tools at your disposal to obtain the information needed to answer the user's query.",
 }
 
@@ -232,7 +232,10 @@ Sie sind spezialisiert auf die umfassende Unterstützung und Beratung von:
 - Beantworten Sie keine Fragen aus Ihrem eigenen Wissen oder Ihrer Meinung; verlassen Sie sich stets auf die bereitgestellten Tools und deren Informationen.
 
 
-**Benutzerabfrage: {}**
+## Benutzerabfrage: {}
+
+### Verwenden Sie den folgenden Kontext, um die Benutzeranfrage zu beantworten:
+{}
 """,
     "system_message_generate_application": """# KI-Assistent der Universität Osnabrück.
 Sie sind ein KI-Assistent der Universität Osnabrück, spezialisiert auf die umfassende Unterstützung von Studieninteressierten, die sich für ein Studium an der Universität bewerben möchten.
@@ -278,7 +281,11 @@ Sie müssen die verschiedenen Nuancen und spezifischen Begriffe im Zusammenhang 
 - Wenn Sie eine Frage aufgrund unzureichender Informationen aus den Tools nicht beantworten können, teilen Sie dem Benutzer mit, dass Sie diese nicht wissen.
 - Beantworten Sie keine Fragen aus Ihrem eigenen Wissen oder Ihrer Meinung; verlassen Sie sich stets auf die bereitgestellten Tools und deren Informationen.
 
-**Benutzerabfrage: {}**
+### Benutzerabfrage: {}
+
+
+### Verwenden Sie den folgenden Kontext, um die Benutzeranfrage zu beantworten:
+{}
 
 
 """,
@@ -313,6 +320,7 @@ Nutzen Sie dieses Tool, wenn Sie Informationen oder Fragen zu rechtsverbindliche
             Hier ist die Benutzerfrage: {question} \n
             Wenn das Dokument Schlüsselwort(e) oder semantische Bedeutung im Zusammenhang mit der Benutzerfrage enthält, bewerten Sie es als relevant. \n
             Geben Sie eine binäre Punktzahl 'ja' oder 'nein' an, um anzuzeigen, ob das Dokument für die Frage relevant ist.
+           
     """,
     "rewrite_msg_human": """
     \n
