@@ -128,6 +128,7 @@ class ChatApp:
                 for msg, metadata in graph._graph.stream(
                     {
                         "messages": system_user_prompt,
+                        "message_history": history,
                         "user_initial_query": user_input,
                         "current_date": current_date,
                     },

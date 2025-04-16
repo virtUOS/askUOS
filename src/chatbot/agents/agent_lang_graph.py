@@ -35,6 +35,7 @@ from src.config.core_config import settings
 
 OPEN_AI_MODEL = settings.model.model_name
 DEBUG = settings.application.debug
+MESSAGE_HISTORY_LIMIT = 7
 
 
 class State(TypedDict):
@@ -49,6 +50,9 @@ class State(TypedDict):
     """
 
     messages: List[BaseMessage]
+    message_history: List[
+        BaseMessage
+    ]  # to exclude all system messages and messages genrated by the agent
     search_query: Optional[List[str]]
     user_initial_query: Optional[str]
     current_date: Optional[str]
@@ -235,8 +239,8 @@ class GraphNodesMixin:
             Dict: Updated state with agent response
         """
         messages = state.get("messages", [])
-        # TODO Messages need to be mapped to langchain messages
-        filtered_messages = self.filter_messages(messages, 7)
+
+        filtered_messages = self.filter_messages(messages, MESSAGE_HISTORY_LIMIT)
         response = self._llm_with_tools.invoke(filtered_messages)
         return {
             "messages": filtered_messages + [response],
@@ -393,27 +397,30 @@ class GraphNodesMixin:
 
     def generate_helper(self, state, system_message_generate):
 
-        messages = state.get("messages", [])
-        if not messages:
-            logger.error("No messages found in graph state")
-            return {"messages": messages}
+        messages_history = state.get("message_history", [])
+        if messages_history:
+            filtered_messages_history = self.filter_messages(
+                messages_history, MESSAGE_HISTORY_LIMIT
+            )
+            message_deque = deque(filtered_messages_history)
 
-        # TODO inject the original user query and tool message as context in the generation system message
+            if isinstance(message_deque[0], SystemMessage):
+                message_deque.popleft()
+                message_deque.appendleft(system_message_generate)
+            else:
+                message_deque.appendleft(system_message_generate)
 
-        message_deque = deque(messages)
+            # the last message should be the Human message
+            if isinstance(message_deque[-1], AIMessage):
+                message_deque.pop()
 
-        if isinstance(message_deque[0], SystemMessage):
-            message_deque.popleft()
-            message_deque.appendleft(system_message_generate)
+            response = self._llm.invoke(list(message_deque))
         else:
-            message_deque.appendleft(system_message_generate)
-
-        # the last message should be the Human message
-        if isinstance(message_deque[-1], AIMessage):
-            message_deque.pop()
-
-        response = self._llm.invoke(list(message_deque))
-        return {"messages": messages + [response]}
+            logger.warning(
+                "No messages history found. Using system message only for generation."
+            )
+            response = self._llm.invoke([system_message_generate])
+        return {"messages": messages_history + [response]}
 
     def generate(self, state: State) -> Dict:
         """Generate final answer based on retrieved documents.

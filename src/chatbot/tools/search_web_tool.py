@@ -41,7 +41,7 @@ dotenv.load_dotenv()
 # TODO add the urls to the config file
 APPLICATION_CONTEXT_URLS = [
     # "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/zulassungsbeschraenkungen",
-    "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung",
+    # "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung",
 ]
 
 
