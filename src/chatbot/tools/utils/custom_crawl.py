@@ -366,12 +366,13 @@ if __name__ == "__main__":
     )
     run_config = CrawlerRunConfig(
         cache_mode=CacheMode.ENABLED,
+        css_selector="main",
         scan_full_page=True,
-        markdown_generator=DefaultMarkdownGenerator(
-            content_filter=PruningContentFilter(
-                threshold=0.48, threshold_type="fixed", min_word_threshold=0
-            )
-        ),
+        # markdown_generator=DefaultMarkdownGenerator(
+        #     content_filter=PruningContentFilter(
+        #         threshold=0.48, threshold_type="fixed", min_word_threshold=0
+        #     )
+        # ),
     )
 
     async def crawl():
@@ -386,9 +387,11 @@ if __name__ == "__main__":
             # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-ein-fach"
 
             # TODO tables
-            # url = "https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/abschluesse-und-ordnungen/2-faecher-bachelor"
+            url = "https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/abschluesse-und-ordnungen/2-faecher-bachelor"
             # url = "https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/abschluesse-und-ordnungen/lehramt-bachelor-und-master/lehramt-an-gymnasien"
-            url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung#c31478"
+            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung#c31478"
+            # url = "https://www.studentenwerk-osnabrueck.de/de/ueber-uns.html"
+            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung"
 
             result = await crawler.arun(url, config=run_config)
             print(result)

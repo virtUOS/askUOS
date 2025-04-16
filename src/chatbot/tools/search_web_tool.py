@@ -69,15 +69,16 @@ class SearchUniWebTool:
             )
             self.run_config = CrawlerRunConfig(
                 cache_mode=CacheMode.ENABLED,
+                css_selector="main",
                 scan_full_page=True,
-                markdown_generator=DefaultMarkdownGenerator(
-                    content_filter=PruningContentFilter(
-                        threshold=0.48, threshold_type="fixed", min_word_threshold=0
-                    )
-                ),
+                # markdown_generator=DefaultMarkdownGenerator(
+                #     content_filter=PruningContentFilter(
+                #         threshold=0.48, threshold_type="fixed", min_word_threshold=0
+                #     )
+                # ),
             )
 
-    def generate_summary(self, text: str, question: str) -> str:
+    async def generate_summary(self, text: str, question: str) -> str:
         # TODO summarize the content when it + the prompt +chat_history exceed the number of openai allowed tokens (16385 tokens)
         logger.info(f"Summarizing content, query: {question}")
 
@@ -121,7 +122,7 @@ class SearchUniWebTool:
 
         # TODO use aync chain.run?
         settings.llm_summarization_mode = True
-        summary = chain.run(input_documents=docs, question=question)
+        summary = await chain.arun(input_documents=docs, question=question)
         # TODO the summary does not include the Taking from: url
         settings.llm_summarization_mode = False
         return summary
@@ -263,7 +264,7 @@ class SearchUniWebTool:
                 for i, text in enumerate(reversed(self.contents)):
                     original_index = len(self.contents) - i - 1
                     # start summarizing from the last text fetched (assumed to be the least important/relevant)
-                    self.contents[original_index] = self.generate_summary(
+                    self.contents[original_index] = await self.generate_summary(
                         text, self.query
                     )
                     # update the total tokens

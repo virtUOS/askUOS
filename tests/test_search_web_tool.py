@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
@@ -14,7 +15,7 @@ class TestWebSearch(unittest.TestCase):
 
     @patch("src.chatbot.tools.search_web_tool.settings")
     # receives the mock objects as parameters in the reverse order of their respective @patch decorators
-    def test_generate_summary(self, mock_settings):
+    async def test_generate_summary(self, mock_settings):
         # Mock settings
         mock_settings.model.context_window = 1000
 
@@ -25,7 +26,7 @@ class TestWebSearch(unittest.TestCase):
         question = "What is the main point?"
 
         # Call the method
-        result = self.search_tool.generate_summary(text, question)
+        result = await self.search_tool.generate_summary(text, question)
 
         self.assertLess(
             len(result),
