@@ -10,7 +10,14 @@ from aiohttp import ClientSession
 
 # https://github.com/Krukov/cashews?tab=readme-ov-file#template-keys
 from cashews import cache
-from crawl4ai import BrowserConfig, CacheMode, CrawlerRunConfig
+from crawl4ai import (
+    BrowserConfig,
+    CacheMode,
+    CrawlerMonitor,
+    CrawlerRunConfig,
+    DisplayMode,
+)
+from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher
 from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from langchain.chains.summarize import load_summarize_chain
@@ -23,6 +30,7 @@ from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import (
     VisitedLinks,
     decode_string,
+    do_not_visit_links,
     extract_html_text,
     extract_pdf_text,
     visited_links,
@@ -71,11 +79,18 @@ class SearchUniWebTool:
                 cache_mode=CacheMode.ENABLED,
                 css_selector="main",
                 scan_full_page=True,
+                stream=False,
                 # markdown_generator=DefaultMarkdownGenerator(
                 #     content_filter=PruningContentFilter(
                 #         threshold=0.48, threshold_type="fixed", min_word_threshold=0
                 #     )
                 # ),
+            )
+            self.dispatcher = MemoryAdaptiveDispatcher(
+                memory_threshold_percent=70.0,
+                check_interval=1.0,
+                max_session_permit=10,
+                monitor=CrawlerMonitor(display_mode=DisplayMode.DETAILED),
             )
 
     async def generate_summary(self, text: str, question: str) -> str:
@@ -135,7 +150,7 @@ class SearchUniWebTool:
         total_tokens = self.internal_num_tokens + current_search_num_tokens
         return total_tokens, current_search_num_tokens
 
-    async def fetch_url(
+    async def fetch_url_deprecated(
         self, session: ClientSession, url: str, index: int
     ) -> tuple[str, int]:
         """
@@ -202,8 +217,7 @@ class SearchUniWebTool:
         self.internal_num_tokens = self.agent_executor.compute_internal_tokens(
             self.query
         )
-        # Clear the list of visited links
-        visited_links.clear()
+
         self.contents = []
         self.links_search = []
 
@@ -224,49 +238,69 @@ class SearchUniWebTool:
                 # extract search results
                 self.links_search = [item["link"] for item in dict_reponse["items"]]
 
-            tasks = []
+        urls = []
+        for i, href in enumerate(self.links_search):
+            # href = str(tag.get("href"))
+            # Check for previously visited links
+            if href.endswith(".pdf"):
+                # TODO pdf files need to be handled differently (Vector DB for example)
+                continue
 
-            # TODO Make sure that the search result links ordered is preserved (Implement test)
-            for i, href in enumerate(self.links_search):
-                # href = str(tag.get("href"))
-                # Check for previously visited links
-                if len(visited_links()) >= max_num_links:
-                    if about_application:
-                        count = 0
-                        for url_ in APPLICATION_CONTEXT_URLS:
-                            if url_ not in visited_links():
-                                visited_links().append(url_)
-                                count += 1
-                                tasks.append(self.fetch_url(session, url_, i + count))
+            if i >= max_num_links:
+                if about_application:
+                    for url_ in APPLICATION_CONTEXT_URLS:
+                        if url_ not in visited_links():
+                            visited_links().append(url_)
+                            urls.append(url_)
 
-                    break
-                if href in visited_links():
-                    continue
+                break
+            if href in visited_links() or href in do_not_visit_links():
+                continue
 
-                visited_links().append(href)
-                # Create and collect a task to fetch the URL
-                tasks.append(self.fetch_url(session, href, i))
+            # these are used as references for the generated text
+            visited_links().append(href)
+            # Links that were visited in a graph run should not be visited again
+            do_not_visit_links().append(href)
+            urls.append(href)
 
-            with cache.detect as detector:
-                # Gather the results of the tasks (text fetched from the URLs)
-                self.contents = await asyncio.gather(*tasks, return_exceptions=True)
-                if detector.calls:
-                    logger.debug("Cache hit")
+        if urls:
+            # async with AsyncOverrideCrawler(config=self.browser_config) as crawler:
+            #     results = await crawler.arun_many(
+            #         urls=urls,
+            #         config=self.run_config,
+            #         dispatcher=self.dispatcher,
+            #     )
+            #     if results:
+            #         for result in results:
+            #             if result.success:
+            #                 self.contents.append(
+            #                     f"Information taken from: {result.url}\n{result.markdown}"
+            #                 )
+
+            for url in urls:
+                async with AsyncOverrideCrawler(config=self.browser_config) as crawler:
+                    result = await crawler.arun(
+                        url=url,
+                        config=self.run_config,
+                    )
+                    if result:
+                        if result.success:
+                            self.contents.append(
+                                f"Information taken from: {result.url}\n{result.markdown}"
+                            )
 
         # summarize the content if the total tokens exceed the limit
         # TODO this needs to be async and generate summary cached
         if self.contents:
             # order the contents by the index
             self.contents = sorted(self.contents, key=lambda x: x[1])
-            self.contents = [x[0] for x in self.contents]
+            # self.contents = [x[0] for x in self.contents]
             total_tokens, _ = self.compute_tokens("".join(self.contents))
             if total_tokens > settings.model.context_window:
                 for i, text in enumerate(reversed(self.contents)):
-                    original_index = len(self.contents) - i - 1
+                    # original_index = len(self.contents) - i - 1
                     # start summarizing from the last text fetched (assumed to be the least important/relevant)
-                    self.contents[original_index] = await self.generate_summary(
-                        text, self.query
-                    )
+                    self.contents[i] = await self.generate_summary(text, self.query)
                     # update the total tokens
                     total_tokens, _ = self.compute_tokens("".join(self.contents))
                     if total_tokens <= settings.model.context_window:

@@ -137,11 +137,23 @@ Use this tool whenever you need information or need to answer questions about le
     "response_output_description": "The final answer to respond to the user",
     "response_sources_description": "The sources used to generate the answer. The sources should consist of a list of URLs. Only include the sources if the answer was extracted from the University of Osnabruek website.",
     "grading_llm": """
-    You are a grader assessing relevance of a retrieved document to a user question. 
-            ## Here is the retrieved document: {context} 
-            ## Here is the user question: {question} 
-            If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. \n
-            Output a binary score 'yes' or 'no' to indicate whether the document is relevant to the question.
+ You are an evaluator who assesses the relevance of a document for a specific user query.
+
+### Retrieved Document:
+
+{context}
+
+### User Question:
+
+{question}
+
+Evaluate whether the document contains keywords or meaningful information related to the user question.
+
+Provide your assessment in the form of a binary response:
+
+“yes”: The document is relevant.
+“no”: The document is not relevant.
+Please include a brief justification for your assessment.
     """,
     "rewrite_msg_human": """ \n 
         The retrieved docuements do not provide the information needed to answer the user's question.
@@ -315,11 +327,23 @@ Nutzen Sie dieses Tool, wenn Sie Informationen oder Fragen zu rechtsverbindliche
 """,
     "response_output_description": "Die endgültige Antwort, um dem Benutzer zu antworten",
     "response_sources_description": "Die Quellen, die zur Erstellung der Antwort verwendet wurden. Die Quellen sollten aus einer Liste von URLs bestehen. Geben Sie die Quellen nur an, wenn die Antwort von der Website der Universität Osnabrück stammt.",
-    "grading_llm": """ Sie sind ein Bewerter, der die Relevanz eines abgerufenen Dokuments für eine Benutzerfrage bewertet. \n 
-            Hier ist das abgerufene Dokument: \n\n {context} \n\n
-            Hier ist die Benutzerfrage: {question} \n
-            Wenn das Dokument Schlüsselwort(e) oder semantische Bedeutung im Zusammenhang mit der Benutzerfrage enthält, bewerten Sie es als relevant. \n
-            Geben Sie eine binäre Punktzahl 'ja' oder 'nein' an, um anzuzeigen, ob das Dokument für die Frage relevant ist.
+    "grading_llm": """ Sie sind ein Bewerter, der die Relevanz eines Dokuments für eine bestimmte Benutzerfrage bewertet.
+
+### Abgerufenes Dokument:
+
+{context}
+
+### Benutzerfrage:
+
+{question}
+
+Bewerten Sie, ob das Dokument Schlüsselwörter oder bedeutungsvolle Informationen enthält, die mit der Benutzerfrage zusammenhängen.
+
+Geben Sie Ihre Bewertung in Form einer binären Antwort Ab:
+
+„ja“: Das Dokument ist relevant.
+„nein“: Das Dokument ist nicht relevant.
+Fügen Sie eine kurze Begründung für Ihre Bewertung hinzu.
            
     """,
     "rewrite_msg_human": """

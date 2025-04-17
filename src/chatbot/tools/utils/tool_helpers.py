@@ -132,6 +132,33 @@ class VisitedLinks:
         return self.urls
 
 
+class DoNotVisitLinks:
+    """
+    Singleton class to keep track of links that should not be visited.
+    It maintains a list of links that should be ignored.
+    """
+
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(DoNotVisitLinks, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self) -> None:
+        if not self.__dict__:
+            self.urls = []
+
+    def clear(self):
+        """
+        Cleans the list of visited links.
+        """
+        self.urls = []
+
+    def __call__(self):
+        return self.urls
+
+
 class ReferenceRetriever:
 
     _instance = None
@@ -172,3 +199,4 @@ class ReferenceRetriever:
 
 visited_docs = ReferenceRetriever()
 visited_links = VisitedLinks()
+do_not_visit_links = DoNotVisitLinks()

@@ -18,6 +18,7 @@ class BaseTestStreamlitApp(unittest.TestCase):
         initial_message_count = len(at.session_state["messages"])
         for q in warm_up_queries:
             at.chat_input[0].set_value(q).run()
+            assert not at.exception
             self.assertGreater(len(at.session_state["messages"]), initial_message_count)
             initial_message_count = len(at.session_state["messages"])
 
@@ -29,6 +30,7 @@ class BaseTestStreamlitApp(unittest.TestCase):
         at = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=90)
         at.session_state["selected_language"] = "English"
         at.run()
+        assert not at.exception
 
         initial_message_count = len(at.session_state["messages"])
 

@@ -15,7 +15,11 @@ from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.prompt.prompt_date import get_current_date
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
-from src.chatbot.tools.utils.tool_helpers import visited_docs, visited_links
+from src.chatbot.tools.utils.tool_helpers import (
+    do_not_visit_links,
+    visited_docs,
+    visited_links,
+)
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
@@ -125,6 +129,7 @@ class ChatApp:
             # deleteme = []
 
             def _get_stream():
+                do_not_visit_links.clear()
                 for msg, metadata in graph._graph.stream(
                     {
                         "messages": system_user_prompt,

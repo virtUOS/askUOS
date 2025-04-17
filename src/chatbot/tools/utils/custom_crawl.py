@@ -359,12 +359,23 @@ class AsyncOverrideCrawler(AsyncWebCrawler):
 
 
 if __name__ == "__main__":
+    from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher
+
     # Example usage
     browser_config = BrowserConfig(
         headless=True,
         verbose=True,
     )
+
+    dispatcher = MemoryAdaptiveDispatcher(
+        memory_threshold_percent=70.0,
+        check_interval=1.0,
+        max_session_permit=10,
+        monitor=CrawlerMonitor(display_mode=DisplayMode.DETAILED),
+    )
+
     run_config = CrawlerRunConfig(
+        stream=False,
         cache_mode=CacheMode.ENABLED,
         css_selector="main",
         scan_full_page=True,
@@ -393,8 +404,16 @@ if __name__ == "__main__":
             # url = "https://www.studentenwerk-osnabrueck.de/de/ueber-uns.html"
             # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung"
 
-            result = await crawler.arun(url, config=run_config)
-            print(result)
+            urls = [
+                "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/bachelorstudiengaenge-zwei-faecher-zulassungsbeschraenkt",
+                "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/bachelorstudiengaenge-ein-fach-zulassungsfrei",
+                "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-zwei-faecher",
+                "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-ein-fach",
+            ]
+            results = await crawler.arun_many(
+                urls=urls, config=run_config, dispatcher=dispatcher
+            )
+            print(results)
 
     asyncio.run(crawl())
     print()

@@ -26,7 +26,7 @@ from src.chatbot.prompt.main import (
     get_system_prompt,
     translate_prompt,
 )
-from src.chatbot.tools.utils.tool_helpers import visited_docs
+from src.chatbot.tools.utils.tool_helpers import visited_docs, visited_links
 from src.chatbot.tools.utils.tool_schema import RetrieverInput, SearchInputWeb
 from src.chatbot.utils.agent_helpers import llm
 from src.chatbot.utils.agent_retriever import _get_relevant_documents
@@ -123,6 +123,9 @@ class GraphEdgesMixin:
             binary_score: str = Field(
                 description=translate_prompt()["grader_binary_score"]
             )
+            reason: str = Field(
+                description="Back up your decision with a short explanation"
+            )
             # relevant_paragraphs: Optional[str] = Field(
             #     description="From the retrieved documents, which paragraphs are relevant to answer the user query? Extract all relevant paragraphs from the retrieved documents."
             # )
@@ -133,7 +136,12 @@ class GraphEdgesMixin:
             input_variables=["context", "question"],
         )
         chain = prompt | llm_with_str_output
-        scored_result = chain.invoke({"question": tool_query, "context": tool_messages})
+        scored_result = chain.invoke(
+            {
+                "question": f'{state["user_initial_query"]}, {tool_query}',
+                "context": tool_messages,
+            }
+        )
 
         score = scored_result.binary_score.lower()
         try:
@@ -312,6 +320,8 @@ class GraphNodesMixin:
     def tool_node(self, state: Dict) -> Dict:
         """Process tool calls."""
 
+        # Clear the list of visited links
+        visited_links.clear()
         if messages := state.get("messages", []):
             message = messages[-1]
         else:
