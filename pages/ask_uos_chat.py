@@ -20,8 +20,11 @@ from src.chatbot.tools.utils.tool_helpers import (
     visited_docs,
     visited_links,
 )
+from src.chatbot.utils.agent_helpers import llm
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
+
+MAX_TOKENS_hISTORY = 400
 
 
 class ChatApp:
@@ -264,7 +267,7 @@ class ChatApp:
                     f"Time taken to serve whole answer to the user: {time_taken} seconds"
                 )
 
-                self.store_response(response, prompt)
+                self.store_response(response, prompt, graph)
                 if visited_docs():
                     self.display_visited_docs()
 
@@ -354,8 +357,15 @@ class ChatApp:
                 )
         visited_links.clear()
 
-    def store_response(self, output, prompt):
+    def store_response(
+        self, output: str, prompt: str, graph: CampusManagementOpenAIToolsAgent
+    ):
         """Store the assistant's response and prompt in session state."""
+
+        count_tokens = llm().get_num_tokens(output)
+        if count_tokens > MAX_TOKENS_hISTORY:
+            output = graph.summarize_conversation(output)
+
         st.session_state.messages.append(
             {
                 "role": "assistant",
