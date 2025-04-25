@@ -588,23 +588,41 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             self._prompt_length = get_prompt_length()
             self._create_graph()
 
-    def summarize_conversation(self, document: str) -> str:
-        # TODO only summarize if the AI message is greater than certain number of tokens
+    def summarize_conversation(
+        self, messages: List[BaseMessage], previous_summary: str = None
+    ) -> str:
+        # TODO only summarize if the AI message is greater than a certain number of tokens
+
+        if previous_summary:
+            template = """ Below I provide a summary of the conversation so far and new messages that also belong to the same conversation.
+            ### Previous summary:
+            {previous_summary}
+            ### New messages:
+                {messages}
+                
+            ### Instructions:
+            1. Create a summary of the entire conversation, including the previous summary and the new messages. Keep the details of the previous summary to the minimum and focus on the new messages.
+            2. Ensure the summary is brief focusing on key points.
+            """
+        else:
+            template = """Summarize the following conversation. Ensure the summary is brief focusing on key points:
+                ### Conversation:
+                {messages}
+            """
 
         prompt = PromptTemplate(
-            template="""
-           Create a summary of the document provided below. 
-           The summary should be concise and capture the main points of the document.
-           ### Document:
-           {document}
-           """,
-            input_variables=["document"],
+            template=template, input_variables=["messages", "previous_summary"]
         )
-
         chain = prompt | self._llm
 
-        response = chain.invoke({"document": document})
-        return response.content
+        # Prepare the arguments based on previous_summary availability
+        invoke_args = {"messages": messages}
+        if previous_summary:
+            invoke_args["previous_summary"] = previous_summary
+
+        response = chain.invoke(invoke_args)
+
+        return f"**Summary of conversation earlier:** {response.content}"
 
     def _create_graph(self):
         graph_builder = StateGraph(State)

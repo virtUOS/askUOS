@@ -1,5 +1,6 @@
 import time
 import uuid
+from collections import deque
 from typing import Dict, List, Optional
 
 import streamlit as st
@@ -20,11 +21,10 @@ from src.chatbot.tools.utils.tool_helpers import (
     visited_docs,
     visited_links,
 )
-from src.chatbot.utils.agent_helpers import llm
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
-MAX_TOKENS_hISTORY = 400
+MAX_MESSAGE_HISTORY = 5
 
 
 class ChatApp:
@@ -74,6 +74,8 @@ class ChatApp:
                     "content": greeting_message,
                 }
             ]
+        if "conversation_summary" not in st.session_state:
+            st.session_state["conversation_summary"] = []
 
     def display_chat_messages(self):
         """Display chat messages stored in the session state."""
@@ -124,7 +126,7 @@ class ChatApp:
 
                 config["callbacks"] = [tracer]
             current_date = get_current_date(settings.language.lower())
-            history = self._get_chat_history(st.session_state["messages"])
+            history = self._get_conversation_history()
             # system_user_prompt = get_prompt(history + [("user", user_input)])
             system_user_prompt = get_system_prompt(history, user_input, current_date)
             table_content = ""
@@ -276,7 +278,7 @@ class ChatApp:
 
             # self.store_response(response, prompt)
 
-    def _get_chat_history(self, messages: List[Dict[str, str]], k=5):
+    def _get_chat_history(self, messages: List[Dict[str, str]], k=MAX_MESSAGE_HISTORY):
         """
         Retrieve and store the last k messages from the chat history.
 
@@ -284,38 +286,22 @@ class ChatApp:
             messages (List[Dict[str, str]]): A list of message dictionaries, where each dictionary contains
                                              'role', 'content' and 'avatar' keys representing the role of the message
                                              sender and the message content respectively. The 'avatar' key represents the icon used when displaying the message.
-            k (int, optional): The number of most recent messages to retain. Defaults to 5.
 
-        Returns:
-            None
+
+
         """
 
         if not messages:
             return []
 
-        if len(messages) > k:
-            messages = messages[-k:]  # get the last k messages
+        # if len(messages) > k:
+        #     messages = messages[-k:]  # get the last k messages
         # chat_history = [
         #     {"role": record["role"], "content": record["content"]}
         #     for record in messages
         # ]
-        chat_history = []
-        for record in messages:
-            if record["role"] == "user":
-                chat_history.append(
-                    HumanMessage(content=record["content"], additional_kwargs={})
-                )
-            elif record["role"] == "assistant":
-                chat_history.append(
-                    AIMessage(content=record["content"], additional_kwargs={})
-                )
-            else:
-                chat_history.append(
-                    ToolMessage(content=record["content"], additional_kwargs={})
-                )
 
-        logger.debug(f"Chat History -------{chat_history}--------")
-        return chat_history
+        return self._convert_messages(messages)
 
     def display_visited_docs(self):
         """Display the documents visited for the current user query."""
@@ -362,10 +348,6 @@ class ChatApp:
     ):
         """Store the assistant's response and prompt in session state."""
 
-        count_tokens = llm().get_num_tokens(output)
-        if count_tokens > MAX_TOKENS_hISTORY:
-            output = graph.summarize_conversation(output)
-
         st.session_state.messages.append(
             {
                 "role": "assistant",
@@ -374,6 +356,99 @@ class ChatApp:
             }
         )
         st.session_state.user_query = prompt
+
+        # summarize the conversation
+        number_of_summaries = len(
+            st.session_state["conversation_summary"]
+        )  # number of summaries
+        if (
+            len(st.session_state.messages) >= MAX_MESSAGE_HISTORY
+            # and len(st.session_state.messages) % MAX_MESSAGE_HISTORY == 0
+            and (number_of_summaries * MAX_MESSAGE_HISTORY + MAX_MESSAGE_HISTORY)
+            <= len(st.session_state["messages"])
+        ):
+
+            if number_of_summaries == 0:
+                history = self._get_chat_history(st.session_state["messages"])
+
+                st.session_state["conversation_summary"].append(
+                    graph.summarize_conversation(
+                        history,
+                    )
+                )
+            else:
+                # if there is a previoius summary, update it
+                st.session_state["conversation_summary"].append(
+                    graph.summarize_conversation(
+                        self._get_chat_history(
+                            st.session_state["messages"][
+                                -MAX_MESSAGE_HISTORY * number_of_summaries :
+                            ]
+                        ),
+                        st.session_state["conversation_summary"][
+                            -1
+                        ],  # get the last summary
+                    )
+                )
+            # TODO if a summary is generated, MAKE SURE THAT THE SUMMARY IS NOT GREATER THAT MAX_CHARACTER_SUMMARY. IF IT IS, THEN summarize it again
+
+    def _convert_messages(self, messages: List[Dict[str, str]]) -> List:
+
+        chat_history = []
+        for record in messages:
+            if record["role"] == "user":
+                chat_history.append(
+                    HumanMessage(content=record["content"], additional_kwargs={})
+                )
+            elif record["role"] == "assistant":
+                chat_history.append(
+                    AIMessage(content=record["content"], additional_kwargs={})
+                )
+            else:
+                chat_history.append(
+                    ToolMessage(content=record["content"], additional_kwargs={})
+                )
+
+        logger.debug(f"Chat History -------{chat_history}--------")
+        return chat_history
+
+    def _get_conversation_history(self):
+
+        if st.session_state.get("conversation_summary", None):
+
+            # these are the k messages which are not included in the summary
+            # k = int(len(st.session_state["messages"]) % MAX_MESSAGE_HISTORY)
+            k = len(st.session_state["conversation_summary"]) * MAX_MESSAGE_HISTORY
+
+            if len(st.session_state["messages"]) > k:
+                conversation_history = self._get_chat_history(
+                    st.session_state["messages"][k:],  # get the last k messages
+                )
+
+                conversation_history = deque(conversation_history)
+                # Two ai messages cannot be consecutive
+                if isinstance(conversation_history[0], AIMessage):
+                    new_ai_message = AIMessage(
+                        content=st.session_state["conversation_summary"][-1]
+                        + "\n\n"
+                        + conversation_history[0].content
+                    )
+
+                    conversation_history[0] = new_ai_message
+                else:
+                    conversation_history.appendleft(
+                        AIMessage(content=st.session_state["conversation_summary"][-1])
+                    )
+
+            else:
+                conversation_history = AIMessage(
+                    content=st.session_state["conversation_summary"][-1]
+                )
+
+        else:
+            conversation_history = self._get_chat_history(st.session_state["messages"])
+
+        return list(conversation_history)
 
     def show_feedback_faces(self):
         streamlit_feedback(
