@@ -35,7 +35,10 @@ from src.config.core_config import settings
 
 OPEN_AI_MODEL = settings.model.model_name
 DEBUG = settings.application.debug
+# message history limit within the graph
 MESSAGE_HISTORY_LIMIT = 7
+# Maximum number of tokens for the conversation summary
+MAX_TOKEN_SUMMARY = 1000
 
 
 class State(TypedDict):
@@ -588,27 +591,27 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             self._prompt_length = get_prompt_length()
             self._create_graph()
 
+    def shorten_conversation_summary(self, summary: str) -> str:
+        """Shorten the conversation summary if it exceeds the maximum token limit."""
+
+        template = translate_prompt()["shorten_conversation_summary"]
+
+        prompt = PromptTemplate(template=template, input_variables=["summary"])
+        chain = prompt | self._llm
+
+        response = chain.invoke({"summary": summary})
+
+        return response
+
     def summarize_conversation(
         self, messages: List[BaseMessage], previous_summary: str = None
     ) -> str:
         # TODO only summarize if the AI message is greater than a certain number of tokens
 
         if previous_summary:
-            template = """ Below I provide a summary of the conversation so far and new messages that also belong to the same conversation.
-            ### Previous summary:
-            {previous_summary}
-            ### New messages:
-                {messages}
-                
-            ### Instructions:
-            1. Create a summary of the entire conversation, including the previous summary and the new messages. Keep the details of the previous summary to the minimum and focus on the new messages.
-            2. Ensure the summary is brief focusing on key points.
-            """
+            template = translate_prompt()["summarize_conversation_previous"]
         else:
-            template = """Summarize the following conversation. Ensure the summary is brief focusing on key points:
-                ### Conversation:
-                {messages}
-            """
+            template = translate_prompt()["summarize_conversation"]
 
         prompt = PromptTemplate(
             template=template, input_variables=["messages", "previous_summary"]
@@ -621,6 +624,15 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             invoke_args["previous_summary"] = previous_summary
 
         response = chain.invoke(invoke_args)
+
+        tokens_response = self._llm.get_num_tokens(response.content)
+        # To prevent the conversation summary from being too long, we can shorten it
+        if tokens_response > MAX_TOKEN_SUMMARY:
+
+            logger.warning(
+                f"Conversation Summary is too long ({tokens_response} tokens)"
+            )
+            response = self.shorten_conversation_summary(response.content)
 
         return f"**Summary of conversation earlier:** {response.content}"
 

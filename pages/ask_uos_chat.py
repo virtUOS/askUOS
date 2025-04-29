@@ -24,6 +24,7 @@ from src.chatbot.tools.utils.tool_helpers import (
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
+# max number of messages after which a summary is generated
 MAX_MESSAGE_HISTORY = 5
 
 
@@ -390,7 +391,7 @@ class ChatApp:
                         ],  # get the last summary
                     )
                 )
-            # TODO if a summary is generated, MAKE SURE THAT THE SUMMARY IS NOT GREATER THAT MAX_CHARACTER_SUMMARY. IF IT IS, THEN summarize it again
+            # TODO if a summary is generated, MAKE SURE THAT THE SUMMARY IS NOT GREATER THAT MAX_TOKEN_SUMMARY. IF IT IS, THEN summarize it again
 
     def _convert_messages(self, messages: List[Dict[str, str]]) -> List:
 

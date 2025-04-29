@@ -3,24 +3,40 @@ import sys
 sys.path.append("./")
 import time
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 from langchain.evaluation import load_evaluator
 from streamlit.testing.v1 import AppTest
 
+from pages.ask_uos_chat import MAX_MESSAGE_HISTORY
+from src.chatbot.utils.agent_helpers import llm
 from tests.warm_up import warm_up_queries
 
 
 class BaseTestStreamlitApp(unittest.TestCase):
 
     def test_multiple_queries(self):
-        at = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=90).run()
+        _llm = llm()
+        summary_length = []
+        at = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=60).run()
         initial_message_count = len(at.session_state["messages"])
-        for q in warm_up_queries:
+        for index, q in enumerate(warm_up_queries):
             at.chat_input[0].set_value(q).run()
             assert not at.exception
             self.assertGreater(len(at.session_state["messages"]), initial_message_count)
             initial_message_count = len(at.session_state["messages"])
+            # Each iteration generates two messages: user and assistant
+            if index * 2 >= MAX_MESSAGE_HISTORY:
+                # number of expected summaries given the number of messages
+                self.assertEqual(
+                    len(at.session_state["conversation_summary"]),
+                    int(len(at.session_state["messages"]) / MAX_MESSAGE_HISTORY),
+                )
+
+        for s in at.session_state["conversation_summary"]:
+            summary_length.append(_llm.get_num_tokens(s))
+
+        print(f"Summary length (tokens): {summary_length}")
 
     @patch("src.chatbot.prompt.main.settings")
     @patch("pages.language.settings")

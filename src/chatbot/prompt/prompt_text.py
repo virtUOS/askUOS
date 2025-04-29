@@ -180,6 +180,28 @@ Please include a brief justification for your assessment.
         Formulate an improved query and try to find the information needed to answer the question""",
     "grader_binary_score": "Documents are relevant to the user's question, 'yes' or 'no'",
     "use_tool_msg": "Do not answer questions based on your Training knowledge. Use the tools at your disposal to obtain the information needed to answer the user's query.",
+    "summarize_conversation_previous": """Below I provide both a summary of a conversation so far and new messages that also belong to the same conversation.
+            ### Previous summary:
+            {previous_summary}
+            ### New messages:
+                {messages}
+                
+            ### Instructions:
+            1. Create a summary of the entire conversation, including the previous summary and the new messages. Keep the details of the previous summary to the minimum and focus on the new messages.
+            2. Ensure the summary is brief focusing on key points.
+            """,
+    "summarize_conversation": """Summarize the following conversation. Ensure the summary is brief focusing on key points:
+                ### Conversation:
+                {messages}
+            """,
+    "shorten_conversation_summary": """The following conversation summary between and AI and human is too long. 
+        ### Instructions:
+        1. Shorten the conversation summary provided below while retaining the key points and information. 
+        2.  Keep the initial details of the convesation to the minimum and focus on the last interactions between the AI and the human.
+        
+        ### Conversation Summary:
+            {summary}
+        """,
 }
 
 prompt_text_deutsch = {
@@ -370,4 +392,23 @@ Formulieren Sie eine verbesserte Abfrage und versuchen Sie, die zur Beantwortung
     """,
     "grader_binary_score": "Relevanzpunktzahl 'ja' oder 'nein'",
     "use_tool_msg": "Beantworten Sie Fragen nicht auf Grundlage Ihres Trainingswissens. Nutzen Sie die Ihnen zur Verfügung stehenden Tools, um die Informationen zu erhalten, die Sie zur Beantwortung der Benutzeranfrage benötigen.",
+    "summarize_conversation_previous": """Nachfolgend stelle ich sowohl eine Zusammenfassung der bisherigen Konversation als auch neue Nachrichten derselben Konversation bereit.
+### Vorherige Zusammenfassung:
+{previous_summary}
+### Neue Nachrichten:
+{messages}
+
+### Anleitung:
+1. Erstellen Sie eine Zusammenfassung der gesamten Konversation, einschließlich der vorherigen Zusammenfassung und der neuen Nachrichten. Beschränken Sie die Details der vorherigen Zusammenfassung auf ein Minimum und konzentrieren Sie sich auf die neuen Nachrichten.
+2. Achten Sie darauf, dass die Zusammenfassung kurz ist und sich auf die wichtigsten Punkte konzentriert. """,
+    "summarize_conversation": """Fassen Sie das folgende Gespräch zusammen. Achten Sie darauf, dass die Zusammenfassung kurz ist und sich auf die wichtigsten Punkte konzentriert:
+### Gespräch:
+{messages} """,
+    "shorten_conversation_summary": """Die folgende Gesprächszusammenfassung zwischen KI und Mensch ist zu lang.
+### Anleitung:
+1. Kürzen Sie die unten stehende Gesprächszusammenfassung, behalten Sie dabei aber die wichtigsten Punkte und Informationen bei.
+2. Beschränken Sie die anfänglichen Gesprächsdetails auf ein Minimum und konzentrieren Sie sich auf die letzten Interaktionen zwischen KI und Mensch.
+
+### Gesprächszusammenfassung:
+{summary} """,
 }
