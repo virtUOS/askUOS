@@ -35,7 +35,7 @@ from src.chatbot.tools.utils.tool_helpers import (
     extract_pdf_text,
     visited_links,
 )
-from src.chatbot.utils.agent_helpers import llm as sumarize_llm
+from src.chatbot.agents.utils.agent_helpers import llm as sumarize_llm
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 

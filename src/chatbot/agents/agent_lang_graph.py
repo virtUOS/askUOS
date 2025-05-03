@@ -20,6 +20,9 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
+from src.chatbot.agents.utils.agent_helpers import llm
+from src.chatbot.agents.utils.agent_retriever import _get_relevant_documents
+from src.chatbot.agents.utils.exceptions import MustContainSystemMessageException
 from src.chatbot.db.clients import get_retriever
 from src.chatbot.prompt.main import (
     get_prompt_length,
@@ -28,8 +31,6 @@ from src.chatbot.prompt.main import (
 )
 from src.chatbot.tools.utils.tool_helpers import visited_docs, visited_links
 from src.chatbot.tools.utils.tool_schema import RetrieverInput, SearchInputWeb
-from src.chatbot.utils.agent_helpers import llm
-from src.chatbot.utils.agent_retriever import _get_relevant_documents
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
@@ -235,10 +236,14 @@ class GraphNodesMixin:
         Returns:
             List[BaseMessage]: Filtered messages
         """
-        # TODO make sure that the system message is always kept
         if len(messages) <= k:
             return messages
-        return messages[-k:]
+
+        if isinstance(messages[0], SystemMessage):
+            # append system message to the beginning of the list
+            return [messages[0]] + messages[-k:]
+        else:
+            return messages[-k:]
 
     def agent_node(self, state: State) -> Dict:
         """Decide course of action.
@@ -252,6 +257,10 @@ class GraphNodesMixin:
         messages = state.get("messages", [])
 
         filtered_messages = self.filter_messages(messages, MESSAGE_HISTORY_LIMIT)
+        if not isinstance(filtered_messages[0], SystemMessage):
+            raise MustContainSystemMessageException(
+                "The first message in the conversation must be a SystemMessage."
+            )
         response = self._llm_with_tools.invoke(filtered_messages)
         return {
             "messages": filtered_messages + [response],
@@ -427,6 +436,10 @@ class GraphNodesMixin:
             if isinstance(message_deque[-1], AIMessage):
                 message_deque.pop()
 
+            if not isinstance(message_deque[0], SystemMessage):
+                raise MustContainSystemMessageException(
+                    "The first message in the conversation must be a SystemMessage."
+                )
             response = self._llm.invoke(list(message_deque))
         else:
             logger.warning(

@@ -13,6 +13,7 @@ from pages.utils import initialize_session_sate, load_css, setup_page
 
 # from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.utils.exceptions import MaxMessageHistoryException
 from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.prompt.prompt_date import get_current_date
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
@@ -25,7 +26,7 @@ from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
 # max number of messages after which a summary is generated
-MAX_MESSAGE_HISTORY = 5
+MAX_MESSAGE_HISTORY = 3
 
 
 class ChatApp:
@@ -417,11 +418,11 @@ class ChatApp:
 
         if st.session_state.get("conversation_summary", None):
 
-            # these are the k messages which are not included in the summary
-            # k = int(len(st.session_state["messages"]) % MAX_MESSAGE_HISTORY)
+            #  k - len(st.session_state["messages"]) = number of messages not yet summarized
             k = len(st.session_state["conversation_summary"]) * MAX_MESSAGE_HISTORY
 
             if len(st.session_state["messages"]) > k:
+                # messages that have not been summarized yet
                 conversation_history = self._get_chat_history(
                     st.session_state["messages"][k:],  # get the last k messages
                 )
@@ -442,9 +443,22 @@ class ChatApp:
                     )
 
             else:
-                conversation_history = AIMessage(
-                    content=st.session_state["conversation_summary"][-1]
+                # when there is only a summary, append the last two messages
+                conversation_history = []
+                conversation_history.append(
+                    AIMessage(content=st.session_state["conversation_summary"][-1])
                 )
+                try:
+                    conversation_history.append(
+                        self._get_chat_history(st.session_state["messages"])[-2]
+                    )
+                    conversation_history.append(
+                        self._get_chat_history(st.session_state["messages"])[-1]
+                    )
+                except IndexError:
+                    raise MaxMessageHistoryException(
+                        "MAX_MESSAGE_HISTORY must be >= 2. Summarizing only allowed when there are 2 or more messages."
+                    )
 
         else:
             conversation_history = self._get_chat_history(st.session_state["messages"])

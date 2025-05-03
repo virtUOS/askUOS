@@ -14,6 +14,17 @@ warm_up_queries = [
     "According to the examination regulations, can I write my Master's thesis in English?, Mathematics",
     "How do I apply for on-campus housing, and what meal plans are available?",
     "According to the examination regulations, how are the thesis and oral exam graded?, Mathematics",
+    "Was kann ich tun, wenn ich keinen Studienplatz im Master Sport bekommen habe?",
+    "Für welche Studiengänge brauche ich ein Latinum?",
+    "Wo liegt der NC bei Sport?",
+    "Wie viele ECTS-Punkte habe ich in meinem Bachelor (Biologie)?",
+    "Muss ich im Grundschullehramt Mathe und Deutsch studieren?",
+    "Welche Schnupperangebote bietet die Uni OS?",
+    "Kann ich Biologie und Sport auf Lehramt studieren?",
+    "Brauche ich für eine Zweitstudienbewerbung in Psychologie den Eignungstest?",
+    "Kann ich Politik auf Lehramt studieren?",
+    "Kann ich Geschichte als Hauptfach studieren?",
+    "Welchen NC brauche ich für Psychologie?",
 ]
 
 
