@@ -21,6 +21,8 @@ def initialize_session_sate() -> None:
         "time_taken": None,
         "chat_started": False,
         "selected_language": settings.language,
+        "agent_language": settings.language,
+        "agent": None,
     }
 
     for key, value in defaults.items():

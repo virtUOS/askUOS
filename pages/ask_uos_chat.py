@@ -106,9 +106,30 @@ class ChatApp:
     def generate_response(self, prompt):
         """Generate a response from the assistant based on user prompt."""
 
-        graph = CampusManagementOpenAIToolsAgent.run(
-            language=session_state["selected_language"]
-        )
+        def get_agent():
+            if st.session_state["agent"] is None:
+                st.session_state["agent"] = CampusManagementOpenAIToolsAgent.run(
+                    language=session_state["selected_language"]
+                )
+                st.session_state["agent_language"] = session_state["selected_language"]
+
+            if (
+                st.session_state["selected_language"]
+                != st.session_state["agent_language"]
+            ):
+                st.session_state["agent_language"] = st.session_state[
+                    "selected_language"
+                ]
+                st.session_state["agent"] = CampusManagementOpenAIToolsAgent.run(
+                    language=session_state["selected_language"]
+                )
+            return st.session_state["agent"]
+
+        graph = get_agent()
+
+        # graph = CampusManagementOpenAIToolsAgent.run(
+        #     language=session_state["selected_language"]
+        # )
 
         def stream_graph_updates(user_input):
             response = ""

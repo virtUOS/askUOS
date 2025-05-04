@@ -17,7 +17,6 @@ from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
 from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
-from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
 from src.chatbot.agents.utils.agent_helpers import llm
@@ -46,7 +45,7 @@ class State(TypedDict):
     """State management for the graph-based agent.
 
     Attributes:
-        messages: List of messages in the conversation, with add_messages annotation for proper state updates
+        messages: List of messages in the conversation
         search_query: Optional list of queries used for web/db searches
         user_initial_query: Optional string containing the user's initial query
         answer_rejection: Optional string for rejected answers
@@ -550,7 +549,7 @@ class GraphNodesMixin:
 class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMixin):
 
     # Singleton instance
-    _instance: ClassVar[Optional["CampusManagementOpenAIToolsAgent"]] = None
+    # _instance: ClassVar[Optional["CampusManagementOpenAIToolsAgent"]] = None
 
     _tools_by_name: List[BaseTool] = PrivateAttr(default=None)
 
@@ -568,26 +567,26 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
     # _clean_tool_message: str = PrivateAttr(default=None)
     # _curated_answer: str = PrivateAttr(default=None)
 
-    def __new__(cls, *args, **kwargs):
-        """Create or retrieve singleton instance.
+    # def __new__(cls, *args, **kwargs):
+    #     """Create or retrieve singleton instance.
 
-        Creates a new instance if none exists or if language changes.
-        """
-        if cls._instance is None:
-            cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
-            logger.debug("Creating a new instance of CampusManagementOpenAIToolsAgent")
+    #     Creates a new instance if none exists or if language changes.
+    #     """
+    #     if cls._instance is None:
+    #         cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
+    #         logger.debug("Creating a new instance of CampusManagementOpenAIToolsAgent")
 
-        elif hasattr(
-            cls._instance, "language"
-        ) and cls._instance.language != kwargs.get("language", settings.language):
-            # TODO preserve the memory of the previous agent (when the language changes and a previous conversation is still ongoing)
-            # TODO provicional solution: chat history is being kept in the session state
-            cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
-            logger.debug(
-                "Language changed: creating a new instance of CampusManagementOpenAIToolsAgent"
-            )
+    #     elif hasattr(
+    #         cls._instance, "language"
+    #     ) and cls._instance.language != kwargs.get("language", settings.language):
+    #         # TODO preserve the memory of the previous agent (when the language changes and a previous conversation is still ongoing)
+    #         # TODO provicional solution: chat history is being kept in the session state
+    #         cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
+    #         logger.debug(
+    #             "Language changed: creating a new instance of CampusManagementOpenAIToolsAgent"
+    #         )
 
-        return cls._instance
+    #     return cls._instance
 
     def __init__(self, **data):
         # data: key-value pairs passed through the run method, e.g., CampusManagementOpenAIToolsAgent.run(language='Deutsch')
