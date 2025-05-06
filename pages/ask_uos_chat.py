@@ -26,7 +26,7 @@ from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
 # max number of messages after which a summary is generated
-MAX_MESSAGE_HISTORY = 3
+MAX_MESSAGE_HISTORY = 5
 
 
 class ChatApp:
@@ -139,19 +139,28 @@ class ChatApp:
                 "configurable": {"thread_id": thread_id},
                 "recursion_limit": settings.application.recursion_limit,  # This amounts to two laps of the graph # https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
             }
-            if settings.application.tracing:
-                from opik.integrations.langchain import OpikTracer
+            # if settings.application.tracing:
+            #     from opik.integrations.langchain import OpikTracer
 
-                tracer = OpikTracer(
-                    graph=graph._graph.get_graph(xray=True),
-                    project_name=settings.application.opik_project_name,
-                )
+            #     tracer = OpikTracer(
+            #         graph=graph._graph.get_graph(xray=True),
+            #         project_name=settings.application.opik_project_name,
+            #     )
 
-                config["callbacks"] = [tracer]
+            #     config["callbacks"] = [tracer]
             current_date = get_current_date(settings.language.lower())
+
+            conversation_summary = (
+                st.session_state["conversation_summary"][-1]
+                if st.session_state.get("conversation_summary", None)
+                else None
+            )
+            # messages that are not still summarized. remaining_msg = len(messages) - (MAX_MESSAGE_HISTORY * number_of_summaries); IF remaining_msg ==0 return the last two messages
             history = self._get_conversation_history()
             # system_user_prompt = get_prompt(history + [("user", user_input)])
-            system_user_prompt = get_system_prompt(history, user_input, current_date)
+            system_user_prompt = get_system_prompt(
+                conversation_summary, history, user_input, current_date
+            )
             table_content = ""
             is_table_content = False
             # deleteme = []
@@ -439,7 +448,7 @@ class ChatApp:
 
         if st.session_state.get("conversation_summary", None):
 
-            #  k - len(st.session_state["messages"]) = number of messages not yet summarized
+            # number of summarized messages
             k = len(st.session_state["conversation_summary"]) * MAX_MESSAGE_HISTORY
 
             if len(st.session_state["messages"]) > k:
@@ -448,27 +457,27 @@ class ChatApp:
                     st.session_state["messages"][k:],  # get the last k messages
                 )
 
-                conversation_history = deque(conversation_history)
-                # Two ai messages cannot be consecutive
-                if isinstance(conversation_history[0], AIMessage):
-                    new_ai_message = AIMessage(
-                        content=st.session_state["conversation_summary"][-1]
-                        + "\n\n"
-                        + conversation_history[0].content
-                    )
+                # conversation_history = deque(conversation_history)
+                # # Two ai messages cannot be consecutive
+                # if isinstance(conversation_history[0], AIMessage):
+                #     new_ai_message = AIMessage(
+                #         content=st.session_state["conversation_summary"][-1]
+                #         + "\n\n"
+                #         + conversation_history[0].content
+                #     )
 
-                    conversation_history[0] = new_ai_message
-                else:
-                    conversation_history.appendleft(
-                        AIMessage(content=st.session_state["conversation_summary"][-1])
-                    )
+                #     conversation_history[0] = new_ai_message
+                # else:
+                #     conversation_history.appendleft(
+                #         AIMessage(content=st.session_state["conversation_summary"][-1])
+                #     )
 
             else:
                 # when there is only a summary, append the last two messages
                 conversation_history = []
-                conversation_history.append(
-                    AIMessage(content=st.session_state["conversation_summary"][-1])
-                )
+                # conversation_history.append(
+                #     AIMessage(content=st.session_state["conversation_summary"][-1])
+                # )
                 try:
                     conversation_history.append(
                         self._get_chat_history(st.session_state["messages"])[-2]

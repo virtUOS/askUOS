@@ -39,6 +39,10 @@ If a user is interested in applying to the University but does not specify a par
 --------------------------------------    
 User query: 
 {}
+-------------------------------------
+Chat history (summary of previous conversation):
+{}
+--------------------------------------
 
 """,
     "system_message_generate": """# AI Assistant of Osnabrück University.
@@ -234,7 +238,8 @@ Wenn ein Benutzer an einer Bewerbung interessiert ist, aber keinen spezifischen 
    - Geben Sie kontextspezifische Antworten und stellen Sie Hyperlinks zu relevanten Informationsquellen bereit (falls vorhanden).
 
 4. **Einbeziehung des Kontexts:**
-   - Ihre Antworten sollten ausschließlich auf den Informationen basieren, die aus den verfügbaren Tools sowie aus dem Chatverlauf gewonnen wurden.
+   - Ihre Antworten sollten ausschließlich auf den Informationen basieren, die aus den verfügbaren Tools gewonnen wurden.
+   - Beachten Sie die unten stehende Konversationszusammenfassung, da sie Ihnen helfen kann, die Anfrage des Benutzers besser zu verstehen.
    - Wenn Sie eine Anfrage aufgrund fehlender Informationen aus den Tools nicht beantworten können, geben Sie an, dass Sie es nicht wissen.
    - Vermeiden Sie es, Fragen auf Grundlage eigener Kenntnisse oder Meinungen zu beantworten. Vertrauen Sie stets auf die bereitgestellten Tools und deren Informationen.
    
@@ -245,6 +250,11 @@ Wenn ein Benutzer an einer Bewerbung interessiert ist, aber keinen spezifischen 
 ----------------------------------
 Benutzerabfrage: 
 {}
+
+---------------------------------
+Chatverlauf (Zusammenfassung des vorherigen Gesprächs):
+{}
+---------------------------------
 
 
 """,
