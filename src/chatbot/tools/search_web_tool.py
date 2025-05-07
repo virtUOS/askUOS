@@ -90,7 +90,7 @@ class SearchUniWebTool:
                 memory_threshold_percent=70.0,
                 check_interval=1.0,
                 max_session_permit=10,
-                monitor=CrawlerMonitor(display_mode=DisplayMode.DETAILED),
+                monitor=CrawlerMonitor(),
             )
 
     async def generate_summary(self, text: str, question: str) -> str:

@@ -16,5 +16,5 @@ langchain-milvus
 langgraph
 tqdm
 pymilvus
-crawl4AI===0.4.248
+crawl4AI===0.6.2
 opik

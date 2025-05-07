@@ -70,7 +70,7 @@ def extract_html_text(href: str, result) -> str:
     """
 
     try:
-        text_content = result.markdown
+        text_content = result[0].markdown
     except Exception as e:
         logger.exception(
             f"Failed to fetch markdown content from (The issue may be crawl4ai related): {href}"

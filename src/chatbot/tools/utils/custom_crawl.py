@@ -7,7 +7,7 @@ from typing import AsyncGenerator, List, Optional, TypeVar, Union
 
 import aiohttp
 from colorama import Fore
-from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
+from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig, ProxyConfig
 from crawl4ai.async_crawler_strategy import AsyncCrawlResponse
 from crawl4ai.async_database import async_db_manager
 from crawl4ai.async_dispatcher import *  # noqa: F403
@@ -20,7 +20,7 @@ from crawl4ai.content_filter_strategy import RelevantContentFilter
 from crawl4ai.extraction_strategy import *  # noqa: F403
 from crawl4ai.extraction_strategy import ExtractionStrategy, NoExtractionStrategy
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
-from crawl4ai.models import CrawlResult
+from crawl4ai.models import CrawlResult, CrawlResultContainer, RunManyReturn
 from crawl4ai.utils import create_box_message, get_error_context, sanitize_input_encode
 
 # /root/.crawl4ai/crawl4ai.db   vs code  `code /root/.crawl4ai/`
@@ -46,26 +46,9 @@ class AsyncOverrideCrawler(AsyncWebCrawler):
     async def arun(
         self,
         url: str,
-        config: Optional[CrawlerRunConfig] = None,
-        # Legacy parameters maintained for backwards compatibility
-        word_count_threshold=MIN_WORD_THRESHOLD,
-        extraction_strategy: ExtractionStrategy = None,
-        chunking_strategy: ChunkingStrategy = RegexChunking(),
-        content_filter: RelevantContentFilter = None,
-        cache_mode: Optional[CacheMode] = None,
-        # Deprecated cache parameters
-        bypass_cache: bool = False,
-        disable_cache: bool = False,
-        no_cache_read: bool = False,
-        no_cache_write: bool = False,
-        # Other legacy parameters
-        css_selector: str = None,
-        screenshot: bool = False,
-        pdf: bool = False,
-        user_agent: str = None,
-        verbose=True,
+        config: CrawlerRunConfig = None,
         **kwargs,
-    ) -> CrawlResult:
+    ) -> RunManyReturn:
         """
         Runs the crawler for a single source: URL (web, local file, or raw HTML).
 
@@ -94,76 +77,30 @@ class AsyncOverrideCrawler(AsyncWebCrawler):
         Returns:
             CrawlResult: The result of crawling and processing
         """
-        crawler_config = config
+        # Auto-start if not ready
+        if not self.ready:
+            await self.start()
+
+        config = config or CrawlerRunConfig()
         if not isinstance(url, str) or not url:
             raise ValueError("Invalid URL, make sure the URL is a non-empty string")
 
         async with self._lock or self.nullcontext():
             try:
-                # Handle configuration
-                if crawler_config is not None:
-                    # if any(param is not None for param in [
-                    #     word_count_threshold, extraction_strategy, chunking_strategy,
-                    #     content_filter, cache_mode, css_selector, screenshot, pdf
-                    # ]):
-                    #     self.logger.warning(
-                    #         message="Both crawler_config and legacy parameters provided. crawler_config will take precedence.",
-                    #         tag="WARNING"
-                    #     )
-                    config = crawler_config
-                else:
-                    # Merge all parameters into a single kwargs dict for config creation
-                    config_kwargs = {
-                        "word_count_threshold": word_count_threshold,
-                        "extraction_strategy": extraction_strategy,
-                        "chunking_strategy": chunking_strategy,
-                        "content_filter": content_filter,
-                        "cache_mode": cache_mode,
-                        "bypass_cache": bypass_cache,
-                        "disable_cache": disable_cache,
-                        "no_cache_read": no_cache_read,
-                        "no_cache_write": no_cache_write,
-                        "css_selector": css_selector,
-                        "screenshot": screenshot,
-                        "pdf": pdf,
-                        "verbose": verbose,
-                        **kwargs,
-                    }
-                    config = CrawlerRunConfig.from_kwargs(config_kwargs)
-
-                # Handle deprecated cache parameters
-                if any([bypass_cache, disable_cache, no_cache_read, no_cache_write]):
-                    if kwargs.get("warning", True):
-                        warnings.warn(
-                            "Cache control boolean flags are deprecated and will be removed in version 0.5.0. "
-                            "Use 'cache_mode' parameter instead.",
-                            DeprecationWarning,
-                            stacklevel=2,
-                        )
-
-                    # Convert legacy parameters if cache_mode not provided
-                    if config.cache_mode is None:
-                        config.cache_mode = _legacy_to_cache_mode(
-                            disable_cache=disable_cache,
-                            bypass_cache=bypass_cache,
-                            no_cache_read=no_cache_read,
-                            no_cache_write=no_cache_write,
-                        )
+                self.logger.verbose = config.verbose
 
                 # Default to ENABLED if no cache mode specified
                 if config.cache_mode is None:
                     config.cache_mode = CacheMode.ENABLED
 
                 # Create cache context
-                cache_context = CacheContext(
-                    url, config.cache_mode, self.always_bypass_cache
-                )
+                cache_context = CacheContext(url, config.cache_mode, False)
 
                 # Initialize processing variables
                 async_response: AsyncCrawlResponse = None
                 cached_result: CrawlResult = None
-                content_changed = True
                 html = None
+                content_changed = True
                 screenshot_data = None
                 pdf_data = None
                 extracted_content = None
@@ -172,7 +109,6 @@ class AsyncOverrideCrawler(AsyncWebCrawler):
                 # Try to get cached result if appropriate
                 if cache_context.should_read():
                     cached_result = await async_db_manager.aget_cached_url(url)
-                    print()
 
                 if cached_result:
                     # check if content change
@@ -211,12 +147,11 @@ class AsyncOverrideCrawler(AsyncWebCrawler):
                                         # If screenshot is requested but its not in cache, then set cache_result to None
                                         screenshot_data = cached_result.screenshot
                                         pdf_data = cached_result.pdf
-                                        if (
-                                            config.screenshot
-                                            and not screenshot
-                                            or config.pdf
-                                            and not pdf
-                                        ):
+                                        # if config.screenshot and not screenshot or config.pdf and not pdf:
+                                        if config.screenshot and not screenshot_data:
+                                            cached_result = None
+
+                                        if config.pdf and not pdf_data:
                                             cached_result = None
 
                                         self.logger.url_status(
@@ -235,12 +170,26 @@ class AsyncOverrideCrawler(AsyncWebCrawler):
                                         cached_result = None
                                         print()
 
+                # Update proxy configuration from rotation strategy if available
+                if config and config.proxy_rotation_strategy:
+                    next_proxy: ProxyConfig = (
+                        await config.proxy_rotation_strategy.get_next_proxy()
+                    )
+                    if next_proxy:
+                        self.logger.info(
+                            message="Switch proxy: {proxy}",
+                            tag="PROXY",
+                            params={"proxy": next_proxy.server},
+                        )
+                        config.proxy_config = next_proxy
+                        # config = config.clone(proxy_config=next_proxy)
+
                 # Fetch fresh content if needed
                 if (not cached_result or not html) and content_changed:
                     t1 = time.perf_counter()
 
-                    if user_agent:
-                        self.crawler_strategy.update_user_agent(user_agent)
+                    if config.user_agent:
+                        self.crawler_strategy.update_user_agent(config.user_agent)
 
                     # Check robots.txt if enabled
                     if config and config.check_robots_txt:
@@ -258,7 +207,9 @@ class AsyncOverrideCrawler(AsyncWebCrawler):
                                 },
                             )
 
-                    # Pass config to crawl method
+                    ##############################
+                    # Call CrawlerStrategy.crawl #
+                    ##############################
                     async_response = await self.crawler_strategy.crawl(
                         url,
                         config=config,  # Pass the entire config object
@@ -267,6 +218,7 @@ class AsyncOverrideCrawler(AsyncWebCrawler):
                     html = sanitize_input_encode(async_response.html)
                     screenshot_data = async_response.screenshot
                     pdf_data = async_response.pdf_data
+                    js_execution_result = async_response.js_execution_result
 
                     t2 = time.perf_counter()
                     self.logger.url_status(
@@ -276,16 +228,19 @@ class AsyncOverrideCrawler(AsyncWebCrawler):
                         tag="FETCH",
                     )
 
-                    # Process the HTML content
+                    ###############################################################
+                    # Process the HTML content, Call CrawlerStrategy.process_html #
+                    ###############################################################
                     crawl_result: CrawlResult = await self.aprocess_html(
                         url=url,
                         html=html,
                         extracted_content=extracted_content,
                         config=config,  # Pass the config object instead of individual parameters
-                        screenshot=screenshot_data,
+                        screenshot_data=screenshot_data,
                         pdf_data=pdf_data,
                         verbose=config.verbose,
                         is_raw_html=True if url.startswith("raw:") else False,
+                        redirected_url=async_response.redirected_url,
                         **kwargs,
                     )
 
@@ -293,49 +248,40 @@ class AsyncOverrideCrawler(AsyncWebCrawler):
                     crawl_result.redirected_url = async_response.redirected_url or url
                     crawl_result.response_headers = async_response.response_headers
                     crawl_result.downloaded_files = async_response.downloaded_files
-                    crawl_result.ssl_certificate = (
-                        async_response.ssl_certificate
-                    )  # Add SSL certificate
+                    crawl_result.js_execution_result = js_execution_result
+                    crawl_result.mhtml = async_response.mhtml_data
+                    crawl_result.ssl_certificate = async_response.ssl_certificate
+                    # Add captured network and console data if available
+                    crawl_result.network_requests = async_response.network_requests
+                    crawl_result.console_messages = async_response.console_messages
 
                     crawl_result.success = bool(html)
                     crawl_result.session_id = getattr(config, "session_id", None)
 
-                    self.logger.success(
-                        message="{url:.50}... | Status: {status} | Total: {timing}",
+                    self.logger.url_status(
+                        url=cache_context.display_url,
+                        success=crawl_result.success,
+                        timing=time.perf_counter() - start_time,
                         tag="COMPLETE",
-                        params={
-                            "url": cache_context.display_url,
-                            "status": crawl_result.success,
-                            "timing": f"{time.perf_counter() - start_time:.2f}s",
-                        },
-                        colors={
-                            "status": Fore.GREEN if crawl_result.success else Fore.RED,
-                            "timing": Fore.YELLOW,
-                        },
                     )
 
                     # Update cache if appropriate
                     if cache_context.should_write() and not bool(cached_result):
                         await async_db_manager.acache_url(crawl_result)
 
-                    return crawl_result
+                    return CrawlResultContainer(crawl_result)
 
                 else:
-                    self.logger.success(
-                        message="{url:.50}... | Status: {status} | Total: {timing}",
+                    self.logger.url_status(
+                        url=cache_context.display_url,
+                        success=True,
+                        timing=time.perf_counter() - start_time,
                         tag="COMPLETE",
-                        params={
-                            "url": cache_context.display_url,
-                            "status": True,
-                            "timing": f"{time.perf_counter() - start_time:.2f}s",
-                        },
-                        colors={"status": Fore.GREEN, "timing": Fore.YELLOW},
                     )
-
                     cached_result.success = bool(html)
                     cached_result.session_id = getattr(config, "session_id", None)
                     cached_result.redirected_url = cached_result.redirected_url or url
-                    return cached_result
+                    return CrawlResultContainer(cached_result)
 
             except Exception as e:
                 error_context = get_error_context(sys.exc_info())
@@ -353,8 +299,10 @@ class AsyncOverrideCrawler(AsyncWebCrawler):
                     tag="ERROR",
                 )
 
-                return CrawlResult(
-                    url=url, html="", success=False, error_message=error_message
+                return CrawlResultContainer(
+                    CrawlResult(
+                        url=url, html="", success=False, error_message=error_message
+                    )
                 )
 
 
@@ -371,7 +319,7 @@ if __name__ == "__main__":
         memory_threshold_percent=70.0,
         check_interval=1.0,
         max_session_permit=10,
-        monitor=CrawlerMonitor(display_mode=DisplayMode.DETAILED),
+        monitor=CrawlerMonitor(),
     )
 
     run_config = CrawlerRunConfig(
@@ -398,7 +346,7 @@ if __name__ == "__main__":
             # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-ein-fach"
 
             # TODO tables
-            url = "https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/abschluesse-und-ordnungen/2-faecher-bachelor"
+            url = "https://uni-osnabrueck.de/studieren/kosten-stipendien-und-foerderung/kosten-des-studiums"
             # url = "https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/abschluesse-und-ordnungen/lehramt-bachelor-und-master/lehramt-an-gymnasien"
             # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung#c31478"
             # url = "https://www.studentenwerk-osnabrueck.de/de/ueber-uns.html"
@@ -410,9 +358,7 @@ if __name__ == "__main__":
                 "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-zwei-faecher",
                 "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-ein-fach",
             ]
-            results = await crawler.arun_many(
-                urls=urls, config=run_config, dispatcher=dispatcher
-            )
+            results = await crawler.arun(url=url, config=run_config)
             print(results)
 
     asyncio.run(crawl())

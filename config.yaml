@@ -10,7 +10,7 @@ legal:
 
 application:
   debug: True
-  tracing: True
+  tracing: False # used by opik
   # If you want to use the tracing feature, you need to set up a tracing provider (Opik)
   opik_project_name: "askUOSTesting"
   recursion_limit: 8 # default is 12 https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
