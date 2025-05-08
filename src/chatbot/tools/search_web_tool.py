@@ -3,9 +3,11 @@ import sys
 
 sys.path.append("/app")
 import asyncio
+from typing import List
 
 import aiohttp
 import dotenv
+import streamlit as st
 from aiohttp import ClientSession
 
 # https://github.com/Krukov/cashews?tab=readme-ov-file#template-keys
@@ -29,12 +31,9 @@ from src.chatbot.agents.utils.agent_helpers import llm as sumarize_llm
 from src.chatbot.tools.utils.custom_crawl import AsyncOverrideCrawler
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import (
-    VisitedLinks,
     decode_string,
-    do_not_visit_links,
     extract_html_text,
     extract_pdf_text,
-    visited_links,
 )
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
@@ -210,7 +209,7 @@ class SearchUniWebTool:
         url: str,
         about_application: bool,
         max_num_links: int = MAX_NUM_LINKS,
-        visited_links: VisitedLinks = visited_links,
+        do_not_visit_links: List = [],
     ) -> tuple[str, list]:
 
         # get num tokens (prompt + chat history+query)
@@ -218,7 +217,7 @@ class SearchUniWebTool:
             self.query
         )
 
-        self.contents = []
+        contents = []
         self.links_search = []
 
         async with aiohttp.ClientSession() as session:
@@ -249,18 +248,16 @@ class SearchUniWebTool:
             if i >= max_num_links:
                 if about_application:
                     for url_ in APPLICATION_CONTEXT_URLS:
-                        if url_ not in visited_links():
-                            visited_links().append(url_)
-                            urls.append(url_)
+                        if url_ in urls or url_ in do_not_visit_links:
+                            continue
+                        urls.append(url_)
 
                 break
-            if href in visited_links() or href in do_not_visit_links():
+
+            # Links that were visited in a graph run should not be visited again
+            if href in urls or href in do_not_visit_links:
                 continue
 
-            # these are used as references for the generated text
-            visited_links().append(href)
-            # Links that were visited in a graph run should not be visited again
-            do_not_visit_links().append(href)
             urls.append(href)
 
         if urls:
@@ -273,7 +270,7 @@ class SearchUniWebTool:
             #     if results:
             #         for result in results:
             #             if result.success:
-            #                 self.contents.append(
+            #                 contents.append(
             #                     f"Information taken from: {result.url}\n{result.markdown}"
             #                 )
 
@@ -285,35 +282,39 @@ class SearchUniWebTool:
                     )
                     if result:
                         if result.success:
-                            self.contents.append(
+                            contents.append(
                                 f"Information taken from: {result.url}\n{result.markdown}"
                             )
 
         # summarize the content if the total tokens exceed the limit
         # TODO this needs to be async and generate summary cached
-        if self.contents:
+        if contents:
             # order the contents by the index
-            self.contents = sorted(self.contents, key=lambda x: x[1])
-            # self.contents = [x[0] for x in self.contents]
-            total_tokens, _ = self.compute_tokens("".join(self.contents))
+            contents = sorted(contents, key=lambda x: x[1])
+            # contents = [x[0] for x in contents]
+            total_tokens, _ = self.compute_tokens("".join(contents))
             if total_tokens > settings.model.context_window:
-                for i, text in enumerate(reversed(self.contents)):
-                    # original_index = len(self.contents) - i - 1
+                for i, text in enumerate(reversed(contents)):
+                    # original_index = len(contents) - i - 1
                     # start summarizing from the last text fetched (assumed to be the least important/relevant)
-                    self.contents[i] = await self.generate_summary(text, self.query)
+                    contents[i] = await self.generate_summary(text, self.query)
                     # update the total tokens
-                    total_tokens, _ = self.compute_tokens("".join(self.contents))
+                    total_tokens, _ = self.compute_tokens("".join(contents))
                     if total_tokens <= settings.model.context_window:
                         break
 
+        return urls, contents
+
     def run(
         self,
-        query: str,
-        about_application: bool = False,
-        single_subject: bool = False,
-        two_subject: bool = False,
-        teaching_degree: bool = False,
-    ) -> str:
+        # query: str,
+        # about_application: bool = False,
+        # single_subject: bool = False,
+        # two_subject: bool = False,
+        # teaching_degree: bool = False,
+        # do_not_visit_links: List = None,
+        **kwargs,
+    ) -> tuple[str, list]:
         """
         Searches the University of Osnabrück website based on the given query.
 
@@ -332,15 +333,19 @@ class SearchUniWebTool:
         try:
             # TODO FIX dependency injection and circular dependency/import
             self.agent_executor = CampusManagementOpenAIToolsAgent.run()
-            self.query = query
+            self.query = kwargs["query"]
             query_url = decode_string(self.query)
             url = SEARCH_URL + query_url
 
-            asyncio.run(
-                self.visit_urls_extract(url=url, about_application=about_application)
+            visited_urls, contents = asyncio.run(
+                self.visit_urls_extract(
+                    url=url,
+                    about_application=kwargs["about_application"],
+                    do_not_visit_links=kwargs["do_not_visit_links"],
+                )
             )
 
-            final_output = "\n".join(self.contents)
+            final_output = "\n".join(contents)
 
             if final_output:
                 # for tesing
@@ -353,7 +358,11 @@ class SearchUniWebTool:
                 # settings.final_output_tokens.append(final_output_tokens)
                 # settings.final_search_tokens.append(final_search_tokens)
 
-            return final_output if self.contents else self.no_content_found_message
+            return (
+                (final_output, visited_urls)
+                if contents
+                else (self.no_content_found_message, visited_urls)
+            )
 
         except ProgrammableSearchException as e:
             logger.exception(f"Error: search engine: {e}", exc_info=True)

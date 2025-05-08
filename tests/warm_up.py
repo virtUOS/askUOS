@@ -7,22 +7,25 @@ from typing import List
 
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 
+# do not include repeated queries or very similar queries (tests may fail)
 warm_up_queries = [
-    "What are the application deadlines for the fall and spring semesters for the Computer Science Program?",
-    "Was kann ich tun, wenn ich keinen Studienplatz im Master Sport bekommen habe?",
     "hi",
-    "According to the examination regulations, can I write my Master's thesis in English?, Mathematics",
-    "How do I apply for on-campus housing, and what meal plans are available?",
-    "According to the examination regulations, how are the thesis and oral exam graded?, Mathematics",
-    "Was kann ich tun, wenn ich keinen Studienplatz im Master Sport bekommen habe?",
+    "who are you",
+    "hi there",
+    "How do I apply for on-campus housing?",
     "Für welche Studiengänge brauche ich ein Latinum?",
     "Wo liegt der NC bei Sport?",
+    "Wie viele ECTS-Punkte habe ich in meinem Bachelor (Mathematik)?",
+    "According to the examination regulations, how are the thesis and oral exam graded?, Mathematics",
     "Wie viele ECTS-Punkte habe ich in meinem Bachelor (Biologie)?",
     "Muss ich im Grundschullehramt Mathe und Deutsch studieren?",
     "Welche Schnupperangebote bietet die Uni OS?",
     "Kann ich Biologie und Sport auf Lehramt studieren?",
+    "What are the application deadlines for the fall and spring semesters for the Computer Science Program?",
+    "Was kann ich tun, wenn ich keinen Studienplatz im Master Sport bekommen habe?",
     "Brauche ich für eine Zweitstudienbewerbung in Psychologie den Eignungstest?",
     "Kann ich Politik auf Lehramt studieren?",
+    "According to the examination regulations, can I write my Master's thesis in English?, Mathematics",
     "Kann ich Geschichte als Hauptfach studieren?",
     "Welchen NC brauche ich für Psychologie?",
 ]

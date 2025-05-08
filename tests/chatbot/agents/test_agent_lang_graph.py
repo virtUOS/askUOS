@@ -57,6 +57,28 @@ class TestCampusManagementOpenAIToolsAgent(unittest.TestCase):
         self.assertEqual(filtered_messages[1].content, "5")
         self.assertEqual(filtered_messages[2].content, "6")
 
+    def test_shorten_conversation_summary(self):
+        """
+        Test the shorten_conversation_summary method of the CampusManagementOpenAIToolsAgent class.
+
+        """
+
+        messages = [
+            HumanMessage(content="Hello"),
+            AIMessage(content="Hi there!"),
+        ]
+        with patch("src.chatbot.agents.agent_lang_graph.MAX_TOKEN_SUMMARY", 2):
+            with patch(
+                "src.chatbot.agents.agent_lang_graph.CampusManagementOpenAIToolsAgent.shorten_conversation_summary"
+            ) as mock_shorten:
+                mock_shorten.return_value = AIMessage(content="Shortened Summary")
+                summary = self.agent.summarize_conversation(messages)
+                mock_shorten.assert_called_once()
+
+            self.assertIn("Shortened Summary", summary)
+
+        print(summary)
+
     # @patch.object(CampusManagementOpenAIToolsAgent, "shorten_conversation_summary")
     # @patch.object(CampusManagementOpenAIToolsAgent, "_llm")
     # def test_summarize_conversation(self, mock_llm, mock_shorten_conversation_summary):
@@ -88,3 +110,4 @@ class TestCampusManagementOpenAIToolsAgent(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+    print()

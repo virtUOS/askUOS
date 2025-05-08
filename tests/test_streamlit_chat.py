@@ -21,7 +21,8 @@ class BaseTestStreamlitApp(unittest.TestCase):
         at2 = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=90).run()
         at3 = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=90).run()
 
-        apps = [[at1, 0], [at2, 0], [at3, 0]]
+        # [instance of the app,keep track of the number of messages in the session state, [user_query_1, user_query_2,...]]
+        apps = [[at1, 0, []], [at2, 0, []], [at3, 0, []]]
 
         def get_query():
             for q in warm_up_queries:
@@ -35,6 +36,8 @@ class BaseTestStreamlitApp(unittest.TestCase):
                     # initial message count
                     at[1] = len(at[0].session_state["messages"]) or 0
                     test_query = next(query_generator)
+                    # add the query to the list of queries
+                    at[2].append(test_query)
                     at[0].chat_input[0].set_value(test_query).run()
                     assert not at[0].exception
                     # check if the message count increased
@@ -55,12 +58,37 @@ class BaseTestStreamlitApp(unittest.TestCase):
                             ),
                         )
 
-                    # TODO CHECK IF THE GENERATED ANSWERS HAS ANYTHING TO DO WITH THE QUERY
                     time.sleep(2)
+                # [[link_1, link_2,...],[],[]]
+                visited_links = [
+                    app[0].session_state["agent"]._visited_links for app in apps
+                ]
+                tuple_visited_links = [tuple(i) for i in visited_links if i]
+                if tuple_visited_links:
+
+                    # since the queries are different, the visited links should be different
+                    self.assertEqual(
+                        len(tuple_visited_links),
+                        len(set(tuple_visited_links)),
+                        f"The visited links are not unique across users. {visited_links}",
+                    )
             except StopIteration:
                 break
 
         for at in apps:
+            # check if the number of messages is equal to the number of queries * 2 + 1 (1 accounts for the AI initial message e.g., "Hi, I am an AI assistant")
+            # each iteration generates two messages: user and assistant
+            self.assertEqual(
+                len(at[0].session_state["messages"]),
+                (len(at[2]) * 2) + 1,
+                f"The number of messages is not equal to the number of queries. {at[0].session_state['messages']}",
+            )
+            # check if the queries are the same as the ones sent by the user
+            for m in at[0].session_state["messages"]:
+                if m["role"] == "user":
+                    self.assertIn(m["content"], at[2])
+            # TODO CHECK IF THE GENERATED ANSWERS HAve ANYTHING TO DO WITH THE QUERY
+
             summary_length = []
             for s in at[0].session_state["conversation_summary"]:
                 summary_length.append(llm().get_num_tokens(s))

@@ -17,11 +17,7 @@ from src.chatbot.agents.utils.exceptions import MaxMessageHistoryException
 from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.prompt.prompt_date import get_current_date
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
-from src.chatbot.tools.utils.tool_helpers import (
-    do_not_visit_links,
-    visited_docs,
-    visited_links,
-)
+from src.chatbot.tools.utils.tool_helpers import visited_docs
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
@@ -103,29 +99,24 @@ class ChatApp:
             if st.session_state.messages[-1]["role"] != "assistant":
                 self.generate_response(prompt)
 
+    def get_agent(self):
+        if st.session_state["agent"] is None:
+            st.session_state["agent"] = CampusManagementOpenAIToolsAgent.run(
+                language=session_state["selected_language"]
+            )
+            st.session_state["agent_language"] = session_state["selected_language"]
+
+        if st.session_state["selected_language"] != st.session_state["agent_language"]:
+            st.session_state["agent_language"] = st.session_state["selected_language"]
+            st.session_state["agent"] = CampusManagementOpenAIToolsAgent.run(
+                language=session_state["selected_language"]
+            )
+        return st.session_state["agent"]
+
     def generate_response(self, prompt):
         """Generate a response from the assistant based on user prompt."""
 
-        def get_agent():
-            if st.session_state["agent"] is None:
-                st.session_state["agent"] = CampusManagementOpenAIToolsAgent.run(
-                    language=session_state["selected_language"]
-                )
-                st.session_state["agent_language"] = session_state["selected_language"]
-
-            if (
-                st.session_state["selected_language"]
-                != st.session_state["agent_language"]
-            ):
-                st.session_state["agent_language"] = st.session_state[
-                    "selected_language"
-                ]
-                st.session_state["agent"] = CampusManagementOpenAIToolsAgent.run(
-                    language=session_state["selected_language"]
-                )
-            return st.session_state["agent"]
-
-        graph = get_agent()
+        graph = self.get_agent()
 
         # graph = CampusManagementOpenAIToolsAgent.run(
         #     language=session_state["selected_language"]
@@ -166,7 +157,8 @@ class ChatApp:
             # deleteme = []
 
             def _get_stream():
-                do_not_visit_links.clear()
+                # if there are links from the previous query, clear them
+                graph._visited_links = []
                 for msg, metadata in graph._graph.stream(
                     {
                         "messages": system_user_prompt,
@@ -305,7 +297,7 @@ class ChatApp:
                 if visited_docs():
                     self.display_visited_docs()
 
-                if visited_links():
+                if graph._visited_links:
                     self.display_visited_links()
 
             # self.store_response(response, prompt)
@@ -361,8 +353,9 @@ class ChatApp:
     def display_visited_links(self):
         """Display the links visited for the current user query."""
 
+        graph = self.get_agent()
         with st.expander(session_state["_"]("Sources")):
-            for link in visited_links():
+            for link in graph._visited_links:
                 st.markdown(
                     f"""
                     
@@ -373,7 +366,6 @@ class ChatApp:
                         """,
                     unsafe_allow_html=True,
                 )
-        visited_links.clear()
 
     def store_response(
         self, output: str, prompt: str, graph: CampusManagementOpenAIToolsAgent

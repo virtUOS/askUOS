@@ -102,61 +102,61 @@ def extract_html_text(href: str, result) -> str:
     # return ""
 
 
-class VisitedLinks:
-    """
-    Singleton class to keep track of visited links.
-    It maintains a list of links that have been visited.
-    Attributes:
-        _instance (VisitedLinks): The singleton instance of the class.
-        links (list): A list to store visited links.
-    """
+# class VisitedLinks:
+#     """
+#     Singleton class to keep track of visited links.
+#     It maintains a list of links that have been visited.
+#     Attributes:
+#         _instance (VisitedLinks): The singleton instance of the class.
+#         links (list): A list to store visited links.
+#     """
 
-    _instance = None
+#     _instance = None
 
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(VisitedLinks, cls).__new__(cls)
-        return cls._instance
+#     def __new__(cls):
+#         if cls._instance is None:
+#             cls._instance = super(VisitedLinks, cls).__new__(cls)
+#         return cls._instance
 
-    def __init__(self) -> None:
-        if not self.__dict__:
-            self.urls = []
+#     def __init__(self) -> None:
+#         if not self.__dict__:
+#             self.urls = []
 
-    def clear(self):
-        """
-        Cleans the list of visited links.
-        """
-        self.urls = []
+#     def clear(self):
+#         """
+#         Cleans the list of visited links.
+#         """
+#         self.urls = []
 
-    def __call__(self):
-        return self.urls
+#     def __call__(self):
+#         return self.urls
 
 
-class DoNotVisitLinks:
-    """
-    Singleton class to keep track of links that should not be visited.
-    It maintains a list of links that should be ignored.
-    """
+# class DoNotVisitLinks:
+#     """
+#     Singleton class to keep track of links that should not be visited.
+#     It maintains a list of links that should be ignored.
+#     """
 
-    _instance = None
+#     _instance = None
 
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(DoNotVisitLinks, cls).__new__(cls)
-        return cls._instance
+#     def __new__(cls):
+#         if cls._instance is None:
+#             cls._instance = super(DoNotVisitLinks, cls).__new__(cls)
+#         return cls._instance
 
-    def __init__(self) -> None:
-        if not self.__dict__:
-            self.urls = []
+#     def __init__(self) -> None:
+#         if not self.__dict__:
+#             self.urls = []
 
-    def clear(self):
-        """
-        Cleans the list of visited links.
-        """
-        self.urls = []
+#     def clear(self):
+#         """
+#         Cleans the list of visited links.
+#         """
+#         self.urls = []
 
-    def __call__(self):
-        return self.urls
+#     def __call__(self):
+#         return self.urls
 
 
 class ReferenceRetriever:
@@ -198,5 +198,5 @@ class ReferenceRetriever:
 
 
 visited_docs = ReferenceRetriever()
-visited_links = VisitedLinks()
-do_not_visit_links = DoNotVisitLinks()
+# visited_links = VisitedLinks()
+# do_not_visit_links = DoNotVisitLinks()

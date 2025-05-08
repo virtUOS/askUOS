@@ -28,7 +28,7 @@ from src.chatbot.prompt.main import (
     get_system_prompt,
     translate_prompt,
 )
-from src.chatbot.tools.utils.tool_helpers import visited_docs, visited_links
+from src.chatbot.tools.utils.tool_helpers import visited_docs
 from src.chatbot.tools.utils.tool_schema import RetrieverInput, SearchInputWeb
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
@@ -45,6 +45,7 @@ class State(TypedDict):
     """State management for the graph-based agent.
 
     Attributes:
+
         messages: List of messages in the conversation
         search_query: Optional list of queries used for web/db searches
         user_initial_query: Optional string containing the user's initial query
@@ -61,7 +62,9 @@ class State(TypedDict):
     current_date: Optional[str]
     answer_rejection: Optional[str]
     score_judgement_binary: Optional[str]
-    about_application: Optional[bool] = False
+    about_application: Optional[bool] = (
+        False  # To determine which node generates the answer
+    )
     tool_messages: Optional[str]
     last_tool_usage: Optional[str]
 
@@ -331,8 +334,10 @@ class GraphNodesMixin:
     def tool_node(self, state: Dict) -> Dict:
         """Process tool calls."""
 
+        from src.chatbot.tools.search_web_tool import search_uni_web
+
         # Clear the list of visited links
-        visited_links.clear()
+        self._visited_links = []
         if messages := state.get("messages", []):
             message = messages[-1]
         else:
@@ -346,13 +351,25 @@ class GraphNodesMixin:
 
         for tool_call in message.tool_calls:
             try:
-                tool_result = self._tools_by_name[tool_call["name"]].invoke(
-                    tool_call["args"]
-                )
+
                 # TODO Write test for this
                 if tool_call["name"] == "custom_university_web_search":
                     about_application = tool_call["args"].get(
                         "about_application", False
+                    )
+                    tool_call["args"]["do_not_visit_links"] = self._visited_links
+                    # tool_result = self._tools_by_name[tool_call["name"]].invoke(
+                    #     tool_call["args"]
+                    # )
+                    tool_result = search_uni_web.run(**tool_call["args"])
+                    # the web search can take place several times while processing the same query, visited links keeps track of the links
+                    # that have already been visited across all the searches within the same graph run
+                    self._visited_links += tool_result[1]
+                    tool_result = tool_result[0]
+
+                else:
+                    tool_result = self._tools_by_name[tool_call["name"]].invoke(
+                        tool_call["args"]
                     )
             except Exception as e:
                 logger.exception(
@@ -564,6 +581,8 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
     _chat_history: List[Dict] = PrivateAttr(default=[])
     _prompt_length: int = PrivateAttr(default=None)
     _agent_direct_msg: str = PrivateAttr(default=None)
+    _visited_links: List[str] = PrivateAttr(default=[])
+
     # _clean_tool_message: str = PrivateAttr(default=None)
     # _curated_answer: str = PrivateAttr(default=None)
 
