@@ -365,6 +365,8 @@ class GraphNodesMixin:
                     # the web search can take place several times while processing the same query, visited links keeps track of the links
                     # that have already been visited across all the searches within the same graph run
                     self._visited_links += tool_result[1]
+                    # TODO IF no results are found, the tool result is empty and the agent should generate a new query and search again
+                    # TODO even when no results are found, the entire graph executes e.g. grade_documents edge
                     tool_result = tool_result[0]
 
                 else:
@@ -393,6 +395,8 @@ class GraphNodesMixin:
 
         last_tool_usage = state["messages"][-1].additional_kwargs
         state["messages"] = state["messages"][:-1]  # remove the last AI message
+
+        # TODO IF no results are found, the tool result is empty and the agent should generate a new query and search again
         return {
             "tool_messages": outputs_txt,
             "last_tool_usage": last_tool_usage,  # last ai message with previous tool usage

@@ -155,7 +155,7 @@ class SearchUniWebTool:
         about_application: bool,
         max_num_links: int = MAX_NUM_LINKS,
         do_not_visit_links: List = [],
-    ) -> tuple[str, list]:
+    ) -> tuple[List, list]:
 
         # get num tokens (prompt + chat history+query)
         self.internal_num_tokens = self.agent_executor.compute_internal_tokens(
@@ -177,14 +177,28 @@ class SearchUniWebTool:
                         f"Failed: Programmable Search Engine. Status: {response.status}"
                     )
                 # parse json response
-                dict_reponse = await response.json()
+                dict_response = await response.json()
 
                 # extract search results
-                self.links_search = [item["link"] for item in dict_reponse["items"]]
+
+                # check if there are results
+                total_results = dict_response.get("searchInformation", {}).get(
+                    "totalResults", 0
+                )
+                if int(total_results) > 0:
+
+                    self.links_search = [
+                        item["link"] for item in dict_response["items"]
+                    ]
+                else:
+                    logger.warning(
+                        f"[ProgrammableSearch] No results found by the search engine while requesting this URL: {url}"
+                    )
+                    return [], []
 
         urls = []
         for i, href in enumerate(self.links_search):
-            # href = str(tag.get("href"))
+            # href = str(tag.get("href"))s
             # Check for previously visited links
             if href.endswith(".pdf"):
                 # TODO pdf files need to be handled differently (Vector DB for example)
