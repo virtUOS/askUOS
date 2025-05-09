@@ -60,4 +60,28 @@ class ChatLlm:
         return self.llm_chat_open_ai
 
 
+class ChatLlmOptional:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(ChatLlmOptional, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        if not self.__dict__:
+
+            self.llm_chat_open_ai = ChatOpenAI(
+                model="gpt-4.1-nano",
+                temperature=0,
+                streaming=True,
+                callbacks=[StdOutCallbackHandler()],
+            )
+
+    def __call__(self, *args, **kwargs) -> Any:
+        return self.llm_chat_open_ai
+
+
 llm = ChatLlm()
+# currenlty being used for summarization and grading documents (edge grade_documents (graph))
+llm_optional = ChatLlmOptional()

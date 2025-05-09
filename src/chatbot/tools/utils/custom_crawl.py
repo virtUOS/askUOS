@@ -325,7 +325,8 @@ if __name__ == "__main__":
     run_config = CrawlerRunConfig(
         stream=False,
         cache_mode=CacheMode.ENABLED,
-        css_selector="main",
+        # css_selector="div.eb2",
+        target_elements=["main", "div.eb2"],
         scan_full_page=True,
         # markdown_generator=DefaultMarkdownGenerator(
         #     content_filter=PruningContentFilter(
@@ -336,14 +337,6 @@ if __name__ == "__main__":
 
     async def crawl():
         async with AsyncOverrideCrawler(config=browser_config) as crawler:
-
-            # url = "https://zilliz.com/blog/sharding-partitioning-segments-get-most-from-your-database"
-            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung"
-            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-zwei-faecher#c52103"
-            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/bachelorstudiengaenge-zwei-faecher-zulassungsbeschraenkt"
-            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/bachelorstudiengaenge-ein-fach-zulassungsfrei"
-            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-zwei-faecher"
-            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-ein-fach"
 
             # TODO tables
             url = "https://uni-osnabrueck.de/studieren/kosten-stipendien-und-foerderung/kosten-des-studiums"
@@ -357,8 +350,25 @@ if __name__ == "__main__":
                 "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/bachelorstudiengaenge-ein-fach-zulassungsfrei",
                 "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-zwei-faecher",
                 "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-ein-fach",
+                "https://www.lili.uni-osnabrueck.de/fachbereich/studium_und_lehre/pruefungsamt/haeufig_gestellte_fragen.html",
             ]
-            results = await crawler.arun(url=url, config=run_config)
+            # url that does not comply with the new website rules
+            old_url = "https://www.lili.uni-osnabrueck.de/fachbereich/studium_und_lehre/pruefungsamt/haeufig_gestellte_fragen.html"
+            # results = await crawler.arun(
+            #     # url="https://www.ikw.uni-osnabrueck.de/en/research_groups/artificial_intelligence/overview.html",
+            #     # url=old_url,
+            #     url=url,
+            #     config=run_config,
+            # )
+            # print(results)
+
+            results = await crawler.arun_many(
+                # url="https://www.ikw.uni-osnabrueck.de/en/research_groups/artificial_intelligence/overview.html",
+                # url=old_url,
+                urls=urls,
+                dispatcher=dispatcher,
+                config=run_config,
+            )
             print(results)
 
     asyncio.run(crawl())

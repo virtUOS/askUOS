@@ -19,7 +19,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
-from src.chatbot.agents.utils.agent_helpers import llm
+from src.chatbot.agents.utils.agent_helpers import llm, llm_optional
 from src.chatbot.agents.utils.agent_retriever import _get_relevant_documents
 from src.chatbot.agents.utils.exceptions import MustContainSystemMessageException
 from src.chatbot.db.clients import get_retriever
@@ -136,7 +136,7 @@ class GraphEdgesMixin:
             #     description="From the retrieved documents, which paragraphs are relevant to answer the user query? Extract all relevant paragraphs from the retrieved documents."
             # )
 
-        llm_with_str_output = self._llm.with_structured_output(GradeResult)
+        llm_with_str_output = self._llm_optional.with_structured_output(GradeResult)
         prompt = PromptTemplate(
             template=translate_prompt()["grading_llm"],
             input_variables=["context", "question"],
@@ -572,6 +572,8 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
 
     # TODO have a global llm object, that can be used throgout the application
     _llm: ChatOpenAI = PrivateAttr(default=None)
+    # faster llm used for e.g., summarization
+    _llm_optional: ChatOpenAI = PrivateAttr(default=None)
     # important: the code uses function calling as opposed to tool calling. (DEPENDS ON THE MODEL and how it was fine tuned)
     _llm_with_tools: ChatOpenAI = PrivateAttr(default=None)
     # _llm_answer_grader: ChatOpenAI = PrivateAttr(default=None)
@@ -614,6 +616,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             logger.debug(f"Language set to: {self.language}")
 
             self._llm = llm()
+            self._llm_optional = llm_optional()
 
             tools = GraphNodesMixin.create_tools()
             self._tools_by_name = {tool.name: tool for tool in tools}
@@ -628,7 +631,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
         template = translate_prompt()["shorten_conversation_summary"]
 
         prompt = PromptTemplate(template=template, input_variables=["summary"])
-        chain = prompt | self._llm
+        chain = prompt | self._llm_optional
 
         response = chain.invoke({"summary": summary})
 
@@ -647,7 +650,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
         prompt = PromptTemplate(
             template=template, input_variables=["messages", "previous_summary"]
         )
-        chain = prompt | self._llm
+        chain = prompt | self._llm_optional
 
         # Prepare the arguments based on previous_summary availability
         invoke_args = {"messages": messages}
@@ -656,7 +659,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
 
         response = chain.invoke(invoke_args)
 
-        tokens_response = self._llm.get_num_tokens(response.content)
+        tokens_response = self._llm_optional.get_num_tokens(response.content)
         # To prevent the conversation summary from being too long, we can shorten it
         if tokens_response > MAX_TOKEN_SUMMARY:
 

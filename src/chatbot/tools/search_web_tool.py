@@ -27,14 +27,10 @@ from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
-from src.chatbot.agents.utils.agent_helpers import llm as sumarize_llm
+from src.chatbot.agents.utils.agent_helpers import llm_optional as sumarize_llm
 from src.chatbot.tools.utils.custom_crawl import AsyncOverrideCrawler
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
-from src.chatbot.tools.utils.tool_helpers import (
-    decode_string,
-    extract_html_text,
-    extract_pdf_text,
-)
+from src.chatbot.tools.utils.tool_helpers import decode_string
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
@@ -76,7 +72,11 @@ class SearchUniWebTool:
             )
             self.run_config = CrawlerRunConfig(
                 cache_mode=CacheMode.ENABLED,
-                css_selector="main",
+                # css_selector="main",
+                target_elements=[
+                    "main",
+                    "div.eb2",
+                ],  # eb2 is the class for the main content (old website)
                 scan_full_page=True,
                 stream=False,
                 # markdown_generator=DefaultMarkdownGenerator(
@@ -148,61 +148,6 @@ class SearchUniWebTool:
 
         total_tokens = self.internal_num_tokens + current_search_num_tokens
         return total_tokens, current_search_num_tokens
-
-    async def fetch_url_deprecated(
-        self, session: ClientSession, url: str, index: int
-    ) -> tuple[str, int]:
-        """
-        Fetches the content from a given URL asynchronously.
-        Args:
-            session (ClientSession): The aiohttp client session to use for making the request.
-            url (str): The URL to fetch content from.
-            index (int): Used to ensure the order of the links is preserved
-        Returns:
-            str: The extracted text content from the URL, prefixed with a source information string.
-                Returns None if an error occurs or the response status is not 200.
-        Raises:
-            Exception: Logs any exceptions that occur during the fetch process.
-        """
-
-        # TODO the function needs to return the text fetched from the URL
-        @cache(ttl="2h")
-        async def process_url(url):
-
-            taken_from = "Information taken from: "
-            try:
-                if url.endswith(".pdf"):
-                    async with session.get(url) as response:
-                        if response.status == 200:
-                            # TODO pdf files need to be handled differently (Vector DB for example)
-
-                            # TODO read pdf using response.stream(), so that the whole pdf is not loaded into memory. Process every stream
-                            # TODO as soon as it is available (see online algorithm)
-                            pdf_bytes = (
-                                await response.read()
-                            )  # Read PDF content as bytes
-                            text = (
-                                f"{taken_from}{url}\n{extract_pdf_text(url, pdf_bytes)}"
-                            )
-                else:
-                    async with AsyncOverrideCrawler(
-                        config=self.browser_config
-                    ) as crawler:
-                        result = await crawler.arun(
-                            url=url,
-                            config=self.run_config,
-                        )
-                    text = f"{taken_from}{url}\n{extract_html_text(url, result)}"
-                # # 1 token ~= 4 chars in English  --> https://help.openai.com/en/articles/4936856-what-are-tokens-and-how-to-count-them
-
-                return text, index
-
-            except Exception as e:
-                logger.exception(f"Error while fetching: {url} - {e}")
-
-                return f"Error fetching content from: {url}", index
-
-        return await process_url(url)
 
     async def visit_urls_extract(
         self,
@@ -281,9 +226,9 @@ class SearchUniWebTool:
                         config=self.run_config,
                     )
                     if result:
-                        if result.success:
+                        if result[0].success:
                             contents.append(
-                                f"Information taken from: {result.url}\n{result.markdown}"
+                                f"Information taken from: {result[0].url}\n{result[0].markdown}"
                             )
 
         # summarize the content if the total tokens exceed the limit

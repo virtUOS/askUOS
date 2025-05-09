@@ -1,5 +1,5 @@
 model:
-  model_name: "gpt-4o-mini"
+  model_name: "gpt-4.1-mini"
   context_window: 50000 #128000 # in tokens (for pricing reasons you may want to keep this low and not higher than openai max tokens)
 
 language: "Deutsch"  # Literal["Deutch", "English"]. 
