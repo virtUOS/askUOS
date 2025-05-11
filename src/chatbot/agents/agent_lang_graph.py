@@ -120,7 +120,12 @@ class GraphEdgesMixin:
         Returns:
             Literal["generate", "rewrite"]: Decision on document relevance
         """
-        tool_messages = state.get("tool_messages", None)
+
+        tool_messages = state.get("tool_messages", "")
+        if len(tool_messages) < 10:
+            logger.debug("[GRADE DOCUMENTS] No tool messages found")
+            return "rewrite"
+
         tool_query = " ".join(state["search_query"])
 
         class GradeResult(BaseModel):
@@ -337,7 +342,7 @@ class GraphNodesMixin:
         from src.chatbot.tools.search_web_tool import search_uni_web
 
         # Clear the list of visited links
-        self._visited_links = []
+        # self._visited_links = []--> done in ask_uos.py
         if messages := state.get("messages", []):
             message = messages[-1]
         else:

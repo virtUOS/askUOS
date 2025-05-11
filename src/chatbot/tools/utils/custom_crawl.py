@@ -326,7 +326,8 @@ if __name__ == "__main__":
         stream=False,
         cache_mode=CacheMode.ENABLED,
         # css_selector="div.eb2",
-        target_elements=["main", "div.eb2"],
+        # target_elements=["main", "div.eb2"],
+        target_elements=["main", "div#content"],
         scan_full_page=True,
         # markdown_generator=DefaultMarkdownGenerator(
         #     content_filter=PruningContentFilter(
@@ -352,23 +353,25 @@ if __name__ == "__main__":
                 "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-ein-fach",
                 "https://www.lili.uni-osnabrueck.de/fachbereich/studium_und_lehre/pruefungsamt/haeufig_gestellte_fragen.html",
             ]
-            # url that does not comply with the new website rules
+            # url that does not comply with the new website rules (Main content in div.eb2)
             old_url = "https://www.lili.uni-osnabrueck.de/fachbereich/studium_und_lehre/pruefungsamt/haeufig_gestellte_fragen.html"
-            # results = await crawler.arun(
-            #     # url="https://www.ikw.uni-osnabrueck.de/en/research_groups/artificial_intelligence/overview.html",
-            #     # url=old_url,
-            #     url=url,
-            #     config=run_config,
-            # )
-            # print(results)
-
-            results = await crawler.arun_many(
-                # url="https://www.ikw.uni-osnabrueck.de/en/research_groups/artificial_intelligence/overview.html",
+            old_url_eb1 = "https://www.psycho.uni-osnabrueck.de/studieninteressierte/bachelor_psychologie/studieneignungstest.html"
+            results = await crawler.arun(
+                url=url,
+                # url=old_url_eb1,
                 # url=old_url,
-                urls=urls,
-                dispatcher=dispatcher,
                 config=run_config,
             )
+
+            # results = await crawler.arun_many(
+            #     # url="https://www.ikw.uni-osnabrueck.de/en/research_groups/artificial_intelligence/overview.html",
+            #     # url=old_url,
+            #     urls=urls,
+            #     dispatcher=dispatcher,
+            #     config=run_config,
+            # )
+
+            # TODO !!! FOR TESTING MAKE SURE TO DELETE THE DB, OTHERWISE THE CACHED RESULTS WILL BE RETURNED
             print(results)
 
     asyncio.run(crawl())

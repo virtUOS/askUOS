@@ -17,7 +17,7 @@ langchain-milvus
 langgraph
 ipython
 tqdm
-milvus-cli
+# milvus-cli
 pymilvus
 pandas
 seaborn

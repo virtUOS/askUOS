@@ -66,6 +66,10 @@ class SearchUniWebTool:
     def __init__(self):
         if not self.__dict__:  # to avoid reinitializing the object
             self.no_content_found_message = "Content not found"
+            self.target_elements = [
+                "main",
+                "div#content",
+            ]
             self.browser_config = BrowserConfig(
                 headless=True,
                 verbose=True,
@@ -73,10 +77,7 @@ class SearchUniWebTool:
             self.run_config = CrawlerRunConfig(
                 cache_mode=CacheMode.ENABLED,
                 # css_selector="main",
-                target_elements=[
-                    "main",
-                    "div.eb2",
-                ],  # eb2 is the class for the main content (old website)
+                target_elements=self.target_elements,  # div#content needed for accessing the content from the old website
                 scan_full_page=True,
                 stream=False,
                 # markdown_generator=DefaultMarkdownGenerator(
@@ -204,7 +205,7 @@ class SearchUniWebTool:
                 # TODO pdf files need to be handled differently (Vector DB for example)
                 continue
 
-            if i >= max_num_links:
+            if len(urls) >= max_num_links:
                 if about_application:
                     for url_ in APPLICATION_CONTEXT_URLS:
                         if url_ in urls or url_ in do_not_visit_links:
@@ -241,8 +242,14 @@ class SearchUniWebTool:
                     )
                     if result:
                         if result[0].success:
+                            result_content = result[0].markdown
+                            if len(result_content) < 10:
+                                logger.warning(
+                                    f"[Crawling] The URL content could not be extracted. Make sure the content is contained in current target elements: {self.target_elements}. URL: {url}"
+                                )
+                                continue
                             contents.append(
-                                f"Information taken from: {result[0].url}\n{result[0].markdown}"
+                                f"Information taken from: {result[0].url}\n{result_content}"
                             )
 
         # summarize the content if the total tokens exceed the limit
@@ -317,11 +324,7 @@ class SearchUniWebTool:
                 # settings.final_output_tokens.append(final_output_tokens)
                 # settings.final_search_tokens.append(final_search_tokens)
 
-            return (
-                (final_output, visited_urls)
-                if contents
-                else (self.no_content_found_message, visited_urls)
-            )
+            return (final_output, visited_urls) if contents else ([], [])
 
         except ProgrammableSearchException as e:
             logger.exception(f"Error: search engine: {e}", exc_info=True)
@@ -331,7 +334,8 @@ class SearchUniWebTool:
 
         except Exception as e:
             logger.exception(f"Error while searching the web: {e}", exc_info=True)
-            return "Error while searching the web"
+            # return "Error while searching the web"
+            return [], []
 
 
 search_uni_web = SearchUniWebTool()
