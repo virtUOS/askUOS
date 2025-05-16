@@ -25,6 +25,8 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from redis import StrictRedis
+from redis_cache import RedisCache
 
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.agents.utils.agent_helpers import llm_optional as sumarize_llm
@@ -34,9 +36,8 @@ from src.chatbot.tools.utils.tool_helpers import decode_string
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
-# cache.setup("mem://?size=1000000&check_interval=5")
-# TODO Connect cache with a DB, Redis??
-cache.setup("mem://", size=1000)
+client = StrictRedis(host="redis", decode_responses=True)
+cache = RedisCache(redis_client=client)
 
 dotenv.load_dotenv()
 
@@ -191,6 +192,9 @@ class SearchUniWebTool:
                     self.links_search = [
                         item["link"] for item in dict_response["items"]
                     ]
+                    logger.debug(
+                        f"[ProgrammableSearch] Search Engine retuned {len(self.links_search)} results (links)"
+                    )
                 else:
                     logger.warning(
                         f"[ProgrammableSearch] No results found by the search engine while requesting this URL: {url}"
@@ -303,13 +307,28 @@ class SearchUniWebTool:
             query_url = decode_string(self.query)
             url = SEARCH_URL + query_url
 
-            visited_urls, contents = asyncio.run(
-                self.visit_urls_extract(
-                    url=url,
-                    about_application=kwargs["about_application"],
-                    do_not_visit_links=kwargs["do_not_visit_links"],
+            # visited_urls, contents = asyncio.run(
+            #     self.visit_urls_extract(
+            #         url=url,
+            #         about_application=kwargs["about_application"],
+            #         do_not_visit_links=kwargs["do_not_visit_links"],
+            #     )
+            # )
+            @cache.cache(ttl=60 * 60 * 24, limit=3000)
+            def _run(url=url):
+                logger.debug(
+                    "[ProgrammableSearch] Search Engine call required. No cache results"
                 )
-            )
+                visited_urls, contents = asyncio.run(
+                    self.visit_urls_extract(
+                        url=url,
+                        about_application=kwargs["about_application"],
+                        do_not_visit_links=kwargs["do_not_visit_links"],
+                    )
+                )
+                return visited_urls, contents
+
+            visited_urls, contents = _run()
 
             final_output = "\n".join(contents)
 

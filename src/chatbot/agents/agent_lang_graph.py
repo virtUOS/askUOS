@@ -123,7 +123,7 @@ class GraphEdgesMixin:
 
         tool_messages = state.get("tool_messages", "")
         if len(tool_messages) < 10:
-            logger.debug("[GRADE DOCUMENTS] No tool messages found")
+            logger.debug("[GRADE DOCUMENTS EDGE] No tool messages found")
             return "rewrite"
 
         tool_query = " ".join(state["search_query"])
@@ -159,12 +159,12 @@ class GraphEdgesMixin:
             if score.lower() in ["yes", "ja"]:
                 # TODO Further process the relevant paragraphs
                 # self._clean_tool_message = scored_result.relevant_paragraphs
-                logger.debug("---DECISION: DOCS RELEVANT---")
+                logger.debug("[GRADE DOCUMENTS EDGE] DECISION: DOCS RELEVANT")
                 if state.get("about_application", False):
                     return "generate_application"
                 return "generate"
             else:
-                logger.debug("---DECISION: DOCS NOT RELEVANT---")
+                logger.debug("[GRADE DOCUMENTS EDGE] DECISION: DOCS NOT RELEVANT")
                 return "rewrite"
         except Exception as e:
             raise e
@@ -329,6 +329,9 @@ class GraphNodesMixin:
 
         if score.judgement_binary.lower() == "no":
             msg = [HumanMessage(content=translate_prompt()["use_tool_msg"])]
+            logger.debug(
+                f"[JUGE NODE] The agent should have used a tool. Reason: {score.reason}"
+            )
             return {
                 "messages": state["messages"] + msg,
                 "score_judgement_binary": score.judgement_binary,
@@ -378,6 +381,9 @@ class GraphNodesMixin:
                     tool_result = self._tools_by_name[tool_call["name"]].invoke(
                         tool_call["args"]
                     )
+                logger.debug(
+                    f'[TOOL NODE] Successfully executed tool call:{tool_call["name"]}. Length of tool_resul: {len(tool_call)}'
+                )
             except Exception as e:
                 logger.exception(
                     f"Error invoking tool: {tool_call['name']} with args: tool_call['args']: {e}"
@@ -482,7 +488,7 @@ class GraphNodesMixin:
         Returns:
             Dict: Updated state with generated response
         """
-        logger.debug("---GENERATE---")
+        logger.debug("[GENERATE NODE] Generating answer")
 
         # tool_message = self._clean_tool_message or state.get("tool_messages", None)
         tool_message = state.get("tool_messages", None)
@@ -498,6 +504,7 @@ class GraphNodesMixin:
 
     def generate_application(self, state: State) -> Dict:
 
+        logger.debug(["GENERATE APPLICATION NODE] Generating answer"])
         # tool_message = self._clean_tool_message or state.get("tool_messages", None)
         tool_message = state.get("tool_messages", None)
         system_message_generate = SystemMessage(
@@ -637,6 +644,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
     def shorten_conversation_summary(self, summary: str) -> str:
         """Shorten the conversation summary if it exceeds the maximum token limit."""
 
+        logger.warning(f"[SHORTEN CONVERSATION SUMMARY] Summary length: {len(summary)}")
         template = translate_prompt()["shorten_conversation_summary"]
 
         prompt = PromptTemplate(template=template, input_variables=["summary"])
