@@ -4,6 +4,30 @@ import sys
 from logging.handlers import RotatingFileHandler
 
 
+class ColoredFormatter(logging.Formatter):
+    """Custom formatter with colors for different log levels"""
+
+    COLORS = {
+        logging.DEBUG: "\033[0;36m",  # Cyan
+        logging.INFO: "\033[0;32m",  # Green
+        logging.WARNING: "\033[0;33m",  # Yellow
+        logging.ERROR: "\033[0;31m",  # Red
+        logging.CRITICAL: "\033[0;37;41m",  # White on Red
+        "RESET": "\033[0m",  # Reset
+    }
+
+    def format(self, record):
+        # Add color to level name
+        levelname_color = self.COLORS.get(record.levelno, "")
+        record.levelname = f"{levelname_color}{record.levelname}{self.COLORS['RESET']}"
+
+        # Add color to message
+        msg_color = self.COLORS.get(record.levelno, "")
+        record.msg = f"{msg_color}{record.msg}{self.COLORS['RESET']}"
+
+        return super().format(record)
+
+
 class CsvFormatter(logging.Formatter):
     def format(self, record):
         created = self.formatTime(record, "%Y-%m-%d %H:%M:%S")
@@ -56,8 +80,8 @@ logger.addHandler(error_handler)
 # Create a console handler for debugging
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setLevel(logging.DEBUG)
-console_formatter = logging.Formatter(
+colored_formatter = ColoredFormatter(
     "%(asctime)s - %(name)s - %(levelname)s - %(message)s [File: %(pathname)s, Line: %(lineno)d]"
 )
-console_handler.setFormatter(console_formatter)
+console_handler.setFormatter(colored_formatter)
 logger.addHandler(console_handler)

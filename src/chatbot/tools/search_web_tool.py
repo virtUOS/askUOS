@@ -7,37 +7,20 @@ from typing import List
 
 import aiohttp
 import dotenv
-import streamlit as st
-from aiohttp import ClientSession
-
-# https://github.com/Krukov/cashews?tab=readme-ov-file#template-keys
-from cashews import cache
-from crawl4ai import (
-    BrowserConfig,
-    CacheMode,
-    CrawlerMonitor,
-    CrawlerRunConfig,
-    DisplayMode,
-)
+from crawl4ai import BrowserConfig, CacheMode, CrawlerMonitor, CrawlerRunConfig
 from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher
-from crawl4ai.content_filter_strategy import PruningContentFilter
-from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from redis import StrictRedis
-from redis_cache import RedisCache
 
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.agents.utils.agent_helpers import llm_optional as sumarize_llm
+from src.chatbot.db.redis_client import redis_manager
 from src.chatbot.tools.utils.custom_crawl import AsyncOverrideCrawler
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import decode_string
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
-
-client = StrictRedis(host="redis", decode_responses=True)
-cache = RedisCache(redis_client=client)
 
 dotenv.load_dotenv()
 
@@ -49,12 +32,18 @@ APPLICATION_CONTEXT_URLS = [
 ]
 
 
+# from cashews import cache
+# cache.setup("redis://redis:6379")
+
+# import redis.asyncio as redis
+
+# Redis client - basic connection
+# r = redis.Redis(host="redis", port=6379, decode_responses=True)
 SEARCH_URL = os.getenv("SEARCH_URL")
 MAX_NUM_LINKS = 4
 
 
 class SearchUniWebTool:
-
     _instance = None
 
     def __new__(cls):
@@ -151,6 +140,46 @@ class SearchUniWebTool:
         total_tokens = self.internal_num_tokens + current_search_num_tokens
         return total_tokens, current_search_num_tokens
 
+    def extract(self, cached_content):
+        import ast
+
+        try:
+            return ast.literal_eval(cached_content)
+        except Exception as e:
+            logger.exception(f"Could not extract cached content: {e}")
+
+    async def get_web_content(self, url: str):
+        cache_key = f"{__name__}:get_web_content:{url}"
+
+        try:
+            # Try to get from cache
+            cached_content = await redis_manager.get(cache_key)
+            if cached_content:
+                logger.debug("[REDIS] Retrieved (creawled) page content from cache")
+
+                return self.extract(cached_content)
+
+            logger.debug("[REDIS] No (crawled) page content cached in Redis")
+
+        except Exception as e:
+            logger.error(f"[REDIS] Error accessing (crawled) cache: {e}")
+
+        async with AsyncOverrideCrawler(config=self.browser_config) as crawler:
+            result = await crawler.arun(
+                url=url,
+                config=self.run_config,
+            )
+            if result and result[0].success:
+                result_url = result[0].url
+                result_content = result[0].markdown
+
+                # Cache the result only if greter than 20
+                if len(result_content) > 20:
+                    cache_value = str((result_url, result_content))
+                    await redis_manager.setex(cache_key, redis_manager.TTL, cache_value)
+                return result_url, result_content
+            return None, None
+
     async def visit_urls_extract(
         self,
         url: str,
@@ -225,36 +254,20 @@ class SearchUniWebTool:
             urls.append(href)
 
         if urls:
-            # async with AsyncOverrideCrawler(config=self.browser_config) as crawler:
-            #     results = await crawler.arun_many(
-            #         urls=urls,
-            #         config=self.run_config,
-            #         dispatcher=self.dispatcher,
-            #     )
-            #     if results:
-            #         for result in results:
-            #             if result.success:
-            #                 contents.append(
-            #                     f"Information taken from: {result.url}\n{result.markdown}"
-            #                 )
 
             for url in urls:
-                async with AsyncOverrideCrawler(config=self.browser_config) as crawler:
-                    result = await crawler.arun(
-                        url=url,
-                        config=self.run_config,
+
+                result_url, result_content = await self.get_web_content(url)
+
+                if result_content:
+                    if len(result_content) < 20:
+                        logger.warning(
+                            f"[Crawling] The URL content could not be extracted. Make sure the content is contained in current target elements: {self.target_elements}. URL: {url}"
+                        )
+                        continue
+                    contents.append(
+                        f"Information taken from: {result_url}\n{result_content}"
                     )
-                    if result:
-                        if result[0].success:
-                            result_content = result[0].markdown
-                            if len(result_content) < 10:
-                                logger.warning(
-                                    f"[Crawling] The URL content could not be extracted. Make sure the content is contained in current target elements: {self.target_elements}. URL: {url}"
-                                )
-                                continue
-                            contents.append(
-                                f"Information taken from: {result[0].url}\n{result_content}"
-                            )
 
         # summarize the content if the total tokens exceed the limit
         # TODO this needs to be async and generate summary cached
@@ -275,14 +288,67 @@ class SearchUniWebTool:
 
         return urls, contents
 
+    async def arun(self, **kwargs):
+
+        try:
+            # Initialize Redis if needed
+            await redis_manager.initialize()
+
+            self.query = kwargs["query"]
+            query_url = decode_string(self.query)
+            url = SEARCH_URL + query_url
+
+            cache_key = f"{__name__}:arun:{url}"
+            # try to get cached content
+
+            cached_content = await redis_manager.get(cache_key)
+            if cached_content:
+                logger.debug("[REDIS] Retrieved cached searched results (urls) ")
+                return self.extract(cached_content)
+
+            self.agent_executor = CampusManagementOpenAIToolsAgent.run()
+
+            visited_urls, contents = await self.visit_urls_extract(
+                url=url,
+                about_application=kwargs["about_application"],
+                do_not_visit_links=kwargs["do_not_visit_links"],
+            )
+
+            final_output = "\n".join(contents)
+
+            if final_output:
+                # for tesing
+                # TODO REMOVE
+                final_output_tokens, final_search_tokens = self.compute_tokens(
+                    final_output
+                )
+                logger.info(f"Search tokens: {final_search_tokens}")
+                logger.info(f"Final output (search + prompt): {final_output_tokens}")
+                # settings.final_output_tokens.append(final_output_tokens)
+                # settings.final_search_tokens.append(final_search_tokens)
+
+                # cache results
+                if len(final_output) > 20:
+                    cache_value = str((final_output, visited_urls))
+                    await redis_manager.client.setex(
+                        cache_key, redis_manager.TTL, cache_value
+                    )
+
+            return (final_output, visited_urls) if contents else ([], [])
+
+        except ProgrammableSearchException as e:
+            logger.exception(f"Error: search engine: {e}", exc_info=True)
+            raise ProgrammableSearchException(
+                f"Failed: Programmable Search Engine. Status: {e}"
+            )
+
+        except Exception as e:
+            logger.exception(f"Error while searching the web: {e}", exc_info=True)
+            # return "Error while searching the web"
+            return [], []
+
     def run(
         self,
-        # query: str,
-        # about_application: bool = False,
-        # single_subject: bool = False,
-        # two_subject: bool = False,
-        # teaching_degree: bool = False,
-        # do_not_visit_links: List = None,
         **kwargs,
     ) -> tuple[str, list]:
         """
@@ -299,62 +365,7 @@ class SearchUniWebTool:
             - This function is specifically designed to handle questions about the University of Osnabrück, such as the application process or studying at the university.
 
         """
-
-        try:
-            # TODO FIX dependency injection and circular dependency/import
-            self.agent_executor = CampusManagementOpenAIToolsAgent.run()
-            self.query = kwargs["query"]
-            query_url = decode_string(self.query)
-            url = SEARCH_URL + query_url
-
-            # visited_urls, contents = asyncio.run(
-            #     self.visit_urls_extract(
-            #         url=url,
-            #         about_application=kwargs["about_application"],
-            #         do_not_visit_links=kwargs["do_not_visit_links"],
-            #     )
-            # )
-            @cache.cache(ttl=60 * 60 * 24, limit=3000)
-            def _run(url=url):
-                logger.debug(
-                    "[ProgrammableSearch] Search Engine call required. No cache results"
-                )
-                visited_urls, contents = asyncio.run(
-                    self.visit_urls_extract(
-                        url=url,
-                        about_application=kwargs["about_application"],
-                        do_not_visit_links=kwargs["do_not_visit_links"],
-                    )
-                )
-                return visited_urls, contents
-
-            visited_urls, contents = _run()
-
-            final_output = "\n".join(contents)
-
-            if final_output:
-                # for tesing
-                # TODO REMOVE
-                final_output_tokens, final_search_tokens = self.compute_tokens(
-                    final_output
-                )
-                logger.info(f"Search tokens: {final_search_tokens}")
-                logger.info(f"Final output (search + prompt): {final_output_tokens}")
-                # settings.final_output_tokens.append(final_output_tokens)
-                # settings.final_search_tokens.append(final_search_tokens)
-
-            return (final_output, visited_urls) if contents else ([], [])
-
-        except ProgrammableSearchException as e:
-            logger.exception(f"Error: search engine: {e}", exc_info=True)
-            raise ProgrammableSearchException(
-                f"Failed: Programmable Search Engine. Status: {e}"
-            )
-
-        except Exception as e:
-            logger.exception(f"Error while searching the web: {e}", exc_info=True)
-            # return "Error while searching the web"
-            return [], []
+        return asyncio.run(self.arun(**kwargs))
 
 
 search_uni_web = SearchUniWebTool()
@@ -370,19 +381,7 @@ if __name__ == "__main__":
         sys.path.append("./test")
         from search_sample import search_sample
 
-    # content, anchor_tags = extract_and_visit_links(search_sample)
-
-    # @cache(ttl="2h")
-    # def test_cache(user_input):
-    #     print("function called")
-
-    # for i in range(5):
-    #     test_cache("test")
-
-    # test_cache("test2")
-
     search_uni_web_instance = SearchUniWebTool()
-    # query = "PO-Bachelor-Cognitive Science pdf"
     query = "can I study Biology?"
     search_result = search_uni_web_instance.run(query)
     search_result_2 = search_uni_web_instance.run(query)
