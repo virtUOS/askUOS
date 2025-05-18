@@ -65,6 +65,7 @@ class SearchUniWebTool:
                 # css_selector="main",
                 target_elements=self.target_elements,  # div#content needed for accessing the content from the old website
                 scan_full_page=True,
+                verbose=settings.application.debug,
                 stream=False,
                 # markdown_generator=DefaultMarkdownGenerator(
                 #     content_filter=PruningContentFilter(
