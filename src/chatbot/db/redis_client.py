@@ -1,12 +1,15 @@
+import asyncio
+
 import redis.asyncio as redis
+
 from src.chatbot_log.chatbot_logger import logger
 
 
 class RedisManager:
     _instance = None
-
+    _init_lock = asyncio.Lock()
     # Redis configuration
-    REDIS_MAX_MEMORY = "512mb"
+    REDIS_MAX_MEMORY = "1024mb"
     REDIS_MAX_MEMORY_POLICY = "allkeys-lru"
     REDIS_SAMPLES = 5
     TTL = 24 * 60 * 60  # 24h default TTL
@@ -22,18 +25,18 @@ class RedisManager:
 
     async def initialize(self):
         """Initialize Redis connection and settings."""
+        async with self._init_lock:
 
-        try:
-            self.client = redis.Redis(
-                host="redis",
-                port=6379,
-                decode_responses=True,
-            )
-            await self._configure_redis()
-
-        except Exception as e:
-            logger.error(f"[REDIS] Failed to initialize: {e}")
-            raise
+            try:
+                self.client = await redis.Redis(
+                    host="redis",
+                    port=6379,
+                    decode_responses=True,
+                ).__aenter__()  # Use Redis context manager
+                await self._configure_redis()
+            except Exception as e:
+                logger.error(f"[REDIS] Failed to initialize: {e}")
+                raise
 
     async def _configure_redis(self):
         """Configure Redis settings."""
@@ -67,18 +70,20 @@ class RedisManager:
 
     async def get(self, key: str):
         """Get value from Redis."""
-        await self.ensure_connection()
+        if not self.client:
+            await self.initialize()
         return await self.client.get(key)
 
     async def setex(self, key: str, time: int, value: str):
         """Set value in Redis with expiration."""
-        await self.ensure_connection()
+        if not self.client:
+            await self.initialize()
         return await self.client.setex(key, time, value)
 
     async def cleanup(self):
-        """Close Redis connection."""
+        """Close Redis connection using Redis's built-in cleanup."""
         if self.client:
-            await self.client.close()
+            await self.client.aclose()
             self.client = None
             logger.info("[REDIS] Connection closed")
 

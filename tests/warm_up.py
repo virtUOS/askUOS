@@ -10,7 +10,6 @@ from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 # do not include repeated queries or very similar queries (tests may fail)
 warm_up_queries = [
     "Wo liegt der NC bei Sport?",
-    "Wo liegt der NC bei Sport?",
     "hi",
     "who are you",
     "hi there",

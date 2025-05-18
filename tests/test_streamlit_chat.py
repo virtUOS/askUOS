@@ -136,6 +136,68 @@ class BaseTestStreamlitApp(unittest.TestCase):
         # Test references
         self.assertGreaterEqual(len(at.expander), 1)
 
+    def test_cache_redis(self):
+        """Test Redis caching for web content and search results."""
+        import asyncio
+
+        import redis.asyncio as redis
+
+        # Clear Redis cache before test
+        async def clear_cache():
+            redis_client = redis.Redis(host="redis", port=6379, decode_responses=True)
+            try:
+                await redis_client.flushall()
+                await redis_client.aclose()
+            except Exception as e:
+                print(f"Failed to clear Redis cache: {e}")
+
+        asyncio.run(clear_cache())
+        time.sleep(1)  # Allow time for cache clear to complete
+
+        # Initialize app twice to test cache between sessions
+        at1 = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=90).run()
+        at2 = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=90).run()
+
+        test_query = "What are the requirements for studying Computer Science?"
+
+        # First run - no cache
+        start_time1 = time.time()
+        at1.chat_input[0].set_value(test_query).run()
+        first_run_time = time.time() - start_time1
+
+        # Track first run results
+        first_links = at1.session_state["agent"]._visited_links
+        first_response = at1.session_state["messages"][-1]["content"]
+
+        time.sleep(1)  # Ensure cache is written
+
+        # Second run - should use cache
+        start_time2 = time.time()
+        at2.chat_input[0].set_value(test_query).run()
+        second_run_time = time.time() - start_time2
+
+        # Get results from second run
+        second_links = at2.session_state["agent"]._visited_links
+        second_response = at2.session_state["messages"][-1]["content"]
+
+        # Verify cache is working
+        self.assertEqual(
+            first_links,
+            second_links,
+            "Visited links should be identical when using cache",
+        )
+
+        # Time comparison
+        self.assertLess(
+            second_run_time,
+            first_run_time,
+            "Second run should be significantly faster due to caching",
+        )
+
+        # Verify no exceptions occurred
+        assert not at1.exception
+        assert not at2.exception
+
 
 if __name__ == "__main__":
 
