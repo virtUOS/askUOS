@@ -1,11 +1,9 @@
 import redis.asyncio as redis
-
 from src.chatbot_log.chatbot_logger import logger
 
 
 class RedisManager:
     _instance = None
-    _initialized = False
 
     # Redis configuration
     REDIS_MAX_MEMORY = "512mb"
@@ -32,7 +30,7 @@ class RedisManager:
                 decode_responses=True,
             )
             await self._configure_redis()
-            # self.__class__._initialized = True
+
         except Exception as e:
             logger.error(f"[REDIS] Failed to initialize: {e}")
             raise
@@ -55,17 +53,34 @@ class RedisManager:
             logger.error(f"[REDIS] Configuration error: {e}")
             raise
 
+    async def is_connected(self):
+        """Check if Redis connection is alive."""
+        try:
+            return self.client is not None and await self.client.ping()
+        except Exception:
+            return False
+
+    async def ensure_connection(self):
+        """Ensure Redis connection is established."""
+        if not await self.is_connected():
+            await self.initialize()
+
     async def get(self, key: str):
         """Get value from Redis."""
-        # if not self.client:
-        #     await self.initialize()
+        await self.ensure_connection()
         return await self.client.get(key)
 
     async def setex(self, key: str, time: int, value: str):
         """Set value in Redis with expiration."""
-        if not self.client:
-            await self.initialize()
+        await self.ensure_connection()
         return await self.client.setex(key, time, value)
+
+    async def cleanup(self):
+        """Close Redis connection."""
+        if self.client:
+            await self.client.close()
+            self.client = None
+            logger.info("[REDIS] Connection closed")
 
 
 redis_manager = RedisManager()

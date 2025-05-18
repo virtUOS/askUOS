@@ -31,14 +31,10 @@ APPLICATION_CONTEXT_URLS = [
     # "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung",
 ]
 
-
 # from cashews import cache
 # cache.setup("redis://redis:6379")
 
-# import redis.asyncio as redis
 
-# Redis client - basic connection
-# r = redis.Redis(host="redis", port=6379, decode_responses=True)
 SEARCH_URL = os.getenv("SEARCH_URL")
 MAX_NUM_LINKS = 4
 
@@ -289,10 +285,9 @@ class SearchUniWebTool:
         return urls, contents
 
     async def arun(self, **kwargs):
-
         try:
             # Initialize Redis if needed
-            await redis_manager.initialize()
+            await redis_manager.ensure_connection()
 
             self.query = kwargs["query"]
             query_url = decode_string(self.query)
@@ -346,6 +341,11 @@ class SearchUniWebTool:
             logger.exception(f"Error while searching the web: {e}", exc_info=True)
             # return "Error while searching the web"
             return [], []
+
+    def __del__(self):
+        """Cleanup when the instance is destroyed."""
+        if redis_manager.client:
+            asyncio.create_task(redis_manager.cleanup())
 
     def run(
         self,
