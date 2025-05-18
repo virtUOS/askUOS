@@ -11,7 +11,6 @@ fastembed===0.2.1
 streamlit===1.39.0
 pydantic-settings===2.3.4
 matplotlib
-cashews
 streamlit-feedback
 langchain-milvus
 langgraph
@@ -26,4 +25,3 @@ crawl4AI===0.6.2
 ragas
 opik
 redis
-aiocache
