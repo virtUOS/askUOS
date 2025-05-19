@@ -7,6 +7,7 @@ from typing import List
 
 import aiohttp
 import dotenv
+import nest_asyncio
 from crawl4ai import BrowserConfig, CacheMode, CrawlerMonitor, CrawlerRunConfig
 from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher
 from langchain.chains.summarize import load_summarize_chain
@@ -41,44 +42,41 @@ MAX_NUM_LINKS = 4
 
 class SearchUniWebTool:
     _instance = None
+    _initialized = False
+    _init_lock = asyncio.Lock()
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(SearchUniWebTool, cls).__new__(cls)
-        else:
-            cls._instance.anchor_tags = None
         return cls._instance
 
-    def __init__(self):
-        if not self.__dict__:  # to avoid reinitializing the object
-            self.no_content_found_message = "Content not found"
-            self.target_elements = [
-                "main",
-                "div#content",
-            ]
-            self.browser_config = BrowserConfig(
-                headless=True,
-                verbose=True,
-            )
-            self.run_config = CrawlerRunConfig(
-                cache_mode=CacheMode.ENABLED,
-                # css_selector="main",
-                target_elements=self.target_elements,  # div#content needed for accessing the content from the old website
-                scan_full_page=True,
-                verbose=settings.application.debug,
-                stream=False,
-                # markdown_generator=DefaultMarkdownGenerator(
-                #     content_filter=PruningContentFilter(
-                #         threshold=0.48, threshold_type="fixed", min_word_threshold=0
-                #     )
-                # ),
-            )
-            self.dispatcher = MemoryAdaptiveDispatcher(
-                memory_threshold_percent=70.0,
-                check_interval=1.0,
-                max_session_permit=10,
-                monitor=CrawlerMonitor(),
-            )
+    async def initialize(self):
+        if not self._initialized:
+            async with self._init_lock:
+                if not self._initialized:
+                    self.no_content_found_message = "Content not found"
+                    self.target_elements = [
+                        "main",
+                        "div#content",
+                    ]
+                    self.browser_config = BrowserConfig(
+                        headless=True,
+                        verbose=True,
+                    )
+                    self.run_config = CrawlerRunConfig(
+                        cache_mode=CacheMode.ENABLED,
+                        target_elements=self.target_elements,
+                        scan_full_page=True,
+                        verbose=settings.application.debug,
+                        stream=False,
+                    )
+                    self.dispatcher = MemoryAdaptiveDispatcher(
+                        memory_threshold_percent=70.0,
+                        check_interval=1.0,
+                        max_session_permit=10,
+                        monitor=CrawlerMonitor(),
+                    )
+                    self._initialized = True
 
     async def generate_summary(self, text: str, question: str) -> str:
         # TODO summarize the content when it + the prompt +chat_history exceed the number of openai allowed tokens (16385 tokens)
@@ -286,6 +284,7 @@ class SearchUniWebTool:
         return urls, contents
 
     async def arun(self, **kwargs):
+        await self.initialize()
         try:
             # Initialize Redis if needed
             await redis_manager.ensure_connection()
@@ -354,19 +353,35 @@ class SearchUniWebTool:
     ) -> tuple[str, list]:
         """
         Searches the University of Osnabrück website based on the given query.
-
-        Args:
-            query (str): The query to search for.
-
-
-        Returns:
-            str: The search result text.
-
-        Notes:
-            - This function is specifically designed to handle questions about the University of Osnabrück, such as the application process or studying at the university.
-
+        Handles both threaded and async execution contexts safely.
         """
-        return asyncio.run(self.arun(**kwargs))
+        try:
+            # Get the current event loop if one exists
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # If no loop exists in this thread, create a new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            # Enable nested event loops, if an event loop is already running, ride that internal loop (needed for Streamlit's threading model)
+            # https://sehmi-conscious.medium.com/got-that-asyncio-feeling-f1a7c37cab8b
+            # TODO use loop.create_task instead
+            nest_asyncio.apply(loop)
+
+            # Run the async operation
+            if loop.is_running():
+                # We're inside a running event loop (e.g., in an async context)
+                return asyncio.run_coroutine_threadsafe(
+                    self.arun(**kwargs), loop
+                ).result()
+            else:
+                # No event loop is running, run it directly
+                return loop.run_until_complete(self.arun(**kwargs))
+
+        except Exception as e:
+            logger.exception("Error in search execution")
+            return [], []
 
 
 search_uni_web = SearchUniWebTool()
