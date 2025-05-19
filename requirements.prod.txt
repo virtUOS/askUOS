@@ -18,3 +18,4 @@ pymilvus
 crawl4AI===0.6.2
 opik
 redis
+nest_asyncio

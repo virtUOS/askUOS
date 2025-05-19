@@ -14,7 +14,7 @@ from tests.warm_up import warm_up_queries
 
 
 class BaseTestStreamlitApp(unittest.TestCase):
-
+    # TODO Create multithreading test
     def test_several_users(self):
 
         at1 = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=90).run()
@@ -36,6 +36,7 @@ class BaseTestStreamlitApp(unittest.TestCase):
                     # initial message count
                     at[1] = len(at[0].session_state["messages"]) or 0
                     test_query = next(query_generator)
+
                     # add the query to the list of queries
                     at[2].append(test_query)
                     at[0].chat_input[0].set_value(test_query).run()
@@ -59,6 +60,7 @@ class BaseTestStreamlitApp(unittest.TestCase):
                         )
 
                     time.sleep(2)
+
                 # [[link_1, link_2,...],[],[]]
                 visited_links = [
                     app[0].session_state["agent"]._visited_links for app in apps
@@ -75,9 +77,12 @@ class BaseTestStreamlitApp(unittest.TestCase):
             except StopIteration:
                 break
 
+        states = []
+
         for at in apps:
             # check if the number of messages is equal to the number of queries * 2 + 1 (1 accounts for the AI initial message e.g., "Hi, I am an AI assistant")
             # each iteration generates two messages: user and assistant
+            states.append({i["content"] for i in at[0].session_state["messages"]})
             self.assertEqual(
                 len(at[0].session_state["messages"]),
                 (len(at[2]) * 2) + 1,
@@ -93,6 +98,14 @@ class BaseTestStreamlitApp(unittest.TestCase):
             for s in at[0].session_state["conversation_summary"]:
                 summary_length.append(llm().get_num_tokens(s))
             print(f"Summary length (tokens): {summary_length}")
+
+        # check if the session states are different
+        intersection = set.intersection(*states)
+        self.assertEqual(
+            len(intersection),
+            1,  # There should be one common message across all sessions, which is the initial message when the bot greets the user.
+            f"The session states are not different. {intersection}",
+        )
 
     # def test_multiple_queries(self):
     #     _llm = llm()

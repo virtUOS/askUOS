@@ -7,12 +7,11 @@ from typing import List
 
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 
-# do not include repeated queries or very similar queries (tests may fail)
+# do not include REPEATED queries or very similar queries (tests will fail)
 warm_up_queries = [
     "Wo liegt der NC bei Sport?",
     "hi",
     "who are you",
-    "hi there",
     "How do I apply for on-campus housing?",
     "Für welche Studiengänge brauche ich ein Latinum?",
     "Wo liegt der NC bei Sport?",

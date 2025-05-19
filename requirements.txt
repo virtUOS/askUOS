@@ -25,3 +25,4 @@ crawl4AI===0.6.2
 ragas
 opik
 redis
+nest_asyncio
