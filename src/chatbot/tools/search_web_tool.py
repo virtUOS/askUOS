@@ -273,8 +273,6 @@ class SearchUniWebTool:
             total_tokens, _ = self.compute_tokens("".join(contents))
             if total_tokens > settings.model.context_window:
                 for i, text in enumerate(reversed(contents)):
-                    # original_index = len(contents) - i - 1
-                    # start summarizing from the last text fetched (assumed to be the least important/relevant)
                     contents[i] = await self.generate_summary(text, self.query)
                     # update the total tokens
                     total_tokens, _ = self.compute_tokens("".join(contents))
@@ -305,8 +303,8 @@ class SearchUniWebTool:
 
             visited_urls, contents = await self.visit_urls_extract(
                 url=url,
-                about_application=kwargs["about_application"],
-                do_not_visit_links=kwargs["do_not_visit_links"],
+                about_application=kwargs.get("about_application", False),
+                do_not_visit_links=kwargs.get("do_not_visit_links", []),
             )
 
             final_output = "\n".join(contents)
@@ -356,31 +354,22 @@ class SearchUniWebTool:
         Handles both threaded and async execution contexts safely.
         """
         try:
-            # Get the current event loop if one exists
+            # Get the current event loop or create a new one
             try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                # If no loop exists in this thread, create a new one
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-
-            # Enable nested event loops, if an event loop is already running, ride that internal loop (needed for Streamlit's threading model)
-            # https://sehmi-conscious.medium.com/got-that-asyncio-feeling-f1a7c37cab8b
-            # TODO use loop.create_task instead
-            nest_asyncio.apply(loop)
-
-            # Run the async operation
-            if loop.is_running():
-                # We're inside a running event loop (e.g., in an async context)
+                loop = asyncio.get_running_loop()
+                # If we're inside a running loop, we'll use nest_asyncio to allow nesting
+                # Enable nested event loops, if an event loop is already running, ride that internal loop (needed for Streamlit's threading model)
+                # https://sehmi-conscious.medium.com/got-that-asyncio-feeling-f1a7c37cab8b
+                nest_asyncio.apply()
+                logger.debug(f"Running within an existing event loop:")
                 return asyncio.run_coroutine_threadsafe(
                     self.arun(**kwargs), loop
                 ).result()
-            else:
-                # No event loop is running, run it directly
-                return loop.run_until_complete(self.arun(**kwargs))
-
+            except RuntimeError:
+                # No running event loop, create a fresh one and run directly
+                return asyncio.run(self.arun(**kwargs))
         except Exception as e:
-            logger.exception("Error in search execution")
+            logger.exception(f"Error in search execution: {str(e)}")
             return [], []
 
 
