@@ -3,20 +3,22 @@ import sys
 
 sys.path.append("/app")
 import asyncio
-from typing import List
+from functools import wraps
+from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 import dotenv
 import nest_asyncio
+import redis.asyncio as redis
 from crawl4ai import BrowserConfig, CacheMode, CrawlerMonitor, CrawlerRunConfig
 from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.agents.utils.agent_helpers import llm_optional as sumarize_llm
-from src.chatbot.db.redis_client import redis_manager
+
+# from src.chatbot.db.redis_client import redis_manager
 from src.chatbot.tools.utils.custom_crawl import AsyncOverrideCrawler
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import decode_string
@@ -25,76 +27,107 @@ from src.config.core_config import settings
 
 dotenv.load_dotenv()
 
-# TODO Make sure that these urls are reachable
-# TODO add the urls to the config file
+# Application context URLs
 APPLICATION_CONTEXT_URLS = [
     # "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/zulassungsbeschraenkungen",
     # "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung",
 ]
 
-# from cashews import cache
-# cache.setup("redis://redis:6379")
-
-
 SEARCH_URL = os.getenv("SEARCH_URL")
 MAX_NUM_LINKS = 4
 
 
-class SearchUniWebTool:
-    _instance = None
-    _initialized = False
-    _init_lock = asyncio.Lock()
+# Redis configuration
+REDIS_MAX_MEMORY = "1024mb"
+REDIS_MAX_MEMORY_POLICY = "allkeys-lru"
+REDIS_SAMPLES = 5
+TTL = 30 * 60 * 60  # 30h default TTL
 
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(SearchUniWebTool, cls).__new__(cls)
-        return cls._instance
+# Module-level state variables
+_initialized = False
+_init_lock = asyncio.Lock()
+no_content_found_message = "Content not found"
+target_elements = ["main", "div#content"]
+browser_config = None
+run_config = None
+dispatcher = None
 
-    async def initialize(self):
-        if not self._initialized:
-            async with self._init_lock:
-                if not self._initialized:
-                    self.no_content_found_message = "Content not found"
-                    self.target_elements = [
-                        "main",
-                        "div#content",
-                    ]
-                    self.browser_config = BrowserConfig(
-                        headless=True,
-                        verbose=True,
-                    )
-                    self.run_config = CrawlerRunConfig(
-                        cache_mode=CacheMode.ENABLED,
-                        target_elements=self.target_elements,
-                        scan_full_page=True,
-                        verbose=settings.application.debug,
-                        stream=False,
-                    )
-                    self.dispatcher = MemoryAdaptiveDispatcher(
-                        memory_threshold_percent=70.0,
-                        check_interval=1.0,
-                        max_session_permit=10,
-                        monitor=CrawlerMonitor(),
-                    )
-                    self._initialized = True
 
-    async def generate_summary(self, text: str, question: str) -> str:
-        # TODO summarize the content when it + the prompt +chat_history exceed the number of openai allowed tokens (16385 tokens)
-        logger.info(f"Summarizing content, query: {question}")
+async def initialize_redis(client: redis.Redis):
+    """Initialize Redis connection and settings."""
 
-        # TODO solve for german
+    try:
+        await client.ping()
+        logger.info("[REDIS] Redis connection established successfully.")
+    except redis.ConnectionError as e:
+        logger.error(f"[REDIS] Redis connection error: {e}")
+        raise
 
-        # TODO evaluate how the chunk size affects the results. The idea is to not call the API multiple times
-        # converts tokens to characters and divides by 2. Make sure the chunk size is not bigger than the (model) context window
-        chunk_size = (
-            settings.model.context_window * 4
-        ) // 2  # 4 is the average number of characters per token in English
-        text_splitter = RecursiveCharacterTextSplitter(
-            separators=["\n\n", "\n"], chunk_size=chunk_size, chunk_overlap=300
+    # configure Redis settings
+    try:
+        await client.config_set("maxmemory", REDIS_MAX_MEMORY)
+        await client.config_set("maxmemory-policy", REDIS_MAX_MEMORY_POLICY)
+        await client.config_set("maxmemory-samples", REDIS_SAMPLES)
+        info = await client.info("memory")
+        used_memory_mb = int(info["used_memory"]) / 1024 / 1024
+        logger.info(
+            f"[REDIS] Redis configured successfully. Memory usage: {used_memory_mb:.2f}MB"
         )
-        docs = text_splitter.create_documents([text])
+    except Exception as e:
+        logger.error(f"[REDIS] Configuration error: {e}")
+        raise
 
-        reduce_template_string = """Your task it to create a concise summary of the text provided. 
+
+async def ensure_initialized():
+    """Ensure that the module is initialized only once."""
+    global _initialized, browser_config, run_config, dispatcher
+
+    if not _initialized:
+        async with _init_lock:
+            if not _initialized:
+                browser_config = BrowserConfig(
+                    headless=True,
+                    verbose=True,
+                )
+                run_config = CrawlerRunConfig(
+                    cache_mode=CacheMode.ENABLED,
+                    target_elements=target_elements,
+                    scan_full_page=True,
+                    verbose=settings.application.debug,
+                    stream=False,
+                )
+                dispatcher = MemoryAdaptiveDispatcher(
+                    memory_threshold_percent=70.0,
+                    check_interval=1.0,
+                    max_session_permit=10,
+                    monitor=CrawlerMonitor(),
+                )
+
+                _initialized = True
+
+
+def extract_cached_content(cached_content):
+    """Extract cached content from string representation."""
+    import ast
+
+    try:
+        return ast.literal_eval(cached_content)
+    except Exception as e:
+        logger.exception(f"Could not extract cached content: {e}")
+        return None
+
+
+async def generate_summary(text: str, query: str) -> str:
+    """Generate a summary of the provided text."""
+    logger.info(f"Summarizing content, query: {query}")
+
+    chunk_size = (settings.model.context_window * 4) // 2
+    text_splitter = RecursiveCharacterTextSplitter(
+        separators=["\n\n", "\n"], chunk_size=chunk_size, chunk_overlap=300
+    )
+    docs = text_splitter.create_documents([text])
+
+    reduce_template_string = """Your task it to create a concise summary of the text provided. 
 ## Instruction: Your task is to generate a concise and accurate summary of the provided text. The summary should effectively capture the key points and concepts while strictly avoiding any interpretations or subjective additions.
 1. Focus on Relevance: Emphasize information that directly addresses the question/query specified below.
 2. Handling External Sources: Do not condense or modify links/urls or references to external sources; include them as they appear in the original text.
@@ -109,297 +142,358 @@ class SearchUniWebTool:
     Answer:
     """
 
-        reduce_template = PromptTemplate(
-            template=reduce_template_string, input_variables=["text", "question"]
-        )
-        chain = load_summarize_chain(
-            llm=sumarize_llm(),
-            chain_type="map_reduce",
-            map_prompt=reduce_template,
-            combine_prompt=reduce_template,
-            verbose=True,
-        )
+    reduce_template = PromptTemplate(
+        template=reduce_template_string, input_variables=["text", "question"]
+    )
 
-        # TODO use aync chain.run?
-        settings.llm_summarization_mode = True
-        summary = await chain.arun(input_documents=docs, question=question)
-        # TODO the summary does not include the Taking from: url
-        settings.llm_summarization_mode = False
-        return summary
+    chain = load_summarize_chain(
+        llm=sumarize_llm(),
+        chain_type="map_reduce",
+        map_prompt=reduce_template,
+        combine_prompt=reduce_template,
+        verbose=True,
+    )
 
-    def compute_tokens(self, search_result_text: str):
-        current_search_num_tokens = self.agent_executor.compute_search_num_tokens(
-            search_result_text
-        )
+    settings.llm_summarization_mode = True
+    summary = await chain.arun(input_documents=docs, question=query)
+    settings.llm_summarization_mode = False
+    return summary
 
-        total_tokens = self.internal_num_tokens + current_search_num_tokens
-        return total_tokens, current_search_num_tokens
 
-    def extract(self, cached_content):
-        import ast
+def compute_tokens(
+    search_result_text: str, query: str, agent_executor
+) -> Tuple[int, int]:
+    """Compute tokens for the search result text."""
+    internal_num_tokens = agent_executor.compute_internal_tokens(query)
+    current_search_num_tokens = agent_executor.compute_search_num_tokens(
+        search_result_text
+    )
+    total_tokens = internal_num_tokens + current_search_num_tokens
+    return total_tokens, current_search_num_tokens
 
-        try:
-            return ast.literal_eval(cached_content)
-        except Exception as e:
-            logger.exception(f"Could not extract cached content: {e}")
 
-    async def get_web_content(self, url: str):
-        cache_key = f"{__name__}:get_web_content:{url}"
+async def get_web_content(
+    url: str, client: redis.Redis
+) -> Tuple[Optional[str], Optional[str]]:
+    """Get web content from URL with caching."""
+    await ensure_initialized()
+    cache_key = f"{__name__}:get_web_content:{url}"
 
-        try:
-            # Try to get from cache
-            cached_content = await redis_manager.get(cache_key)
-            if cached_content:
-                logger.debug("[REDIS] Retrieved (creawled) page content from cache")
+    result_content = None
+    result_url = None
+    try:
+        # Try to get from cache
+        cached_content = await client.get(cache_key)
+        if cached_content:
+            logger.debug("[REDIS] Retrieved (crawled) page content from cache")
+            return extract_cached_content(cached_content)
 
-                return self.extract(cached_content)
+        logger.debug("[REDIS] No (crawled) page content cached in Redis")
 
-            logger.debug("[REDIS] No (crawled) page content cached in Redis")
+    except Exception as e:
+        logger.error(f"[REDIS] Error accessing (crawled) cache: {e}")
 
-        except Exception as e:
-            logger.error(f"[REDIS] Error accessing (crawled) cache: {e}")
-
-        async with AsyncOverrideCrawler(config=self.browser_config) as crawler:
+    try:
+        async with AsyncOverrideCrawler(
+            config=browser_config,
+        ) as crawler:
             result = await crawler.arun(
                 url=url,
-                config=self.run_config,
+                config=run_config,
             )
             if result and result[0].success:
                 result_url = result[0].url
                 result_content = result[0].markdown
 
-                # Cache the result only if greter than 20
-                if len(result_content) > 20:
-                    cache_value = str((result_url, result_content))
-                    await redis_manager.setex(cache_key, redis_manager.TTL, cache_value)
-                return result_url, result_content
-            return None, None
+            return result_url, result_content
 
-    async def visit_urls_extract(
-        self,
-        url: str,
-        about_application: bool,
-        max_num_links: int = MAX_NUM_LINKS,
-        do_not_visit_links: List = [],
-    ) -> tuple[List, list]:
+    except Exception as e:
+        logger.exception(f"Error while crawling the URL: {url}", exc_info=True)
+        return result_url, result_content
+    finally:
+        # Cache the result
+        if result_content and len(result_content) > 20:
+            cache_value = str((result_url, result_content))
+            try:
+                await client.setex(cache_key, TTL, cache_value)
+            except Exception as e:
+                logger.exception(
+                    f"Error while caching content for URL: {url}", exc_info=True
+                )
 
-        # get num tokens (prompt + chat history+query)
-        self.internal_num_tokens = self.agent_executor.compute_internal_tokens(
-            self.query
+
+async def visit_urls_extract(
+    url: str,
+    query: str,
+    agent_executor,
+    about_application: bool = False,
+    max_num_links: int = MAX_NUM_LINKS,
+    do_not_visit_links: List = [],
+    client: redis.Redis = None,
+) -> Tuple[List, List]:
+    """Visit URLs and extract content."""
+    contents = []
+    links_search = []
+
+    async with aiohttp.ClientSession() as session:
+        # Query Google search API
+        async with session.get(url) as response:
+            response.raise_for_status()
+
+            if response.status != 200:
+                raise ProgrammableSearchException(
+                    f"Failed: Programmable Search Engine. Status: {response.status}"
+                )
+
+            # Parse JSON response
+            dict_response = await response.json()
+
+            # Check if there are results
+            total_results = dict_response.get("searchInformation", {}).get(
+                "totalResults", 0
+            )
+            if int(total_results) > 0:
+                links_search = [item["link"] for item in dict_response["items"]]
+                logger.debug(
+                    f"[ProgrammableSearch] Search Engine returned {len(links_search)} results (links)"
+                )
+            else:
+                logger.warning(
+                    f"[ProgrammableSearch] No results found by the search engine while requesting this URL: {url}"
+                )
+                return [], []
+
+    urls = []
+    for href in links_search:
+        # Skip PDF files
+        if href.endswith(".pdf"):
+            continue
+
+        if len(urls) >= max_num_links:
+            if about_application:
+                for url_ in APPLICATION_CONTEXT_URLS:
+                    if url_ in urls or url_ in do_not_visit_links:
+                        continue
+                    urls.append(url_)
+            break
+
+        # Skip already visited links
+        if href in urls or href in do_not_visit_links:
+            continue
+
+        urls.append(href)
+
+    if urls:
+        for url in urls:
+            result_url, result_content = await get_web_content(url, client)
+
+            if result_content:
+                if len(result_content) < 20:
+                    logger.warning(
+                        f"[Crawling] The URL content could not be extracted. Make sure the content is contained in current target elements: {target_elements}. URL: {url}"
+                    )
+                    continue
+                contents.append(
+                    f"Information taken from: {result_url}\n{result_content}"
+                )
+
+    # Summarize content if total tokens exceed the limit
+    if contents:
+        # Order the contents by the index
+        contents = (
+            sorted(contents, key=lambda x: x[1])
+            if isinstance(contents[0], tuple)
+            else contents
+        )
+        total_tokens, _ = compute_tokens("".join(contents), query, agent_executor)
+
+        if total_tokens > settings.model.context_window:
+            for i, text in enumerate(reversed(contents)):
+                contents[i] = await generate_summary(text, query)
+                # Update the total tokens
+                total_tokens, _ = compute_tokens(
+                    "".join(contents), query, agent_executor
+                )
+                if total_tokens <= settings.model.context_window:
+                    break
+
+    return urls, contents
+
+
+async def async_search(client, **kwargs) -> Tuple[str, List]:
+    """Asynchronous search function that encapsulates the search functionality."""
+    await ensure_initialized()
+    try:
+        # Initialize Redis if needed
+        # await redis_manager.ensure_connection()
+        query = kwargs.get("query", "")
+        query_url = decode_string(query)
+        url = SEARCH_URL + query_url
+        do_not_visit_links = kwargs.get("do_not_visit_links", [])
+        about_application = kwargs.get("about_application", False)
+
+        cache_key = f"{__name__}:async_search:{url}"
+        # Try to get cached content
+        cached_content = await client.get(cache_key)
+        if cached_content:
+            logger.debug("[REDIS] Retrieved cached searched results (urls)")
+            return extract_cached_content(cached_content)
+
+        agent_executor = kwargs["agent_executor"]
+
+        visited_urls, contents = await visit_urls_extract(
+            url=url,
+            query=query,
+            agent_executor=agent_executor,
+            about_application=about_application,
+            do_not_visit_links=do_not_visit_links,
+            client=client,
         )
 
-        contents = []
-        self.links_search = []
+        final_output = "\n".join(contents)
 
-        async with aiohttp.ClientSession() as session:
-
-            # query google search API
-            async with session.get(url) as response:
-                response.raise_for_status()
-
-                if response.status != 200:
-
-                    raise ProgrammableSearchException(
-                        f"Failed: Programmable Search Engine. Status: {response.status}"
-                    )
-                # parse json response
-                dict_response = await response.json()
-
-                # extract search results
-
-                # check if there are results
-                total_results = dict_response.get("searchInformation", {}).get(
-                    "totalResults", 0
-                )
-                if int(total_results) > 0:
-
-                    self.links_search = [
-                        item["link"] for item in dict_response["items"]
-                    ]
-                    logger.debug(
-                        f"[ProgrammableSearch] Search Engine retuned {len(self.links_search)} results (links)"
-                    )
-                else:
-                    logger.warning(
-                        f"[ProgrammableSearch] No results found by the search engine while requesting this URL: {url}"
-                    )
-                    return [], []
-
-        urls = []
-        for i, href in enumerate(self.links_search):
-            # href = str(tag.get("href"))s
-            # Check for previously visited links
-            if href.endswith(".pdf"):
-                # TODO pdf files need to be handled differently (Vector DB for example)
-                continue
-
-            if len(urls) >= max_num_links:
-                if about_application:
-                    for url_ in APPLICATION_CONTEXT_URLS:
-                        if url_ in urls or url_ in do_not_visit_links:
-                            continue
-                        urls.append(url_)
-
-                break
-
-            # Links that were visited in a graph run should not be visited again
-            if href in urls or href in do_not_visit_links:
-                continue
-
-            urls.append(href)
-
-        if urls:
-
-            for url in urls:
-
-                result_url, result_content = await self.get_web_content(url)
-
-                if result_content:
-                    if len(result_content) < 20:
-                        logger.warning(
-                            f"[Crawling] The URL content could not be extracted. Make sure the content is contained in current target elements: {self.target_elements}. URL: {url}"
-                        )
-                        continue
-                    contents.append(
-                        f"Information taken from: {result_url}\n{result_content}"
-                    )
-
-        # summarize the content if the total tokens exceed the limit
-        # TODO this needs to be async and generate summary cached
-        if contents:
-            # order the contents by the index
-            contents = sorted(contents, key=lambda x: x[1])
-            # contents = [x[0] for x in contents]
-            total_tokens, _ = self.compute_tokens("".join(contents))
-            if total_tokens > settings.model.context_window:
-                for i, text in enumerate(reversed(contents)):
-                    # original_index = len(contents) - i - 1
-                    # start summarizing from the last text fetched (assumed to be the least important/relevant)
-                    contents[i] = await self.generate_summary(text, self.query)
-                    # update the total tokens
-                    total_tokens, _ = self.compute_tokens("".join(contents))
-                    if total_tokens <= settings.model.context_window:
-                        break
-
-        return urls, contents
-
-    async def arun(self, **kwargs):
-        await self.initialize()
-        try:
-            # Initialize Redis if needed
-            await redis_manager.ensure_connection()
-
-            self.query = kwargs["query"]
-            query_url = decode_string(self.query)
-            url = SEARCH_URL + query_url
-
-            cache_key = f"{__name__}:arun:{url}"
-            # try to get cached content
-
-            cached_content = await redis_manager.get(cache_key)
-            if cached_content:
-                logger.debug("[REDIS] Retrieved cached searched results (urls) ")
-                return self.extract(cached_content)
-
-            self.agent_executor = CampusManagementOpenAIToolsAgent.run()
-
-            visited_urls, contents = await self.visit_urls_extract(
-                url=url,
-                about_application=kwargs["about_application"],
-                do_not_visit_links=kwargs["do_not_visit_links"],
+        if final_output:
+            # For testing
+            final_output_tokens, final_search_tokens = compute_tokens(
+                final_output, query, agent_executor
             )
+            logger.info(f"Search tokens: {final_search_tokens}")
+            logger.info(f"Final output (search + prompt): {final_output_tokens}")
 
-            final_output = "\n".join(contents)
+            # Cache results
+            if len(final_output) > 20:
+                cache_value = str((final_output, visited_urls))
+                await client.setex(cache_key, TTL, cache_value)
 
-            if final_output:
-                # for tesing
-                # TODO REMOVE
-                final_output_tokens, final_search_tokens = self.compute_tokens(
-                    final_output
-                )
-                logger.info(f"Search tokens: {final_search_tokens}")
-                logger.info(f"Final output (search + prompt): {final_output_tokens}")
-                # settings.final_output_tokens.append(final_output_tokens)
-                # settings.final_search_tokens.append(final_search_tokens)
+        return (final_output, visited_urls) if contents else ([], [])
 
-                # cache results
-                if len(final_output) > 20:
-                    cache_value = str((final_output, visited_urls))
-                    await redis_manager.client.setex(
-                        cache_key, redis_manager.TTL, cache_value
-                    )
+    except ProgrammableSearchException as e:
+        logger.exception(f"Error: search engine: {e}", exc_info=True)
+        raise ProgrammableSearchException(
+            f"Failed: Programmable Search Engine. Status: {e}"
+        )
 
-            return (final_output, visited_urls) if contents else ([], [])
+    except Exception as e:
+        logger.exception(f"Error while searching the web: {e}", exc_info=True)
+        return [], []
 
-        except ProgrammableSearchException as e:
-            logger.exception(f"Error: search engine: {e}", exc_info=True)
-            raise ProgrammableSearchException(
-                f"Failed: Programmable Search Engine. Status: {e}"
-            )
 
-        except Exception as e:
-            logger.exception(f"Error while searching the web: {e}", exc_info=True)
-            # return "Error while searching the web"
-            return [], []
+def search_uni_web(**kwargs) -> Tuple[str, List]:
+    """
+    Searches the University of Osnabrück website based on the given query.
+    Handles both threaded and async execution contexts safely.
+    """
 
-    def __del__(self):
-        """Cleanup when the instance is destroyed."""
-        if redis_manager.client:
-            asyncio.create_task(redis_manager.cleanup())
-
-    def run(
-        self,
-        **kwargs,
-    ) -> tuple[str, list]:
-        """
-        Searches the University of Osnabrück website based on the given query.
-        Handles both threaded and async execution contexts safely.
-        """
+    try:
         try:
-            # Get the current event loop if one exists
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                # If no loop exists in this thread, create a new one
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+            loop = asyncio.get_running_loop()
+            nest_asyncio.apply()
+            logger.debug("Running within an existing event loop")
+            client = redis.Redis(host="redis", port=6379, decode_responses=True)
+            return asyncio.run_coroutine_threadsafe(
+                async_search(client, **kwargs), loop
+            ).result()
+        except RuntimeError:
 
-            # Enable nested event loops, if an event loop is already running, ride that internal loop (needed for Streamlit's threading model)
-            # https://sehmi-conscious.medium.com/got-that-asyncio-feeling-f1a7c37cab8b
-            # TODO use loop.create_task instead
-            nest_asyncio.apply(loop)
+            async def complete_search_flow():
+                client = redis.Redis(host="redis", port=6379, decode_responses=True)
+                await initialize_redis(client)
+                result = await async_search(client, **kwargs)
+                await client.close()
+                return result
 
-            # Run the async operation
-            if loop.is_running():
-                # We're inside a running event loop (e.g., in an async context)
-                return asyncio.run_coroutine_threadsafe(
-                    self.arun(**kwargs), loop
-                ).result()
-            else:
-                # No event loop is running, run it directly
-                return loop.run_until_complete(self.arun(**kwargs))
+            return asyncio.run(complete_search_flow())
+    except Exception as e:
+        logger.exception(f"Error in search execution: {str(e)}")
+        return [], []
 
-        except Exception as e:
-            logger.exception("Error in search execution")
-            return [], []
+    # try:
+    #     # Get the current event loop or create a new one
+    #     try:
+    #         loop = asyncio.get_running_loop()
+    #         # If we're inside a running loop, we'll use nest_asyncio to allow nesting
+    #         nest_asyncio.apply()
+    #         logger.debug("Running within an existing event loop")
+    #         return asyncio.run_coroutine_threadsafe(
+    #             async_search(**kwargs), loop
+    #         ).result()
+    #     except RuntimeError:
+
+    #         # No running event loop, create a fresh one and run directly
+
+    #         # Define a complete async function that initializes, executes and cleans up
+    #         async def complete_search_flow():
+    #             global client
+
+    #             # Create new Redis connection for this event loop session
+    #             client = redis.Redis(host="redis", port=6379, decode_responses=True)
+
+    #             try:
+    #                 # Initialize Redis
+    #                 await initialize_redis()
+    #                 # Execute search
+    #                 result = await async_search(**kwargs)
+    #                 return result
+    #             except Exception as e:
+    #                 logger.exception(f"Error during search flow: {str(e)}")
+    #                 return [], []
+
+    #         # Run everything in a single event loop lifecycle
+    #         return asyncio.run(complete_search_flow())
+
+    # No running event loop, create a fresh one and run directly
+
+    # loop = asyncio.new_event_loop()
+    # asyncio.set_event_loop(loop)
+
+    # # Ensure Redis is initialized with this loop
+    # async def setup_and_search():
+    #     await initialize_redis()
+    #     return await async_search(**kwargs)
+
+    # return asyncio.run(setup_and_search())
+
+    # try:
+    #     result = loop.run_until_complete(setup_and_search())
+    # finally:
+    #     try:
+    #         loop.run_until_complete(loop.shutdown_asyncgens())
+    #     finally:
+    #         loop.close()
+    #         return result
+
+    # return asyncio.run_coroutine_threadsafe(
+    #     async_search(**kwargs), loop
+    # ).result()
+    # return asyncio.run(async_search(**kwargs))
+    # except Exception as e:
+    #     logger.exception(f"Error in search execution: {str(e)}")
+    #     return [], []
 
 
-search_uni_web = SearchUniWebTool()
+# Cleanup function for Redis connections
+async def cleanup():
+    """Clean up resources when the module is unloaded."""
+    if client:
+        await client.close()
+
+
+# Register the cleanup function to be called on Python exit
+import atexit
+
+atexit.register(lambda: asyncio.run(cleanup()) if client else None)
 
 
 if __name__ == "__main__":
-    # use for testing/ debugging
-
+    # Use for testing/debugging
     try:
         from search_sample import search_sample
     except ImportError:
-
         sys.path.append("./test")
         from search_sample import search_sample
 
-    search_uni_web_instance = SearchUniWebTool()
     query = "can I study Biology?"
-    search_result = search_uni_web_instance.run(query)
-    search_result_2 = search_uni_web_instance.run(query)
+    search_result = search_uni_web(query=query)
+    search_result_2 = search_uni_web(query=query)
 
     print(search_result)
