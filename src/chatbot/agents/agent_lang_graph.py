@@ -218,7 +218,7 @@ class GraphNodesMixin:
             ),
             StructuredTool.from_function(
                 name="custom_university_web_search",
-                func=search_uni_web.run,
+                func=search_uni_web,
                 description=translate_prompt()["description_university_web_search"],
                 args_schema=SearchInputWeb,
                 handle_tool_errors=True,
@@ -366,10 +366,11 @@ class GraphNodesMixin:
                         "about_application", False
                     )
                     tool_call["args"]["do_not_visit_links"] = self._visited_links
+                    tool_call["args"]["agent_executor"] = self
                     # tool_result = self._tools_by_name[tool_call["name"]].invoke(
                     #     tool_call["args"]
                     # )
-                    tool_result = search_uni_web.run(**tool_call["args"])
+                    tool_result = search_uni_web(**tool_call["args"])
                     # the web search can take place several times while processing the same query, visited links keeps track of the links
                     # that have already been visited across all the searches within the same graph run
                     self._visited_links += tool_result[1]
@@ -408,6 +409,7 @@ class GraphNodesMixin:
         state["messages"] = state["messages"][:-1]  # remove the last AI message
 
         # TODO IF no results are found, the tool result is empty and the agent should generate a new query and search again
+
         return {
             "tool_messages": outputs_txt,
             "last_tool_usage": last_tool_usage,  # last ai message with previous tool usage
