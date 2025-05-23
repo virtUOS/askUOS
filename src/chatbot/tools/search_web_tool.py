@@ -37,10 +37,6 @@ SEARCH_URL = os.getenv("SEARCH_URL")
 MAX_NUM_LINKS = 4
 
 
-# Redis configuration
-REDIS_MAX_MEMORY = "1024mb"
-REDIS_MAX_MEMORY_POLICY = "allkeys-lru"
-REDIS_SAMPLES = 5
 TTL = 30 * 60 * 60  # 30h default TTL
 
 # Module-level state variables
@@ -59,22 +55,13 @@ async def initialize_redis(client: redis.Redis):
     try:
         await client.ping()
         logger.info("[REDIS] Redis connection established successfully.")
-    except redis.ConnectionError as e:
-        logger.error(f"[REDIS] Redis connection error: {e}")
-        raise
-
-    # configure Redis settings
-    try:
-        await client.config_set("maxmemory", REDIS_MAX_MEMORY)
-        await client.config_set("maxmemory-policy", REDIS_MAX_MEMORY_POLICY)
-        await client.config_set("maxmemory-samples", REDIS_SAMPLES)
         info = await client.info("memory")
         used_memory_mb = int(info["used_memory"]) / 1024 / 1024
         logger.info(
             f"[REDIS] Redis configured successfully. Memory usage: {used_memory_mb:.2f}MB"
         )
-    except Exception as e:
-        logger.error(f"[REDIS] Configuration error: {e}")
+    except redis.ConnectionError as e:
+        logger.error(f"[REDIS] Redis connection error: {e}")
         raise
 
 

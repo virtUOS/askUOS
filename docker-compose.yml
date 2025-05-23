@@ -29,8 +29,14 @@ services:
   redis:
     container_name: ask_uos_redis
     image: redis:latest
+    volumes:
+      - redis-data:/data
     ports:
       - "6379:6379"
+    command: >
+      --maxmemory 1024mb
+      --maxmemory-policy allkeys-lru
+      --maxmemory-samples 5
   etcd:
     container_name: milvus-etcd
     image: quay.io/coreos/etcd:v3.5.16
@@ -94,6 +100,7 @@ services:
 volumes:
   sqlite-data:
   fastembed:
+  redis-data:
 
 
 
