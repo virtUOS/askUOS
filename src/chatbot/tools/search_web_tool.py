@@ -196,6 +196,7 @@ async def get_web_content(
     try:
         async with AsyncOverrideCrawler(
             config=browser_config,
+            thread_safe=True,
         ) as crawler:
             result = await crawler.arun(
                 url=url,
@@ -469,19 +470,6 @@ def search_uni_web(**kwargs) -> Tuple[str, List]:
     # except Exception as e:
     #     logger.exception(f"Error in search execution: {str(e)}")
     #     return [], []
-
-
-# Cleanup function for Redis connections
-async def cleanup():
-    """Clean up resources when the module is unloaded."""
-    if client:
-        await client.close()
-
-
-# Register the cleanup function to be called on Python exit
-import atexit
-
-atexit.register(lambda: asyncio.run(cleanup()) if client else None)
 
 
 if __name__ == "__main__":
