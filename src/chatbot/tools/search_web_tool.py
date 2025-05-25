@@ -10,7 +10,13 @@ import aiohttp
 import dotenv
 import nest_asyncio
 import redis.asyncio as redis
-from crawl4ai import BrowserConfig, CacheMode, CrawlerMonitor, CrawlerRunConfig
+from crawl4ai import (
+    AsyncWebCrawler,
+    BrowserConfig,
+    CacheMode,
+    CrawlerMonitor,
+    CrawlerRunConfig,
+)
 from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
@@ -19,11 +25,14 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from src.chatbot.agents.utils.agent_helpers import llm_optional as sumarize_llm
 
 # from src.chatbot.db.redis_client import redis_manager
-from src.chatbot.tools.utils.custom_crawl import AsyncOverrideCrawler
+from src.chatbot.tools.utils.custom_crawl import arun, delete_cached_result
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import decode_string
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
+
+AsyncWebCrawler.arun = arun
+AsyncWebCrawler.delete_cached_result = delete_cached_result
 
 dotenv.load_dotenv()
 
@@ -181,7 +190,7 @@ async def get_web_content(
         logger.error(f"[REDIS] Error accessing (crawled) cache: {e}")
 
     try:
-        async with AsyncOverrideCrawler(
+        async with AsyncWebCrawler(
             config=browser_config,
             thread_safe=True,
         ) as crawler:

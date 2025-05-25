@@ -21,7 +21,7 @@ pymilvus
 pandas
 seaborn
 numpy
-crawl4AI===0.6.2
+crawl4AI===0.6.3
 ragas
 opik
 redis
