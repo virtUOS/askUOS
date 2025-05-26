@@ -3,6 +3,7 @@ import sys
 
 sys.path.append("/app")
 import asyncio
+import types
 from functools import wraps
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -17,6 +18,7 @@ from crawl4ai import (
     CrawlerMonitor,
     CrawlerRunConfig,
 )
+from crawl4ai.async_database import DB_PATH, async_db_manager
 from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
@@ -25,7 +27,14 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from src.chatbot.agents.utils.agent_helpers import llm_optional as sumarize_llm
 
 # from src.chatbot.db.redis_client import redis_manager
-from src.chatbot.tools.utils.custom_crawl import arun, delete_cached_result
+from src.chatbot.tools.utils.custom_crawl import (
+    _check_content_changed,
+    arun,
+    custom_acache_url,
+    custom_aget_cached_url,
+    custom_ainit_db,
+    delete_cached_result,
+)
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import decode_string
 from src.chatbot_log.chatbot_logger import logger
@@ -33,6 +42,17 @@ from src.config.core_config import settings
 
 AsyncWebCrawler.arun = arun
 AsyncWebCrawler.delete_cached_result = delete_cached_result
+AsyncWebCrawler._check_content_changed = _check_content_changed
+
+async_db_manager.ainit_db = types.MethodType(custom_ainit_db, async_db_manager)
+async_db_manager.acache_url = types.MethodType(custom_acache_url, async_db_manager)
+async_db_manager.aget_cached_url = types.MethodType(
+    custom_aget_cached_url, async_db_manager
+)
+
+CrawlerRunConfig.check_content_changed = True
+CrawlerRunConfig.head_request_timeout = 3.0
+CrawlerRunConfig.default_cache_ttl_seconds = 60 * 60 * 48  # 2 days
 
 dotenv.load_dotenv()
 
