@@ -17,6 +17,7 @@
             "name": "streamlit_chat",
             "type": "debugpy",
             "request": "launch",
+            "justMyCode":false,
             "program": "/usr/local/bin/streamlit",
             "env":{ "PYTHONPATH": "/app"},
             "args": [
