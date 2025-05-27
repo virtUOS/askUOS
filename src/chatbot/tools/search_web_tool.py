@@ -7,6 +7,9 @@ from functools import wraps
 from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
+
+# At the beginning of your script
+import colorama
 import dotenv
 import nest_asyncio
 import redis.asyncio as redis
@@ -30,6 +33,8 @@ from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import decode_string
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
+
+colorama.init(strip=True)
 
 AsyncWebCrawler.arun = arun
 AsyncWebCrawler.delete_cached_result = delete_cached_result
@@ -135,7 +140,7 @@ async def generate_summary(text: str, query: str) -> str:
     {text}
 
     question/query: {question}
-    Answer:
+    
     """
 
     reduce_template = PromptTemplate(

@@ -3,6 +3,9 @@ import sys
 import time
 
 import aiohttp
+
+# At the beginning of your script
+import colorama
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
 from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig, ProxyConfig
 from crawl4ai.async_crawler_strategy import AsyncCrawlResponse
@@ -21,6 +24,8 @@ from crawl4ai.utils import create_box_message, get_error_context, sanitize_input
 
 # CrawlResultT = TypeVar("CrawlResultT", bound=CrawlResult)
 # RunManyReturn = Union[List[CrawlResultT], AsyncGenerator[CrawlResultT, None]]
+
+colorama.init(strip=True)
 
 
 async def delete_cached_result(self, db, sql_query):
@@ -293,77 +298,116 @@ async def arun(
 
 
 if __name__ == "__main__":
+    import asyncio
 
-    from crawl4ai import AsyncWebCrawler
+    from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
+    from crawl4ai.content_scraping_strategy import LXMLWebScrapingStrategy
+    from crawl4ai.deep_crawling import BFSDeepCrawlStrategy
 
     AsyncWebCrawler.arun = arun
     AsyncWebCrawler.delete_cached_result = delete_cached_result
-    from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher
 
-    # Example usage
-    browser_config = BrowserConfig(
-        headless=True,
-        verbose=True,
-    )
+    async def main():
+        # Configure a 2-level deep crawl
+        config = CrawlerRunConfig(
+            deep_crawl_strategy=BFSDeepCrawlStrategy(
+                max_depth=7,
+                include_external=False,
+                max_pages=1000,  # Limit to 1000 pages
+            ),
+            scraping_strategy=LXMLWebScrapingStrategy(),
+            cache_mode=CacheMode.ENABLED,
+            verbose=True,
+        )
 
-    dispatcher = MemoryAdaptiveDispatcher(
-        memory_threshold_percent=70.0,
-        check_interval=1.0,
-        max_session_permit=10,
-        monitor=CrawlerMonitor(),
-    )
-
-    run_config = CrawlerRunConfig(
-        stream=False,
-        cache_mode=CacheMode.ENABLED,
-        # css_selector="div.eb2",
-        # target_elements=["main", "div.eb2"],
-        target_elements=["main", "div#content"],
-        scan_full_page=True,
-        # markdown_generator=DefaultMarkdownGenerator(
-        #     content_filter=PruningContentFilter(
-        #         threshold=0.48, threshold_type="fixed", min_word_threshold=0
-        #     )
-        # ),
-    )
-
-    async def crawl():
-        async with AsyncWebCrawler(config=browser_config) as crawler:
-
-            # TODO tables
-            url = "https://uni-osnabrueck.de/studieren/kosten-stipendien-und-foerderung/kosten-des-studiums"
-            # url = "https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/abschluesse-und-ordnungen/lehramt-bachelor-und-master/lehramt-an-gymnasien"
-            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung#c31478"
-            # url = "https://www.studentenwerk-osnabrueck.de/de/ueber-uns.html"
-            # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung"
-
-            urls = [
-                "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/bachelorstudiengaenge-zwei-faecher-zulassungsbeschraenkt",
-                "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/bachelorstudiengaenge-ein-fach-zulassungsfrei",
-                "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-zwei-faecher",
-                "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-ein-fach",
-                "https://www.lili.uni-osnabrueck.de/fachbereich/studium_und_lehre/pruefungsamt/haeufig_gestellte_fragen.html",
-            ]
-            # url that does not comply with the new website rules (Main content in div.eb2)
-            old_url = "https://www.lili.uni-osnabrueck.de/fachbereich/studium_und_lehre/pruefungsamt/haeufig_gestellte_fragen.html"
-            old_url_eb1 = "https://www.psycho.uni-osnabrueck.de/studieninteressierte/bachelor_psychologie/studieneignungstest.html"
+        async with AsyncWebCrawler() as crawler:
             results = await crawler.arun(
-                url=url,
-                # url=old_url_eb1,
-                # url=old_url,
-                config=run_config,
+                "https://www.uni-osnabrueck.de/studieren/studieren-ein-ueberblick",
+                config=config,
             )
 
-            # results = await crawler.arun_many(
-            #     # url="https://www.ikw.uni-osnabrueck.de/en/research_groups/artificial_intelligence/overview.html",
-            #     # url=old_url,
-            #     urls=urls,
-            #     dispatcher=dispatcher,
-            #     config=run_config,
-            # )
+            print(f"Crawled {len(results)} pages in total")
 
-            # TODO !!! FOR TESTING MAKE SURE TO DELETE THE DB, OTHERWISE THE CACHED RESULTS WILL BE RETURNED
-            print(results)
+            # Access individual results
+            for result in results[:3]:  # Show first 3 results
+                print(f"URL: {result.url}")
+                print(f"Depth: {result.metadata.get('depth', 0)}")
 
-    asyncio.run(crawl())
-    print()
+    asyncio.run(main())
+
+
+# if __name__ == "__main__":
+
+#     from crawl4ai import AsyncWebCrawler
+
+#     AsyncWebCrawler.arun = arun
+#     AsyncWebCrawler.delete_cached_result = delete_cached_result
+#     from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher
+
+#     # Example usage
+#     browser_config = BrowserConfig(
+#         headless=True,
+#         verbose=True,
+#     )
+
+#     dispatcher = MemoryAdaptiveDispatcher(
+#         memory_threshold_percent=70.0,
+#         check_interval=1.0,
+#         max_session_permit=10,
+#         monitor=CrawlerMonitor(),
+#     )
+
+#     run_config = CrawlerRunConfig(
+#         stream=False,
+#         cache_mode=CacheMode.ENABLED,
+#         # css_selector="div.eb2",
+#         # target_elements=["main", "div.eb2"],
+#         target_elements=["main", "div#content"],
+#         scan_full_page=True,
+#         # markdown_generator=DefaultMarkdownGenerator(
+#         #     content_filter=PruningContentFilter(
+#         #         threshold=0.48, threshold_type="fixed", min_word_threshold=0
+#         #     )
+#         # ),
+#     )
+
+#     async def crawl():
+#         async with AsyncWebCrawler(config=browser_config) as crawler:
+
+#             # TODO tables
+#             url = "https://uni-osnabrueck.de/studieren/kosten-stipendien-und-foerderung/kosten-des-studiums"
+#             # url = "https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/abschluesse-und-ordnungen/lehramt-bachelor-und-master/lehramt-an-gymnasien"
+#             # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung#c31478"
+#             # url = "https://www.studentenwerk-osnabrueck.de/de/ueber-uns.html"
+#             # url = "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung"
+
+#             urls = [
+#                 "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/bachelorstudiengaenge-zwei-faecher-zulassungsbeschraenkt",
+#                 "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/bachelorstudiengaenge-ein-fach-zulassungsfrei",
+#                 "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-zwei-faecher",
+#                 "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/masterstudiengaenge-ein-fach",
+#                 "https://www.lili.uni-osnabrueck.de/fachbereich/studium_und_lehre/pruefungsamt/haeufig_gestellte_fragen.html",
+#             ]
+#             # url that does not comply with the new website rules (Main content in div.eb2)
+#             old_url = "https://www.lili.uni-osnabrueck.de/fachbereich/studium_und_lehre/pruefungsamt/haeufig_gestellte_fragen.html"
+#             old_url_eb1 = "https://www.psycho.uni-osnabrueck.de/studieninteressierte/bachelor_psychologie/studieneignungstest.html"
+#             results = await crawler.arun(
+#                 url=url,
+#                 # url=old_url_eb1,
+#                 # url=old_url,
+#                 config=run_config,
+#             )
+
+#             # results = await crawler.arun_many(
+#             #     # url="https://www.ikw.uni-osnabrueck.de/en/research_groups/artificial_intelligence/overview.html",
+#             #     # url=old_url,
+#             #     urls=urls,
+#             #     dispatcher=dispatcher,
+#             #     config=run_config,
+#             # )
+
+#             # TODO !!! FOR TESTING MAKE SURE TO DELETE THE DB, OTHERWISE THE CACHED RESULTS WILL BE RETURNED
+#             print(results)
+
+#     asyncio.run(crawl())
+#     print()
