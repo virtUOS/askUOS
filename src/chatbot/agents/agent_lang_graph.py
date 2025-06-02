@@ -13,10 +13,12 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.prompts import PromptTemplate
-from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
+
+# from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
 from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
+from pydantic import BaseModel, Field, PrivateAttr
 from typing_extensions import TypedDict
 
 from src.chatbot.agents.utils.agent_helpers import llm, llm_optional
@@ -154,19 +156,27 @@ class GraphEdgesMixin:
             }
         )
 
-        score = scored_result.binary_score.lower()
         try:
+            # score = scored_result.binary_score.lower()
+            score = scored_result["binary_score"].lower()
             if score.lower() in ["yes", "ja"]:
                 # TODO Further process the relevant paragraphs
                 # self._clean_tool_message = scored_result.relevant_paragraphs
-                logger.debug("[GRADE DOCUMENTS EDGE] DECISION: DOCS RELEVANT")
+                logger.debug(
+                    f"[GRADE DOCUMENTS EDGE] DECISION: DOCS RELEVANT. Reason: {scored_result['reason']}"
+                )
                 if state.get("about_application", False):
                     return "generate_application"
                 return "generate"
             else:
-                logger.debug("[GRADE DOCUMENTS EDGE] DECISION: DOCS NOT RELEVANT")
+                logger.debug(
+                    f"[GRADE DOCUMENTS EDGE] DECISION: DOCS NOT RELEVANT. Reason: {scored_result['reason']}"
+                )
                 return "rewrite"
         except Exception as e:
+            logger.error(
+                f"[GRADE DOCUMENTS EDGE] Error occurred while grading documents: {e}"
+            )
             raise e
 
     def judge_agent_decision(
@@ -284,6 +294,8 @@ class GraphNodesMixin:
             Dict: Updated state with judgement result
         """
 
+        logger.debug("[JUDGE NODE] Evaluating agent's decision to use tools")
+
         class JudgementResult(BaseModel):
             """Result of agent's tool usage judgement."""
 
@@ -327,17 +339,17 @@ class GraphNodesMixin:
             {"question": state["user_initial_query"], "context": state["messages"][-1]}
         )
 
-        if score.judgement_binary.lower() == "no":
+        if score["judgement_binary"].lower() == "no":
             msg = [HumanMessage(content=translate_prompt()["use_tool_msg"])]
             logger.debug(
-                f"[JUGE NODE] The agent should have used a tool. Reason: {score.reason}"
+                f"[JUGE NODE] The agent should have used a tool. Reason: {score['reason']}"
             )
             return {
                 "messages": state["messages"] + msg,
-                "score_judgement_binary": score.judgement_binary,
+                "score_judgement_binary": score["judgement_binary"],
             }
 
-        return {"score_judgement_binary": score.judgement_binary}
+        return {"score_judgement_binary": score["judgement_binary"]}
 
     def tool_node(self, state: Dict) -> Dict:
         """Process tool calls."""
@@ -522,6 +534,8 @@ class GraphNodesMixin:
     def juge_answer(self, state: State) -> Dict:
         """Judge the generated answer."""
 
+        logger.debug("[JUDGE ANSWER NODE] Judging the answer")
+
         class JudgeAnswerResult(BaseModel):
             """Result of answer judgement."""
 
@@ -571,9 +585,9 @@ class GraphNodesMixin:
             }
         )
 
-        if response.binary_score.lower() == "no":
+        if response["binary_score"].lower() == "no":
             # serve new answer
-            self._curated_answer = response.new_answer
+            self._curated_answer = response["new_answer"]
         else:
             # serve the original answer
             self._curated_answer = state["messages"][-1].content

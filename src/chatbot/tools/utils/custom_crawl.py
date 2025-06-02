@@ -27,8 +27,10 @@ from crawl4ai.utils import create_box_message, get_error_context, sanitize_input
 
 # /root/.crawl4ai/crawl4ai.db   vs code  `code /root/.crawl4ai/`
 
-# This code overrides the arun method of the AsyncWebCrawler class
+
 colorama.init(strip=True)
+
+# This code overrides the arun method of the AsyncWebCrawler class
 
 
 async def custom_aget_cached_url(self, url: str) -> Optional[CrawlResult]:
