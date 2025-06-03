@@ -125,6 +125,17 @@
    
         },
 
+         {
+            "name": "deep_search",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./deep_search.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
 
 
         {

@@ -177,6 +177,8 @@ class ChatApp:
                         and (
                             metadata["langgraph_node"] == "generate"
                             or metadata["langgraph_node"] == "generate_application"
+                            or metadata["langgraph_node"]
+                            == "generate_teaching_degree_node"
                         )
                     ):
                         # deleteme.append(msg.content)

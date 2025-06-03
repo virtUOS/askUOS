@@ -67,6 +67,9 @@ class State(TypedDict):
     about_application: Optional[bool] = (
         False  # To determine which node generates the answer
     )
+    teaching_degree: Optional[bool] = (
+        False  # To determine which node generates the answer
+    )
     tool_messages: Optional[str]
     last_tool_usage: Optional[str]
 
@@ -165,9 +168,14 @@ class GraphEdgesMixin:
                 logger.debug(
                     f"[GRADE DOCUMENTS EDGE] DECISION: DOCS RELEVANT. Reason: {scored_result['reason']}"
                 )
-                if state.get("about_application", False):
+                if state.get("teaching_degree", False):
+                    return "generate_teaching_degree_node"
+
+                elif state.get("about_application", False):
                     return "generate_application"
-                return "generate"
+                else:
+                    return "generate"
+
             else:
                 logger.debug(
                     f"[GRADE DOCUMENTS EDGE] DECISION: DOCS NOT RELEVANT. Reason: {scored_result['reason']}"
@@ -366,6 +374,7 @@ class GraphNodesMixin:
         outputs = []
         outputs_txt = ""
         about_application = False
+        teaching_degree = False
         search_query = []
         visited_docs.clear()
 
@@ -377,6 +386,7 @@ class GraphNodesMixin:
                     about_application = tool_call["args"].get(
                         "about_application", False
                     )
+                    teaching_degree = tool_call["args"].get("teaching_degree", False)
                     tool_call["args"]["do_not_visit_links"] = self._visited_links
                     tool_call["args"]["agent_executor"] = self
                     # tool_result = self._tools_by_name[tool_call["name"]].invoke(
@@ -427,6 +437,7 @@ class GraphNodesMixin:
             "last_tool_usage": last_tool_usage,  # last ai message with previous tool usage
             "search_query": search_query,
             "about_application": about_application,
+            "teaching_degree": teaching_degree,
         }
 
     def rewrite(self, state):
@@ -523,6 +534,30 @@ class GraphNodesMixin:
         tool_message = state.get("tool_messages", None)
         system_message_generate = SystemMessage(
             content=translate_prompt()["system_message_generate_application"].format(
+                state.get("current_date", ""),
+                state.get("search_query", ""),
+                tool_message,
+            )
+        )
+        # self._clean_tool_message = None
+        return self.generate_helper(state, system_message_generate)
+
+    def generate_teaching_degree_node(self, state: State) -> Dict:
+        """Generate answer for teaching degree related queries.
+
+        Args:
+            state: Current state
+
+        Returns:
+            Dict: Updated state with generated response
+        """
+        logger.debug("[GENERATE TEACHING DEGREE NODE] Generating answer")
+        # tool_message = self._clean_tool_message or state.get("tool_messages", None)
+        tool_message = state.get("tool_messages", None)
+        system_message_generate = SystemMessage(
+            content=translate_prompt()[
+                "system_message_generate_teaching_degree"
+            ].format(
                 state.get("current_date", ""),
                 state.get("search_query", ""),
                 tool_message,
@@ -716,6 +751,9 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
         )  # Generating a response after we know the documents are relevant
         # Call agent node to decide to retrieve or not
         graph_builder.add_node("generate_application", self.generate_application)
+        graph_builder.add_node(
+            "generate_teaching_degree_node", self.generate_teaching_degree_node
+        )
         # graph_builder.add_node("judge_answer", self.juge_answer)
         graph_builder.add_edge(START, "agent_node")
 
@@ -746,11 +784,13 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
                 "generate": "generate",
                 "rewrite": "rewrite",
                 "generate_application": "generate_application",
+                "generate_teaching_degree_node": "generate_teaching_degree_node",
             },
         )
         graph_builder.add_edge("generate", END)
         graph_builder.add_edge("rewrite", "agent_node")
         graph_builder.add_edge("generate_application", END)
+        graph_builder.add_edge("generate_teaching_degree_node", END)
 
         self._graph = graph_builder.compile(debug=DEBUG)
 
