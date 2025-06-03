@@ -3,14 +3,25 @@ import sys
 
 sys.path.append("/app")
 import asyncio
+import types
 from functools import wraps
 from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
+
+# At the beginning of your script
+import colorama
 import dotenv
 import nest_asyncio
 import redis.asyncio as redis
-from crawl4ai import BrowserConfig, CacheMode, CrawlerMonitor, CrawlerRunConfig
+from crawl4ai import (
+    AsyncWebCrawler,
+    BrowserConfig,
+    CacheMode,
+    CrawlerMonitor,
+    CrawlerRunConfig,
+)
+from crawl4ai.async_database import DB_PATH, async_db_manager
 from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher
 from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
@@ -19,11 +30,34 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from src.chatbot.agents.utils.agent_helpers import llm_optional as sumarize_llm
 
 # from src.chatbot.db.redis_client import redis_manager
-from src.chatbot.tools.utils.custom_crawl import AsyncOverrideCrawler
+from src.chatbot.tools.utils.custom_crawl import (
+    _check_content_changed,
+    arun,
+    custom_acache_url,
+    custom_aget_cached_url,
+    custom_ainit_db,
+    delete_cached_result,
+)
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import decode_string
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
+
+colorama.init(strip=True)
+
+AsyncWebCrawler.arun = arun
+AsyncWebCrawler.delete_cached_result = delete_cached_result
+AsyncWebCrawler._check_content_changed = _check_content_changed
+
+async_db_manager.ainit_db = types.MethodType(custom_ainit_db, async_db_manager)
+async_db_manager.acache_url = types.MethodType(custom_acache_url, async_db_manager)
+async_db_manager.aget_cached_url = types.MethodType(
+    custom_aget_cached_url, async_db_manager
+)
+
+CrawlerRunConfig.check_content_changed = True
+CrawlerRunConfig.head_request_timeout = 3.0
+CrawlerRunConfig.default_cache_ttl_seconds = 60 * 60 * 72  # 72 hours
 
 dotenv.load_dotenv()
 
@@ -37,10 +71,6 @@ SEARCH_URL = os.getenv("SEARCH_URL")
 MAX_NUM_LINKS = 4
 
 
-# Redis configuration
-REDIS_MAX_MEMORY = "1024mb"
-REDIS_MAX_MEMORY_POLICY = "allkeys-lru"
-REDIS_SAMPLES = 5
 TTL = 30 * 60 * 60  # 30h default TTL
 
 # Module-level state variables
@@ -59,22 +89,13 @@ async def initialize_redis(client: redis.Redis):
     try:
         await client.ping()
         logger.info("[REDIS] Redis connection established successfully.")
-    except redis.ConnectionError as e:
-        logger.error(f"[REDIS] Redis connection error: {e}")
-        raise
-
-    # configure Redis settings
-    try:
-        await client.config_set("maxmemory", REDIS_MAX_MEMORY)
-        await client.config_set("maxmemory-policy", REDIS_MAX_MEMORY_POLICY)
-        await client.config_set("maxmemory-samples", REDIS_SAMPLES)
         info = await client.info("memory")
         used_memory_mb = int(info["used_memory"]) / 1024 / 1024
         logger.info(
             f"[REDIS] Redis configured successfully. Memory usage: {used_memory_mb:.2f}MB"
         )
-    except Exception as e:
-        logger.error(f"[REDIS] Configuration error: {e}")
+    except redis.ConnectionError as e:
+        logger.error(f"[REDIS] Redis connection error: {e}")
         raise
 
 
@@ -139,7 +160,7 @@ async def generate_summary(text: str, query: str) -> str:
     {text}
 
     question/query: {question}
-    Answer:
+    
     """
 
     reduce_template = PromptTemplate(
@@ -194,7 +215,7 @@ async def get_web_content(
         logger.error(f"[REDIS] Error accessing (crawled) cache: {e}")
 
     try:
-        async with AsyncOverrideCrawler(
+        async with AsyncWebCrawler(
             config=browser_config,
             thread_safe=True,
         ) as crawler:

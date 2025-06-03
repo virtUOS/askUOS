@@ -17,6 +17,7 @@
             "name": "streamlit_chat",
             "type": "debugpy",
             "request": "launch",
+            "justMyCode":false,
             "program": "/usr/local/bin/streamlit",
             "env":{ "PYTHONPATH": "/app"},
             "args": [
@@ -118,6 +119,17 @@
             "type": "debugpy",
             "request": "launch",
             "program": "./test_me.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+         {
+            "name": "deep_search",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./deep_search.py",
             "cwd": "${workspaceFolder}",
             "env":{ "PYTHONPATH": "/app"},
             "console": "integratedTerminal",

@@ -13,10 +13,12 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.prompts import PromptTemplate
-from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
+
+# from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
 from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
+from pydantic import BaseModel, Field, PrivateAttr
 from typing_extensions import TypedDict
 
 from src.chatbot.agents.utils.agent_helpers import llm, llm_optional
@@ -63,6 +65,9 @@ class State(TypedDict):
     answer_rejection: Optional[str]
     score_judgement_binary: Optional[str]
     about_application: Optional[bool] = (
+        False  # To determine which node generates the answer
+    )
+    teaching_degree: Optional[bool] = (
         False  # To determine which node generates the answer
     )
     tool_messages: Optional[str]
@@ -154,19 +159,32 @@ class GraphEdgesMixin:
             }
         )
 
-        score = scored_result.binary_score.lower()
         try:
+            # score = scored_result.binary_score.lower()
+            score = scored_result["binary_score"].lower()
             if score.lower() in ["yes", "ja"]:
                 # TODO Further process the relevant paragraphs
                 # self._clean_tool_message = scored_result.relevant_paragraphs
-                logger.debug("[GRADE DOCUMENTS EDGE] DECISION: DOCS RELEVANT")
-                if state.get("about_application", False):
+                logger.debug(
+                    f"[GRADE DOCUMENTS EDGE] DECISION: DOCS RELEVANT. Reason: {scored_result['reason']}"
+                )
+                if state.get("teaching_degree", False):
+                    return "generate_teaching_degree_node"
+
+                elif state.get("about_application", False):
                     return "generate_application"
-                return "generate"
+                else:
+                    return "generate"
+
             else:
-                logger.debug("[GRADE DOCUMENTS EDGE] DECISION: DOCS NOT RELEVANT")
+                logger.debug(
+                    f"[GRADE DOCUMENTS EDGE] DECISION: DOCS NOT RELEVANT. Reason: {scored_result['reason']}"
+                )
                 return "rewrite"
         except Exception as e:
+            logger.error(
+                f"[GRADE DOCUMENTS EDGE] Error occurred while grading documents: {e}"
+            )
             raise e
 
     def judge_agent_decision(
@@ -284,6 +302,8 @@ class GraphNodesMixin:
             Dict: Updated state with judgement result
         """
 
+        logger.debug("[JUDGE NODE] Evaluating agent's decision to use tools")
+
         class JudgementResult(BaseModel):
             """Result of agent's tool usage judgement."""
 
@@ -327,17 +347,17 @@ class GraphNodesMixin:
             {"question": state["user_initial_query"], "context": state["messages"][-1]}
         )
 
-        if score.judgement_binary.lower() == "no":
+        if score["judgement_binary"].lower() == "no":
             msg = [HumanMessage(content=translate_prompt()["use_tool_msg"])]
             logger.debug(
-                f"[JUGE NODE] The agent should have used a tool. Reason: {score.reason}"
+                f"[JUGE NODE] The agent should have used a tool. Reason: {score['reason']}"
             )
             return {
                 "messages": state["messages"] + msg,
-                "score_judgement_binary": score.judgement_binary,
+                "score_judgement_binary": score["judgement_binary"],
             }
 
-        return {"score_judgement_binary": score.judgement_binary}
+        return {"score_judgement_binary": score["judgement_binary"]}
 
     def tool_node(self, state: Dict) -> Dict:
         """Process tool calls."""
@@ -354,6 +374,7 @@ class GraphNodesMixin:
         outputs = []
         outputs_txt = ""
         about_application = False
+        teaching_degree = False
         search_query = []
         visited_docs.clear()
 
@@ -365,6 +386,7 @@ class GraphNodesMixin:
                     about_application = tool_call["args"].get(
                         "about_application", False
                     )
+                    teaching_degree = tool_call["args"].get("teaching_degree", False)
                     tool_call["args"]["do_not_visit_links"] = self._visited_links
                     tool_call["args"]["agent_executor"] = self
                     # tool_result = self._tools_by_name[tool_call["name"]].invoke(
@@ -415,6 +437,7 @@ class GraphNodesMixin:
             "last_tool_usage": last_tool_usage,  # last ai message with previous tool usage
             "search_query": search_query,
             "about_application": about_application,
+            "teaching_degree": teaching_degree,
         }
 
     def rewrite(self, state):
@@ -519,8 +542,34 @@ class GraphNodesMixin:
         # self._clean_tool_message = None
         return self.generate_helper(state, system_message_generate)
 
+    def generate_teaching_degree_node(self, state: State) -> Dict:
+        """Generate answer for teaching degree related queries.
+
+        Args:
+            state: Current state
+
+        Returns:
+            Dict: Updated state with generated response
+        """
+        logger.debug("[GENERATE TEACHING DEGREE NODE] Generating answer")
+        # tool_message = self._clean_tool_message or state.get("tool_messages", None)
+        tool_message = state.get("tool_messages", None)
+        system_message_generate = SystemMessage(
+            content=translate_prompt()[
+                "system_message_generate_teaching_degree"
+            ].format(
+                state.get("current_date", ""),
+                state.get("search_query", ""),
+                tool_message,
+            )
+        )
+        # self._clean_tool_message = None
+        return self.generate_helper(state, system_message_generate)
+
     def juge_answer(self, state: State) -> Dict:
         """Judge the generated answer."""
+
+        logger.debug("[JUDGE ANSWER NODE] Judging the answer")
 
         class JudgeAnswerResult(BaseModel):
             """Result of answer judgement."""
@@ -571,9 +620,9 @@ class GraphNodesMixin:
             }
         )
 
-        if response.binary_score.lower() == "no":
+        if response["binary_score"].lower() == "no":
             # serve new answer
-            self._curated_answer = response.new_answer
+            self._curated_answer = response["new_answer"]
         else:
             # serve the original answer
             self._curated_answer = state["messages"][-1].content
@@ -702,6 +751,9 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
         )  # Generating a response after we know the documents are relevant
         # Call agent node to decide to retrieve or not
         graph_builder.add_node("generate_application", self.generate_application)
+        graph_builder.add_node(
+            "generate_teaching_degree_node", self.generate_teaching_degree_node
+        )
         # graph_builder.add_node("judge_answer", self.juge_answer)
         graph_builder.add_edge(START, "agent_node")
 
@@ -732,11 +784,13 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
                 "generate": "generate",
                 "rewrite": "rewrite",
                 "generate_application": "generate_application",
+                "generate_teaching_degree_node": "generate_teaching_degree_node",
             },
         )
         graph_builder.add_edge("generate", END)
         graph_builder.add_edge("rewrite", "agent_node")
         graph_builder.add_edge("generate_application", END)
+        graph_builder.add_edge("generate_teaching_degree_node", END)
 
         self._graph = graph_builder.compile(debug=DEBUG)
 
