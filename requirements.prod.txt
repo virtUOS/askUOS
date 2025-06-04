@@ -15,7 +15,7 @@ langchain-milvus
 langgraph
 tqdm
 pymilvus
-crawl4AI===0.6.2
+crawl4AI===0.6.3
 opik
 redis
 nest_asyncio
