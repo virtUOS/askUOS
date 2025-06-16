@@ -136,6 +136,17 @@
    
         },
 
+             {
+            "name": "log_cleanup",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./src/chatbot_log/log_cleanup.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
 
 
         {

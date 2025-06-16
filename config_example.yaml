@@ -25,7 +25,7 @@ embedding:
       "Authorization": "API-KEY"
     }
   }
-  chunk_size: 3500 # TODO ollama model can embed entire page, could be better for performance
+  chunk_size: 3500 # Make sure this is not higher than the context window of the model
   chunk_overlap: 50
 
 
