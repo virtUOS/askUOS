@@ -13,6 +13,8 @@ from .models import (
     ApplicationConfig,
     EmbeddingSettings,
     Legal,
+    LogSettings,
+    MilvusSettings,
     ModelConfig,
     SearchConfig,
 )
@@ -33,6 +35,7 @@ class Settings(BaseSettings):
     model: ModelConfig
     application: ApplicationConfig
     embedding: EmbeddingSettings
+    milvus_settings: MilvusSettings
     language: Literal["Deutsch", "English"]
     legal: Optional[Legal] = (
         None  # Optional legal information (e.g., data protection, imprint)
@@ -46,6 +49,7 @@ class Settings(BaseSettings):
     # TODO move to a global object/context
     # if the llm summarization mode is active the summarization result will be not sent to the user
     llm_summarization_mode: bool = False
+    log_settings: Optional[LogSettings] = None
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:

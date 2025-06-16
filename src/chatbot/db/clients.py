@@ -1,11 +1,4 @@
-import os
-
-import dotenv
-
-dotenv.load_dotenv()
 import asyncio
-import logging
-import os
 from typing import List, Optional
 
 import nest_asyncio
@@ -13,20 +6,8 @@ from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_milvus import Milvus
 
 from src.chatbot.embeddings.main import get_embeddings
+from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
-
-# # Configurations
-# EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
-
-
-# # Initialize embeddings
-# embeddings = FastEmbedEmbeddings(model_name=EMBEDDING_MODEL)
-
-# TODO: Move to config.yml
-
-URI = os.getenv("MILVUS_URL")
-MILVUS_USER = os.getenv("MILVUS_USER")
-MILVUS_PASSWORD = os.getenv("MILVUS_PASSWORD")
 
 
 # TODO this function is implemented to solve bug with Milvus and async operations: RuntimeError: There is no current event loop in thread 'ScriptRunner.scriptThread'.
@@ -59,10 +40,14 @@ def get_milvus_client(collection_name: str) -> Milvus:
     embeddings = get_embeddings(settings.embedding.type)
     vector_store = Milvus(
         embedding_function=embeddings,
-        connection_args={"uri": URI, "token": f"{MILVUS_USER}:{MILVUS_PASSWORD}"},
+        connection_args={
+            "uri": settings.milvus_settings.uri,
+            "token": settings.milvus_settings.token,
+        },
         collection_name=collection_name,
     )
 
+    logger.info("Milvus client initialized successfully")
     return vector_store
 
 
@@ -77,27 +62,3 @@ def get_retriever(collection_name: str) -> VectorStoreRetriever:
 
 
 print()
-
-# web_index_retriever = get_milvus_client_retriever("web_index")
-
-# print()
-# # Example usage:
-# results = retriever.invoke(
-#     "I finished my application but I did not receive a confirmation email"
-# )
-
-
-# vector_store = Milvus(
-#     embedding_function=embeddings,
-#     connection_args={"uri": URI, "token": f"{MILVUS_USER}:{MILVUS_PASSWORD}"},
-#     collection_name="examination_regulations",
-# )
-
-
-# for doc in results:
-#     print(f"* {doc.page_content} [{doc.metadata}]")
-
-# # LIKE --> infix match
-# vector_store.similarity_search_with_score(
-#     "master arbeit", k=1, expr='source LIKE "%Biologie%"'
-# )

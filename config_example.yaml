@@ -28,6 +28,11 @@ embedding:
   chunk_size: 3500 # Make sure this is not higher than the context window of the model
   chunk_overlap: 50
 
+milvus_settings:
+  # Milvus vector database configuration
+  uri: "http://standalone:19530" # Useful for Docker or Kubernetes deployments. User docker compose service name (Usually "milvus" or "standalone")
+  token: "root:Milvus"  # Optional authentication token
+
 
 # embedding:
 #   # Text embedding configuration
@@ -36,3 +41,7 @@ embedding:
 #     model_name: "intfloat/multilingual-e5-large",
  
 #   }
+
+# Optional. If set up, implement e.g., cron job to run /app/src/chatbot_log/log_cleanup.py  
+log_settings:
+  delete_logs_days: 90 # Number of days to keep logs before deletion

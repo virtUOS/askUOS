@@ -63,3 +63,16 @@ class EmbeddingSettings(BaseModel):
     )
     chunk_overlap: int = 50
     batch_size: int = 256
+
+
+class LogSettings(BaseModel):
+    delete_logs_days: int = 90  # Number of days to keep logs before deletion
+
+
+class MilvusSettings(BaseModel):
+    """Settings for Milvus vector database"""
+
+    uri: Optional[str] = "http://localhost:19530"
+    host: Optional[str] = None
+    port: int = 19530
+    token: Optional[str] = "root:Milvus"

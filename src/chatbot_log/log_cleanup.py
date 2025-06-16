@@ -1,12 +1,14 @@
 import csv
-import logging
 import os
 import shutil
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
-MAX_AGE_DAYS = 90  # Default maximum age for log entries in days
+from src.chatbot_log.chatbot_logger import logger
+from src.config.core_config import settings
+
+MAX_AGE_DAYS = settings.log_settings.delete_logs_days
 
 # Schedule cleanup using a cron job or similar mechanism
 
@@ -56,12 +58,12 @@ def cleanup_old_csv_entries(log_file: str, max_age_days: int = MAX_AGE_DAYS):
 
         # Replace original file with cleaned file
         shutil.move(temp_file.name, log_file)
-        logging.info(f"Removed {removed_count} old entries from {log_file}")
+        logger.info(f"Removed {removed_count} old entries from {log_file}")
 
     except Exception as e:
         temp_file.close()
         os.unlink(temp_file.name)  # Clean up temp file
-        logging.error(f"Error cleaning up {log_file}: {e}")
+        logger.error(f"Error cleaning up {log_file}: {e}")
         raise
 
     return removed_count
@@ -100,12 +102,12 @@ def cleanup_old_text_logs(log_file: str, max_age_days: int = MAX_AGE_DAYS):
 
         temp_file.close()
         shutil.move(temp_file.name, log_file)
-        logging.info(f"Removed {removed_count} old entries from {log_file}")
+        logger.info(f"Removed {removed_count} old entries from {log_file}")
 
     except Exception as e:
         temp_file.close()
         os.unlink(temp_file.name)
-        logging.error(f"Error cleaning up {log_file}: {e}")
+        logger.error(f"Error cleaning up {log_file}: {e}")
         raise
 
     return removed_count
@@ -125,7 +127,7 @@ def cleanup_all_logs(log_dir: str = "logs", max_age_days: int = MAX_AGE_DAYS):
             removed = cleanup_old_csv_entries(str(csv_file), max_age_days)
             total_removed += removed
         except Exception as e:
-            logging.error(f"Failed to clean {csv_file}: {e}")
+            logger.error(f"Failed to clean {csv_file}: {e}")
 
     # Clean text log files
     for log_file in log_path.glob("*.log"):
@@ -133,9 +135,9 @@ def cleanup_all_logs(log_dir: str = "logs", max_age_days: int = MAX_AGE_DAYS):
             removed = cleanup_old_text_logs(str(log_file), max_age_days)
             total_removed += removed
         except Exception as e:
-            logging.error(f"Failed to clean {log_file}: {e}")
+            logger.error(f"Failed to clean {log_file}: {e}")
 
-    logging.info(f"Total entries removed: {total_removed}")
+    logger.info(f"Total entries removed: {total_removed}")
     return total_removed
 
 
