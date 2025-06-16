@@ -1,9 +1,12 @@
 import csv
 import os
 import shutil
+import sys
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
+
+sys.path.append("/app")
 
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
