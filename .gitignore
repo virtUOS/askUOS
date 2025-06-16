@@ -186,3 +186,4 @@ hosts-testing.yml
 volumes/
 ansible_export/
 .roo/
+config.yaml

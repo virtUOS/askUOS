@@ -26,3 +26,4 @@ ragas
 opik
 redis
 nest_asyncio
+langchain-ollama

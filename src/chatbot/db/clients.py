@@ -9,16 +9,20 @@ import os
 from typing import List, Optional
 
 import nest_asyncio
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_milvus import Milvus
 
-# Configurations
-EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
+from src.chatbot.embeddings.main import get_embeddings
+from src.config.core_config import settings
+
+# # Configurations
+# EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
 
 
-# Initialize embeddings
-embeddings = FastEmbedEmbeddings(model_name=EMBEDDING_MODEL)
+# # Initialize embeddings
+# embeddings = FastEmbedEmbeddings(model_name=EMBEDDING_MODEL)
+
+# TODO: Move to config.yml
 
 URI = os.getenv("MILVUS_URL")
 MILVUS_USER = os.getenv("MILVUS_USER")
@@ -52,6 +56,7 @@ def ensure_event_loop():
 
 def get_milvus_client(collection_name: str) -> Milvus:
     ensure_event_loop()
+    embeddings = get_embeddings(settings.embedding.type)
     vector_store = Milvus(
         embedding_function=embeddings,
         connection_args={"uri": URI, "token": f"{MILVUS_USER}:{MILVUS_PASSWORD}"},

@@ -9,7 +9,13 @@ from pydantic_settings import (
 
 from src.chatbot_log.chatbot_logger import logger
 
-from .models import ApplicationConfig, Legal, ModelConfig, SearchConfig
+from .models import (
+    ApplicationConfig,
+    EmbeddingSettings,
+    Legal,
+    ModelConfig,
+    SearchConfig,
+)
 
 
 class Settings(BaseSettings):
@@ -26,6 +32,7 @@ class Settings(BaseSettings):
     # search_config: SearchConfig
     model: ModelConfig
     application: ApplicationConfig
+    embedding: EmbeddingSettings
     language: Literal["Deutsch", "English"]
     legal: Optional[Legal] = (
         None  # Optional legal information (e.g., data protection, imprint)

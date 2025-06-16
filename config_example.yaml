@@ -1,0 +1,38 @@
+model:
+  model_name: "gpt-4.1-mini"
+  context_window: 50000 #128000 # in tokens (for pricing reasons you may want to keep this low and not higher than openai max tokens)
+
+language: "Deutsch"  # Literal["Deutch", "English"]. 
+
+legal:
+  data_protection: "https://my_example.de/datenschutz/"
+  imprint: "https://my_example.de/impressum/"
+
+application:
+  debug: True
+  tracing: False # used by opik
+  # If you want to use the tracing feature, you need to set up a tracing provider (Opik)
+  opik_project_name: "askUOSTesting"
+  recursion_limit: 8 # default is 12 https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
+
+embedding:
+  # Text embedding configuration
+  type: "Ollama"
+  connection_settings: {
+    model_name: "nomic-embed-text",
+    base_url : "https://my-ollama-instance.de",
+    headers: {
+      "Authorization": "API-KEY"
+    }
+  }
+  chunk_size: 3500 # TODO ollama model can embed entire page, could be better for performance
+  chunk_overlap: 50
+
+
+# embedding:
+#   # Text embedding configuration
+#   type: "FastEmbed"
+#   connection_settings: {
+#     model_name: "intfloat/multilingual-e5-large",
+ 
+#   }
