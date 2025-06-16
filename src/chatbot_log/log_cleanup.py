@@ -8,6 +8,8 @@ from pathlib import Path
 
 MAX_AGE_DAYS = 90  # Default maximum age for log entries in days
 
+# Schedule cleanup using a cron job or similar mechanism
+
 
 def cleanup_old_csv_entries(log_file: str, max_age_days: int = MAX_AGE_DAYS):
     """

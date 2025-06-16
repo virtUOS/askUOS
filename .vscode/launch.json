@@ -148,6 +148,18 @@
         },
 
 
+                 {
+            "name": "test_log_cleanup",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./tests/test_log_cleanup.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+
 
         {
             "name": "db_utils",
