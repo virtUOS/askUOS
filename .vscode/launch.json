@@ -106,7 +106,7 @@
             "name": "analyze_logs",
             "type": "debugpy",
             "request": "launch",
-            "program": "./evaluation/analyze_logs.py",
+            "program": "./evaluation/log_evaluation/analyze_logs.py",
             "cwd": "${workspaceFolder}",
             "env":{ "PYTHONPATH": "/app"},
             "console": "integratedTerminal",
