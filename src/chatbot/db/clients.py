@@ -35,6 +35,9 @@ def ensure_event_loop():
         return loop
 
 
+# TODO Milvus client initialization should be done only once, not every time we call the function (Use a singleton pattern or similar approach)
+
+
 def get_milvus_client(collection_name: str) -> Milvus:
     ensure_event_loop()
     embeddings = get_embeddings(settings.embedding.type)

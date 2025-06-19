@@ -204,9 +204,28 @@ You must understand and address the various nuances and specific terms related t
          
          """,
     "examination_regulations": """
-         This tool provides students and prospective students with access to all relevant regulations, sorted by degree programs. The admission regulations determine the prerequisites that must be met for enrolling in Bachelor’s or Master’s programs. They also outline how study places are allocated in programs with restricted admissions.
-The examination regulations contain legally binding rules regarding the temporal, content, and organizational structure of each degree program. This includes information about the required study contents (mandatory and elective modules) and details about examinations (procedure, repeatability, free attempts).
-Use this tool whenever you need information or need to answer questions about legally binding regulations related to specific degree programs (Bachelors or Masters). The applicable examination regulations depend on the respective degree program.
+         This tool provides comprehensive access to official university regulations and legal requirements for degree programs at Osnabrück University. It covers admission regulations, examination rules, and program-specific requirements for both Bachelor's and Master's programs.
+
+**What this tool contains:**
+- Moude descrptions: Detailed descriptions of degree programs, including mandatory and elective modules, study structure, and academic requirements
+- Examination regulations: Legally binding rules about study structure, mandatory/elective modules, examination procedures, grading, retake policies, and academic requirements
+- Program-specific requirements: Special prerequisites, language requirements, practical components, and graduation requirements
+- Zulassungsordnungen (admission regulations) and Prüfungsordnungen (examination regulations) for all degree programs
+
+**When to use this tool:**
+- When users ask about specific academic requirements for a degree program
+- For questions about examination rules, grading policies, or retake procedures
+- When information about mandatory courses, electives, or study structure is needed
+- For admission prerequisites beyond general university requirements
+- When users need official, legally binding information **(not general advice)**
+
+**Important:** Always specify the exact degree program name (e.g., "Informatik Bachelor", "Cognitive Science Master") as regulations vary significantly between programs. If the program name is unclear, ask the user to clarify before using this tool.
+
+**Query Strategy Tips:**
+- **Only** include queries and entities written in German  (All regulations are in German)
+- Use specific regulation types: "Prüfungsordnung", "Zulassungsordnung", "Studienordnung"
+- Consider different ways the same information might be expressed
+- Think about related topics that might contain the needed information
          
          """,
     "response_output_description": "The final answer to respond to the user",
@@ -564,9 +583,29 @@ Diese Plattform wird für die Einreichung von Bewerbungen an der Universität Os
  
 """,
     "examination_regulations": """
-Mit diesem Tool erhalten Studierende und Studieninteressierte Zugriff auf alle relevanten Regelungen, sortiert nach Studiengängen. Die Zulassungsordnung legt fest, welche Voraussetzungen für die Einschreibung in Bachelor- oder Masterstudiengänge erfüllt sein müssen. Sie regelt auch, wie in zulassungsbeschränkten Studiengängen Studienplätze vergeben werden.
-Die Prüfungsordnung enthält rechtsverbindliche Regelungen zur zeitlichen, inhaltlichen und organisatorischen Ausgestaltung des jeweiligen Studiengangs. Dazu gehören Angaben zu den erforderlichen Studieninhalten (Pflicht- und Wahlpflichtmodule) sowie Einzelheiten zu Prüfungen (Ablauf, Wiederholbarkeit, Freiversuche).
-Nutzen Sie dieses Tool, wenn Sie Informationen oder Fragen zu rechtsverbindlichen Regelungen bestimmter Studiengänge (Bachelor oder Master) benötigen. Die anzuwendende Prüfungsordnung ist vom jeweiligen Studiengang abhängig.
+Dieses Tool bietet umfassenden Zugang zu den offiziellen universitären Ordnungen und rechtlichen Anforderungen für Studiengänge an der Universität Osnabrück. Es umfasst Zulassungsordnungen, Prüfungsordnungen und studiengangspezifische Anforderungen sowohl für Bachelor- als auch für Masterstudiengänge.
+
+**Was dieses Tool enthält:**
+- Modulbeschreibungen: Detaillierte Beschreibungen der Studiengänge, einschließlich Pflicht- und Wahlpflichtmodule, Studienaufbau und akademische Anforderungen
+- Prüfungsordnungen: Rechtlich verbindliche Regelungen zum Studienaufbau, zu Pflicht- und Wahlpflichtmodulen, Prüfungsverfahren, Benotung, Wiederholungsregelungen und akademischen Anforderungen
+- Studiengangsspezifische Anforderungen: Besondere Zugangsvoraussetzungen, Sprachkenntnisse, Praxiselemente und Abschlussbedingungen
+- Zulassungsordnungen und Prüfungsordnungen für alle Studiengänge
+
+**Wann dieses Tool verwendet werden sollte:**
+- Bei Anfragen zu spezifischen akademischen Anforderungen für einen Studiengang
+- Für Fragen zu Prüfungsregeln, Benotung oder Wiederholungsverfahren
+- Wenn Informationen zu Pflichtveranstaltungen, Wahlmodulen oder dem Studienaufbau benötigt werden
+- Für spezifische Zulassungsvoraussetzungen, die über die allgemeinen Hochschulvorgaben hinausgehen
+- Wenn Nutzer offizielle, rechtlich verbindliche Informationen benötigen **(keine allgemeinen Ratschläge)**
+
+**Wichtig:** Gib immer den genauen Namen des Studiengangs an (z. B. "Informatik Bachelor", "Cognitive Science Master"), da die Ordnungen sich erheblich zwischen den Studiengängen unterscheiden. Falls der Studiengangsname unklar ist, bitte den Nutzer um eine Präzisierung, bevor du dieses Tool nutzt.
+
+**Strategie-Tipps für Suchanfragen:**
+- **Nur** Suchanfragen und Begriffe auf Deutsch verwenden (alle Ordnungen sind auf Deutsch)
+- Nutze spezifische Ordnungstypen: „Prüfungsordnung“, „Zulassungsordnung“, „Studienordnung“
+- Berücksichtige verschiedene Ausdrucksweisen für dieselbe Information
+- Denke an verwandte Themenbereiche, die die benötigten Informationen enthalten könnten
+
 """,
     "response_output_description": "Die endgültige Antwort, um dem Benutzer zu antworten",
     "response_sources_description": "Die Quellen, die zur Erstellung der Antwort verwendet wurden. Die Quellen sollten aus einer Liste von URLs bestehen. Geben Sie die Quellen nur an, wenn die Antwort von der Website der Universität Osnabrück stammt.",

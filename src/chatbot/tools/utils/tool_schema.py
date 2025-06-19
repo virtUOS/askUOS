@@ -20,8 +20,26 @@ class SearchInputWeb(BaseModel):
 class RetrieverInput(BaseModel):
     """Input to the retriever."""
 
-    query: str = Field(description="query to look up in retriever")
+    primary_query: str = Field(
+        description="The main search query focusing on the specific degree program and primary question topic. Should include: degree program name + level (Bachelor/Master) + main topic"
+    )
+
+    alternative_query: str = Field(
+        default=None,
+        description="An alternative formulation using **different terminology** or approach. Should use synonyms, alternative terms, or different perspective on the same topic",
+    )
+    # broader_query: str = Field(
+    #     description="A broader search to capture related or contextual information. Should cast a wider net to find related regulations or general university policies"
+    # )
+
+    entities: list[str] = Field(
+        description="list of entities to look up in retriever and filter out among a collection of documents, e.g. ['Biologie', 'Informatik']",
+    )
+
     # TODO make sure that keywords are in German
     filter_program_name: str = Field(
         description="Keyword to filter the documents by study program name, e.g. Biologie, Informatik, Kognitionswissenschaft, Cognitive Science, Chemie, Mathematik, Physik, Psychologie, Wirtschaftsinformatik, Wirtschaftswissenschaften etc."
+    )
+    hypothetical_answer: str = Field(
+        description="A hypothetical answer to the question. Generate a short answer to the user's question"
     )

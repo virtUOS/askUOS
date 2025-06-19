@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Optional
+from typing import Any, List, Optional
 
 from langchain.tools import BaseTool
 from langchain_core.callbacks import Callbacks
@@ -12,29 +12,73 @@ from langchain_core.pydantic_v1 import BaseModel, Field
 
 from src.chatbot.db.clients import get_milvus_client, get_retriever
 from src.chatbot.tools.utils.tool_helpers import visited_docs
+from src.chatbot.tools.utils.tool_schema import RetrieverInput
+from src.chatbot_log.chatbot_logger import logger
 
 
 def _get_relevant_documents(
-    query: str,
+    primary_query: str,
+    alternative_query: str,
+    # broader_query: str,
+    entities: List[str],
     filter_program_name: str,
+    hypothetical_answer: str,
 ) -> str:
-    # TODO: add a filter for the program name WHEN searching
+    """Get relevant documents using multiple search strategies."""
     document_separator = "\n\n"
     document_prompt = PromptTemplate.from_template("{page_content}")
-    # retriever = retriever = get_retriever("examination_regulations")
     vector_store = get_milvus_client("examination_regulations")
 
-    # docs = retriever.invoke(query)
-    docs = vector_store.similarity_search(
-        query, expr=f"source LIKE '%{filter_program_name}%'", k=5
+    # TODO: This filter excludes the general regulations and focuses on specific programs.
+    # Prepare filter expression
+    filter_expr = f"source LIKE '%{filter_program_name}%'"
+
+    # Collect all unique documents from multiple queries
+    all_docs = []
+    seen_doc_ids = set()
+
+    # TODO: Implement a reranker to improve the quality of the results
+    # Search with primary query
+    primary_docs = vector_store.similarity_search(primary_query, expr=filter_expr, k=3)
+    for doc in primary_docs:
+        doc_id = doc.metadata.get("pk", "")
+        if doc_id not in seen_doc_ids:
+            all_docs.append(doc)
+            seen_doc_ids.add(doc_id)
+
+    # Search with alternative query if provided
+    if alternative_query:
+        alt_docs = vector_store.similarity_search(
+            alternative_query, expr=filter_expr, k=2
+        )
+        for doc in alt_docs:
+            doc_id = doc.metadata.get("pk", "")
+            if doc_id not in seen_doc_ids:
+                all_docs.append(doc)
+                seen_doc_ids.add(doc_id)
+
+    # Search with broader query
+    # broader_docs = vector_store.similarity_search(broader_query, expr=filter_expr, k=2)
+    # for doc in broader_docs:
+    #     doc_id = doc.metadata.get("pk", "")
+    #     if doc_id not in seen_doc_ids:
+    #         all_docs.append(doc)
+    #         seen_doc_ids.add(doc_id)
+
+    hypothetical_docs = vector_store.similarity_search(
+        hypothetical_answer, expr=filter_expr, k=2
     )
+    for doc in hypothetical_docs:
+        doc_id = doc.metadata.get("pk", "")
+        if doc_id not in seen_doc_ids:
+            all_docs.append(doc)
+            seen_doc_ids.add(doc_id)
 
     results = []
-    # example {'pk': 'f707471d-7369-43e0-a94a-4293', 'source': 'data/documents/PVO-10-31.pdf', 'page': 38}
-
-    for doc in docs:
-        # TODO consider moving this to the graph state
+    for doc in all_docs:
+        # Track visited documents
         visited_docs().append(doc.metadata)
+        logger.debug(f"{doc.metadata.get('source', '')}-{doc.metadata.get('page', '')}")
         results.append(format_document(doc, document_prompt))
 
     return document_separator.join(results)

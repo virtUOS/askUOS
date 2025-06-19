@@ -22,7 +22,6 @@ from pydantic import BaseModel, Field, PrivateAttr
 from typing_extensions import TypedDict
 
 from src.chatbot.agents.utils.agent_helpers import llm, llm_optional
-from src.search.agent_retriever import _get_relevant_documents
 from src.chatbot.agents.utils.exceptions import MustContainSystemMessageException
 from src.chatbot.db.clients import get_retriever
 from src.chatbot.prompt.main import (
@@ -34,6 +33,7 @@ from src.chatbot.tools.utils.tool_helpers import visited_docs
 from src.chatbot.tools.utils.tool_schema import RetrieverInput, SearchInputWeb
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
+from src.search.agent_retriever import _get_relevant_documents
 
 OPEN_AI_MODEL = settings.model.model_name
 DEBUG = settings.application.debug
