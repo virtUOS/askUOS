@@ -14,6 +14,7 @@ from src.chatbot.db.clients import get_milvus_client, get_retriever
 from src.chatbot.tools.utils.tool_helpers import visited_docs
 from src.chatbot.tools.utils.tool_schema import RetrieverInput
 from src.chatbot_log.chatbot_logger import logger
+from src.config.core_config import settings
 
 
 def _get_relevant_documents(
@@ -27,7 +28,9 @@ def _get_relevant_documents(
     """Get relevant documents using multiple search strategies."""
     document_separator = "\n\n"
     document_prompt = PromptTemplate.from_template("{page_content}")
-    vector_store = get_milvus_client("examination_regulations")
+    vector_store = get_milvus_client(
+        settings.agent_tools.exa_regulations.config.collection_name
+    )
 
     # TODO: This filter excludes the general regulations and focuses on specific programs.
     # Prepare filter expression

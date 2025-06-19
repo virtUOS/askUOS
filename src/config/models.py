@@ -76,3 +76,24 @@ class MilvusSettings(BaseModel):
     host: Optional[str] = None
     port: int = 19530
     token: Optional[str] = "root:Milvus"
+
+
+class ToolConfig(BaseModel):
+    collection_name: str
+
+
+class ExaRegulationTool(BaseModel):
+    config: ToolConfig
+
+
+class HISinOneTool(BaseModel):
+    config: ToolConfig
+
+
+class AgentTools(BaseModel):
+    """
+    Configuration for agent tools.
+    """
+
+    exa_regulations: ExaRegulationTool
+    his_in_one: HISinOneTool

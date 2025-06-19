@@ -222,7 +222,7 @@ class GraphNodesMixin:
         return [
             create_retriever_tool(
                 retriever=get_retriever(
-                    "troubleshooting"
+                    settings.agent_tools.his_in_one.config.collection_name
                 ),  # TODO make this configurable
                 name="HISinOne_troubleshooting_questions",
                 description=translate_prompt()["HISinOne_troubleshooting_questions"],

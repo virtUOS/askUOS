@@ -45,3 +45,11 @@ milvus_settings:
 # Optional. If set up, implement e.g., cron job to run /app/src/chatbot_log/log_cleanup.py  
 log_settings:
   delete_logs_days: 90 # Number of days to keep logs before deletion
+
+agent_tools:
+  exa_regulations:
+    config:
+      collection_name: "my_collection_name"
+  his_in_one:
+    config:
+      collection_name: "my_collection_name"

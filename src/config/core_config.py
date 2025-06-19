@@ -10,8 +10,11 @@ from pydantic_settings import (
 from src.chatbot_log.chatbot_logger import logger
 
 from .models import (
+    AgentTools,
     ApplicationConfig,
     EmbeddingSettings,
+    ExaRegulationTool,
+    HISinOneTool,
     Legal,
     LogSettings,
     MilvusSettings,
@@ -36,6 +39,7 @@ class Settings(BaseSettings):
     application: ApplicationConfig
     embedding: EmbeddingSettings
     milvus_settings: MilvusSettings
+    agent_tools: AgentTools
     language: Literal["Deutsch", "English"]
     legal: Optional[Legal] = (
         None  # Optional legal information (e.g., data protection, imprint)
