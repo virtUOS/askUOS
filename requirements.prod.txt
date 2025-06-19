@@ -18,4 +18,4 @@ pymilvus
 crawl4AI===0.6.3
 redis
 nest_asyncio
-langchain-ollama
+langchain-ollama  # TODO: Only keep the dependencies used to embed quieries in production (either fastembed or langchain-ollama)

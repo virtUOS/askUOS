@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from typing_extensions import TypedDict
 
 from src.chatbot.agents.utils.agent_helpers import llm, llm_optional
-from src.chatbot.agents.utils.agent_retriever import _get_relevant_documents
+from src.search.agent_retriever import _get_relevant_documents
 from src.chatbot.agents.utils.exceptions import MustContainSystemMessageException
 from src.chatbot.db.clients import get_retriever
 from src.chatbot.prompt.main import (
