@@ -17,15 +17,14 @@ from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
 
-def _get_relevant_documents(
-    primary_query: str,
-    alternative_query: str,
-    # broader_query: str,
-    entities: List[str],
-    filter_program_name: str,
-    hypothetical_answer: str,
-) -> str:
-    """Get relevant documents using multiple search strategies."""
+def _get_relevant_documents_milvus(
+    primary_query,
+    alternative_query,
+    # broader_query,
+    entities,
+    filter_program_name,
+    hypothetical_answer,
+):
     document_separator = "\n\n"
     document_prompt = PromptTemplate.from_template("{page_content}")
     vector_store = get_milvus_client(
@@ -85,6 +84,33 @@ def _get_relevant_documents(
         results.append(format_document(doc, document_prompt))
 
     return document_separator.join(results)
+
+
+def _get_relevant_documents_rag_flow(
+    primary_query,
+    alternative_query,
+    # broader_query,
+    entities,
+    filter_program_name,
+    hypothetical_answer,
+):
+    return ""
+
+
+def _get_relevant_documents(
+    primary_query: str,
+    alternative_query: str,
+    # broader_query: str,
+    entities: List[str],
+    filter_program_name: str,
+    hypothetical_answer: str,
+) -> str:
+    """Get relevant documents using multiple search strategies."""
+
+    if settings.data_source_config.type == "milvus":
+        return _get_relevant_documents_milvus(**locals())
+    elif settings.data_source_config.type == "rag_flow":
+        return _get_relevant_documents_rag_flow(**locals())
 
 
 # docs = retriever.invoke("master thesis biology", filter={'source like "Economics"'})

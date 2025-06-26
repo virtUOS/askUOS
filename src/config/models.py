@@ -1,4 +1,4 @@
-from typing import ClassVar, List, Literal, Optional, Tuple, Type
+from typing import ClassVar, List, Literal, Optional, Tuple, Type, Union
 
 from pydantic import BaseModel
 
@@ -72,10 +72,25 @@ class LogSettings(BaseModel):
 class MilvusSettings(BaseModel):
     """Settings for Milvus vector database"""
 
+    type: Literal["milvus"] = "milvus"  # Type of data source
     uri: Optional[str] = "http://localhost:19530"
     host: Optional[str] = None
     port: int = 19530
     token: Optional[str] = "root:Milvus"
+
+
+class RagFlowConfig(BaseModel):
+    """
+    Configuration for RAG flow.
+    """
+
+    type: Literal["rag_flow",] = "rag_flow"  # Type of datasource
+    url: str
+    api_key: str
+    dataset_id: str
+
+
+DataSourceConfig = Union[MilvusSettings, RagFlowConfig]
 
 
 class ToolConfig(BaseModel):

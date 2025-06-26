@@ -28,10 +28,11 @@ embedding:
   chunk_size: 3500 # Make sure this is not higher than the context window of the model
   chunk_overlap: 50
 
-milvus_settings:
-  # Milvus vector database configuration
-  uri: "http://standalone:19530" # Useful for Docker or Kubernetes deployments. User docker compose service name (Usually "milvus" or "standalone")
+data_source_config:
+  type: "milvus"  # Literal["milvus", "rag_flow"]
+  uri: "http://my-milvus-instance.de:19530" # Useful for Docker or Kubernetes deployments. User docker compose service name (Usually "milvus" or "standalone")
   token: "root:Milvus"  # Optional authentication token
+  
 
 
 # embedding:

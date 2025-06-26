@@ -1,26 +1,13 @@
 from typing import ClassVar, Literal, Optional, Tuple, Type
 
-from pydantic_settings import (
-    BaseSettings,
-    PydanticBaseSettingsSource,
-    SettingsConfigDict,
-    YamlConfigSettingsSource,
-)
+from pydantic import Field
+from pydantic_settings import (BaseSettings, PydanticBaseSettingsSource,
+                               SettingsConfigDict, YamlConfigSettingsSource)
 
 from src.chatbot_log.chatbot_logger import logger
 
-from .models import (
-    AgentTools,
-    ApplicationConfig,
-    EmbeddingSettings,
-    ExaRegulationTool,
-    HISinOneTool,
-    Legal,
-    LogSettings,
-    MilvusSettings,
-    ModelConfig,
-    SearchConfig,
-)
+from .models import (AgentTools, ApplicationConfig, DataSourceConfig,
+                     EmbeddingSettings, Legal, LogSettings, ModelConfig)
 
 
 class Settings(BaseSettings):
@@ -38,7 +25,6 @@ class Settings(BaseSettings):
     model: ModelConfig
     application: ApplicationConfig
     embedding: EmbeddingSettings
-    milvus_settings: MilvusSettings
     agent_tools: AgentTools
     language: Literal["Deutsch", "English"]
     legal: Optional[Legal] = (
@@ -53,6 +39,9 @@ class Settings(BaseSettings):
     # TODO move to a global object/context
     # if the llm summarization mode is active the summarization result will be not sent to the user
     llm_summarization_mode: bool = False
+    # rag_flow_settings: Optional[RagFlowConfig] = None
+    data_source_config: DataSourceConfig = Field(..., discriminator="type")
+    # TODO move to a global object/context
     log_settings: Optional[LogSettings] = None
 
     def __new__(cls, *args, **kwargs):

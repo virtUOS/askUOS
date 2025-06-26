@@ -44,8 +44,8 @@ def get_milvus_client(collection_name: str) -> Milvus:
     vector_store = Milvus(
         embedding_function=embeddings,
         connection_args={
-            "uri": settings.milvus_settings.uri,
-            "token": settings.milvus_settings.token,
+            "uri": settings.data_source_config.uri,
+            "token": settings.data_source_config.token,
         },
         collection_name=collection_name,
     )
@@ -54,6 +54,11 @@ def get_milvus_client(collection_name: str) -> Milvus:
     return vector_store
 
 
+def get_rag_flow_client():
+    pass
+
+
+# TODO: Currenlty this function is used by the HISinOne_troubleshooting_questions trouble-shooting tool. THRE SHOULD BE A GENERAL RETRIEVAL
 def get_retriever(collection_name: str) -> VectorStoreRetriever:
 
     vector_store = get_milvus_client(collection_name)
@@ -62,6 +67,3 @@ def get_retriever(collection_name: str) -> VectorStoreRetriever:
     )
 
     return retriever
-
-
-print()
