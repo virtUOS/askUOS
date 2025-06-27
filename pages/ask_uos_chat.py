@@ -118,6 +118,14 @@ class ChatApp:
 
         graph = self.get_agent()
 
+        further_help_msg = session_state["_"](
+            """If you need personal assistance regarding studying at the university, you can visit the [StudiOS]({}) (Studierenden-Information Osnabrück) or [ZSB]({}) (Zentrale Studienberatung Osnabrück) website."""
+        )
+        further_help_msg = further_help_msg.format(
+            "https://www.uni-osnabrueck.de/universitaet/organisation/studierenden-information-osnabrueck-studios/",
+            "https://www.zsb-os.de/",
+        )
+
         # graph = CampusManagementOpenAIToolsAgent.run(
         #     language=session_state["selected_language"]
         # )
@@ -253,7 +261,7 @@ class ChatApp:
                 response = session_state["_"](
                     "I'm sorry, but I couldn't find enough information to fully answer your question. Could you please try rephrasing your query and ask again?"
                 )
-                st.markdown(response)
+                st.markdown(f"{response}\n\n{further_help_msg}")
                 # clear the docs references
                 visited_docs.clear()
 
@@ -261,7 +269,7 @@ class ChatApp:
                 response = session_state["_"](
                     "I'm sorry, something went wrong while connecting to the data provided. If the error persists, please reach out to the administrators for assistance."
                 )
-                st.markdown(response)
+                st.markdown(f"{response}\n{further_help_msg}")
                 # clear the docs references
                 visited_docs.clear()
 
@@ -272,7 +280,7 @@ class ChatApp:
                 )
                 # clear the docs references
                 visited_docs.clear()
-                st.markdown(response)
+                st.markdown(f"{response}\n{further_help_msg}")
 
             return response, to_stream
 

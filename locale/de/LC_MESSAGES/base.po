@@ -17,18 +17,20 @@ msgstr ""
 
 
 msgid ""
-"\n## Welcome to ask.UOS!\n###"
-" ask.UOS is a chatbot powered by OpenAI's GPT-4. \n### We are excited to assist you with this first experimental release!"
-" \n\nWe take precautions to ensure a low rate of inaccurate answers. However, for your safety and to ensure the reliability of any information you receive, we recommend using human oversight in your decision-making processes, as this helps confirm that the information is safe, accurate, and appropriate for your needs."
-"\nIf you're ever unsure about an answer, please check the provided sources. You can also refer directly to the [university's website]({})."
-"\n\nIf you need personal assistance regarding studying at the university, you can visit the [StudiOS]({}) (Studierenden-Information Osnabrück) or [ZSB]({}) (Zentrale Studienberatung Osnabrück) website."
+"\n## Welcome to ask.UOS!\n### ask.UOS is a chatbot powered by OpenAI's GPT-4."
+" \n### With this first **experimental** release, we are excited to assist with general questions about applying to the University!"
+"\n\nWe take precautions to ensure a low rate of inaccurate answers. However,"
+" for your safety and to ensure the reliability of any information you receive, we recommend using human oversight in your decision-making processes,"
+" as this helps confirm that the information is safe, accurate, and appropriate for your needs."
+"\nIf you're ever unsure about an answer, please check the provided sources. You can also refer directly to the [university's website]({})"
+".\n\nIf you need personal assistance regarding studying at the university, you can visit the [StudiOS]({}) (Studierenden-Information Osnabrück) or [ZSB]({}) (Zentrale Studienberatung Osnabrück) website."
 "\n\nPlease note that the University of Osnabrück cannot be held liable for any actions, losses, or damages that may arise from the use of the chatbot."
 " \n\nWhile interacting with the Chatbot, avoid sharing personal information. If you're interested, please follow the links to find more information about our [data protection policies]({}) and [imprint]({}).\n"
 
 
 msgstr ""
 "\n## Willkommen bei ask.UOS!\n### "
-"ask.UOS ist ein Chatbot, der auf OpenAIs GPT-4 basiert. \n### Wir freuen uns, Ihnen mit dieser ersten experimentellen Version zur Seite zu stehen!"
+"ask.UOS ist ein Chatbot, der auf OpenAIs GPT-4 basiert. \n### Dieser **experimentelle** Chat-Bot soll Ihnen bei allgemeinen Fragen zu Bewerbungen an der Universität nützliche Informationen liefern.!"
 "\n\nWir arbeiten daran, die Anzahl ungenauer Antworten so gering wie möglich zu halten. Um jedoch sicherzustellen, dass die Informationen verlässlich und auf Ihre Bedürfnisse abgestimmt sind, empfehlen wir, sich zu wichtigen Entscheidungen menschliche Unterstützung holen."
 " Wenn Sie sich bei einer Antwort unsicher sind, überprüfen Sie bitte die angegebenen Quellen. Sie können auch direkt die Website der [Universität Osnabrück]({}) besuchen"
 "\n\nWenn Sie persönliche Unterstützung zum Studium an der Universität benötigen, können Sie die Website des [StudiOS]({}) (Studierenden-Information Osnabrück) oder der [ZSB]({}) (Zentrale Studienberatung Osnabrück) besuchen."
@@ -95,3 +97,6 @@ msgstr "Absenden"
 
 msgid "**Rate the response**"
 msgstr "**Bewerten Sie die Antwort**"
+
+msgid "If you need personal assistance regarding studying at the university, you can visit the [StudiOS]({}) (Studierenden-Information Osnabrück) or [ZSB]({}) (Zentrale Studienberatung Osnabrück) website."
+msgstr "Wenn Sie persönliche Unterstützung zum Studium an der Universität benötigen, können Sie die Website des [StudiOS]({}) (Studierenden-Information Osnabrück) oder der [ZSB]({}) (Zentrale Studienberatung Osnabrück) besuchen."

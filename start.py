@@ -1,11 +1,12 @@
-import streamlit as st
 from time import sleep
+
+import streamlit as st
 from dotenv import load_dotenv
 from streamlit import session_state
 
-from src.config.core_config import settings
 from pages.language import initialize_language
-from pages.utils import initialize_session_sate, setup_page, load_css
+from pages.utils import initialize_session_sate, load_css, setup_page
+from src.config.core_config import settings
 
 # Load environment variables
 load_dotenv()
@@ -23,7 +24,7 @@ def display_welcome_message():
     start_message = """
 ## Welcome to ask.UOS!
 ### ask.UOS is a chatbot powered by OpenAI's GPT-4. 
-### We are excited to assist you with this first experimental release! 
+### With this first **experimental** release, we are excited to assist with general questions about applying to the University!
 
 We take precautions to ensure a low rate of inaccurate answers. However, for your safety and to ensure the reliability of any information you receive, we recommend using human oversight in your decision-making processes, as this helps confirm that the information is safe, accurate, and appropriate for your needs.
 If you're ever unsure about an answer, please check the provided sources. You can also refer directly to the [university's website]({}).
