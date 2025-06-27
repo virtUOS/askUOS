@@ -85,7 +85,7 @@ class RagFlowConfig(BaseModel):
     """
 
     type: Literal["rag_flow",] = "rag_flow"  # Type of datasource
-    url: str
+    base_url: str
     api_key: str
     dataset_id: str
 

@@ -120,6 +120,7 @@
             "request": "launch",
             "program": "./test_me.py",
             "cwd": "${workspaceFolder}",
+            "justMyCode": false,
             "env":{ "PYTHONPATH": "/app"},
             "console": "integratedTerminal",
    

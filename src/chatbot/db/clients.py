@@ -55,15 +55,20 @@ def get_milvus_client(collection_name: str) -> Milvus:
 
 
 def get_rag_flow_client():
-    pass
+
+    return "rag_flow_client"  # Placeholder for actual RAG flow client initialization
 
 
 # TODO: Currenlty this function is used by the HISinOne_troubleshooting_questions trouble-shooting tool. THRE SHOULD BE A GENERAL RETRIEVAL
 def get_retriever(collection_name: str) -> VectorStoreRetriever:
 
-    vector_store = get_milvus_client(collection_name)
-    retriever = vector_store.as_retriever(
-        search_type="similarity", search_kwargs={"k": 5}
-    )
+    if settings.data_source_config.type == "milvus":
 
-    return retriever
+        vector_store = get_milvus_client(collection_name)
+        retriever = vector_store.as_retriever(
+            search_type="similarity", search_kwargs={"k": 5}
+        )
+
+        return retriever
+    elif settings.data_source_config.type == "rag_flow":
+        return get_rag_flow_client()

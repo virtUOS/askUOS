@@ -62,6 +62,9 @@ def extract_pdf_text(href: str, pdf_bytes: bytes) -> str:
     return re.sub(r"(\n\s*|\n\s+\n\s+)", "\n", text.strip())
 
 
+# TODO: CREATE OBJECT PER USER SESSION. SHOULD NOT BE A GLOBAL OBJECT. use __slots__ to reduce memory usage
+
+
 class ReferenceRetriever:
 
     _instance = None

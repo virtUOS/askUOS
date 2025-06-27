@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import partial
 from typing import Any, List, Optional
 
+import requests
 from langchain.tools import BaseTool
 from langchain_core.callbacks import Callbacks
 from langchain_core.prompts import PromptTemplate, format_document
@@ -15,6 +16,90 @@ from src.chatbot.tools.utils.tool_helpers import visited_docs
 from src.chatbot.tools.utils.tool_schema import RetrieverInput
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
+
+
+class RagFlowChunk(BaseModel):
+    """Individual chunk from RagFlow retrieval response."""
+
+    content: str
+    content_ltks: str
+    dataset_id: str
+    doc_type_kwd: str
+    document_id: str
+    document_keyword: str
+    highlight: str
+    id: str
+    image_id: str
+    important_keywords: List[str]
+    positions: List[List[int]]
+    similarity: float
+    term_similarity: float
+    vector_similarity: float
+
+
+class DocumentAggregation(BaseModel):
+    """Document aggregation statistics."""
+
+    count: int
+    doc_id: str
+    doc_name: str
+
+
+class RagFlowData(BaseModel):
+    """Data section of RagFlow response."""
+
+    chunks: List[RagFlowChunk]
+    doc_aggs: List[DocumentAggregation]
+    total: int
+
+
+class RagFlowResponse(BaseModel):
+    """Complete RagFlow API response."""
+
+    code: int
+    data: RagFlowData
+
+
+def _get_relevant_documents_rag_flow(
+    primary_query,
+    alternative_query,
+    # broader_query,
+    entities,
+    filter_program_name,
+    hypothetical_answer,
+):
+
+    url = f"{settings.data_source_config.base_url}/api/v1/retrieval"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {settings.data_source_config.api_key}",
+    }
+
+    data = {
+        "question": f"{primary_query}, AND  {alternative_query}",
+        "dataset_ids": [settings.data_source_config.dataset_id],
+        "document_ids": [],
+        "keyword": True,
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+
+    rag_flow_data = RagFlowResponse.parse_obj(response.json())
+
+    all_documents = ""
+    for chunk, reference in zip(rag_flow_data.data.chunks, rag_flow_data.data.doc_aggs):
+        # aggregate the visited documents
+        all_documents += (
+            f"\n Source: {chunk.document_keyword}, content: {chunk.content}"
+        )
+        visited_docs().append(
+            {
+                "source": reference.doc_name,
+                "page": 0,  # TODO: BUG: page is not available in RagFlow response
+            }
+        )
+
+    return all_documents
 
 
 def _get_relevant_documents_milvus(
@@ -84,17 +169,6 @@ def _get_relevant_documents_milvus(
         results.append(format_document(doc, document_prompt))
 
     return document_separator.join(results)
-
-
-def _get_relevant_documents_rag_flow(
-    primary_query,
-    alternative_query,
-    # broader_query,
-    entities,
-    filter_program_name,
-    hypothetical_answer,
-):
-    return ""
 
 
 def _get_relevant_documents(
