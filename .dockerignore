@@ -16,3 +16,6 @@ README.md
 .git
 .gitattributes
 .gitignore
+.github
+
+evaluation/

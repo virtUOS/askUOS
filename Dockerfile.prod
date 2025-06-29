@@ -1,18 +1,41 @@
-# Use the official Python image from Docker Hub
-# Use the official Python image from Docker Hub
-FROM python:3.11
+FROM python:3.11 as builder
 
 # Set the working directory inside the container
 WORKDIR /app
 
-# Install dependencies
+# Install build dependencies
 RUN apt-get update && apt-get install -y \
     sudo \
     wget \
-    gettext 
+    gettext \
+    && rm -rf /var/lib/apt/lists/*
 
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Playwright system dependencies for Linux
+# Install Python packages
+RUN pip install --upgrade pip
+COPY ./requirements.prod.txt .
+RUN pip install -r requirements.prod.txt
+
+# Download Python source for internationalization
+RUN wget https://www.python.org/ftp/python/3.11.0/Python-3.11.0.tgz \
+    && tar xzf Python-3.11.0.tgz \
+    && mv Python-3.11.0 /usr/local/src/ \
+    && rm Python-3.11.0.tgz
+
+# Copy application code and compile messages
+COPY . .
+RUN chmod +x /usr/local/src/Python-3.11.0/Tools/i18n/msgfmt.py
+RUN /usr/local/src/Python-3.11.0/Tools/i18n/msgfmt.py /app/locale/de/LC_MESSAGES/base.po /app/locale/de/LC_MESSAGES/base
+
+# Final stage
+FROM python:3.11-slim
+
+# Set the working directory
+WORKDIR /app
+
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libnss3 \
@@ -37,30 +60,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libatspi2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade pip
-COPY ./requirements.prod.txt .
-RUN pip install -r requirements.prod.txt
-RUN playwright install 
+# Copy only necessary files from builder
+
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+COPY --from=builder /app/locale /app/locale
+COPY --from=builder /app /app
+
+
+RUN echo $PATH
+RUN echo $(which python)
+
+
+# Install Playwright browsers
+RUN playwright install
 RUN crawl4ai-setup
-
-
-# Download Python source (Needed for internationalization) 
-RUN wget https://www.python.org/ftp/python/3.11.0/Python-3.11.0.tgz \
-    && tar xzf Python-3.11.0.tgz \
-    && mv Python-3.11.0 /usr/local/src/ \
-    && rm Python-3.11.0.tgz 
-
-
-
-# Copy the rest of the application code into the container
-COPY . .
-
-# Compile the .po file into a .mo file
-#RUN ls -l /usr/local/src/Python-3.11.0/Tools/i18n/msgfmt.py
-RUN chmod +x /usr/local/src/Python-3.11.0/Tools/i18n/msgfmt.py
-RUN  /usr/local/src/Python-3.11.0/Tools/i18n/msgfmt.py /app/locale/de/LC_MESSAGES/base.po /app/locale/de/LC_MESSAGES/base
-
-
 # Expose the port that Streamlit will run on
 EXPOSE 8501
 

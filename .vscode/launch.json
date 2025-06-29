@@ -6,7 +6,7 @@
             "type": "debugpy",
             "justMyCode":false,
             "request": "launch",
-            "program": "/usr/local/bin/streamlit",
+            "program": "/opt/venv/bin/streamlit",
             "args": [
                 "run",
                 "./start.py"
@@ -18,7 +18,7 @@
             "type": "debugpy",
             "request": "launch",
             "justMyCode":false,
-            "program": "/usr/local/bin/streamlit",
+            "program": "/opt/venv/bin/streamlit",
             "env":{ "PYTHONPATH": "/app"},
             "args": [
                 "run",
