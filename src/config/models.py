@@ -76,3 +76,12 @@ class MilvusSettings(BaseModel):
     host: Optional[str] = None
     port: int = 19530
     token: Optional[str] = "root:Milvus"
+
+
+class StartPageConfig(BaseModel):
+    """
+    Configuration for the start page.
+    """
+
+    welcome_message_english: str
+    welcome_message_german: str

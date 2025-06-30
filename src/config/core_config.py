@@ -17,6 +17,7 @@ from .models import (
     MilvusSettings,
     ModelConfig,
     SearchConfig,
+    StartPageConfig,
 )
 
 
@@ -37,6 +38,7 @@ class Settings(BaseSettings):
     embedding: EmbeddingSettings
     milvus_settings: MilvusSettings
     language: Literal["Deutsch", "English"]
+    start_page: StartPageConfig
     legal: Optional[Legal] = (
         None  # Optional legal information (e.g., data protection, imprint)
     )

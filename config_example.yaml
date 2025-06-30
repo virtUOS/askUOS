@@ -45,3 +45,9 @@ milvus_settings:
 # Optional. If set up, implement e.g., cron job to run /app/src/chatbot_log/log_cleanup.py  
 log_settings:
   delete_logs_days: 90 # Number of days to keep logs before deletion
+
+start_page:
+  welcome_message_english: "Welcome to our chatbot! How can I assist you today?"
+  welcome_message_german: "Willkommen bei unserem Chatbot! Wie kann ich Ihnen heute helfen?"
+
+  
