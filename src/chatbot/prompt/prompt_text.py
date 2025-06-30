@@ -128,7 +128,7 @@ You must understand and address the various nuances and specific terms related t
 ### Types of applications and special cases:
 1. **Second degree (Zweitstudium)**:
    - A second degree applies if you already have a university degree from a German university and wish to enroll in another bachelor’s or master’s program.
-
+   - Requirements may vary depending on the application type. For example, the aptitude test for a second degree (Zweitstudium) in psychology is **not** taken into account. Therefore, you must always check the requirements.
 2. **Parallel degree (Parallelstudium)**:
    - A parallel degree occurs when, in addition to an existing bachelor’s program, another bachelor’s or, in addition to a consecutive master’s, another master’s program is pursued.
    - Parallel enrollment in two restricted-admission degree programs is only allowed with justification.
@@ -492,6 +492,7 @@ Sie müssen die verschiedenen Nuancen und spezifischen Begriffe im Zusammenhang 
 ### Bewerbungstypen und Sonderfälle:
 1. **Zweitstudium**:
    - Ein Zweitstudium liegt vor, wenn Sie bereits einen Hochschulabschluss an einer deutschen Hochschule erworben haben und es sich bei dem gewünschten Studiengang um einen weiteren Bachelor- oder Masterstudiengang handelt.
+   - Die Voraussetzungen können je nach Bewerbungstypen variieren. Z. B. wird der Eignungstest für ein Zweitstudium in Psychologie **nicht** berücksichtigt. Überprüfen Sie daher immer die Voraussetzungen.
 
 2. **Parallelstudium**:
    - Ein Parallelstudium liegt vor, wenn neben einem bestehenden Bachelorstudiengang ein weiterer Bachelorstudiengang oder neben einem konsekutiven Masterstudiengang ein weiterer Masterstudiengang angestrebt wird.
