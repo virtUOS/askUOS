@@ -35,30 +35,22 @@ def ensure_event_loop():
         return loop
 
 
-def get_milvus_client(collection_name: str) -> Milvus:
+def get_milvus_client(collection_name: str) -> Optional[Milvus]:
     ensure_event_loop()
-    embeddings = get_embeddings(settings.embedding.type)
-    vector_store = Milvus(
-        embedding_function=embeddings,
-        connection_args={
-            "uri": settings.milvus_settings.uri,
-            "token": settings.milvus_settings.token,
-        },
-        collection_name=collection_name,
-    )
 
-    logger.info("Milvus client initialized successfully")
-    return vector_store
+    try:
+        embeddings = get_embeddings(settings.embedding.type)
+        vector_store = Milvus(
+            embedding_function=embeddings,
+            connection_args={
+                "uri": settings.milvus_settings.uri,
+                "token": settings.milvus_settings.token,
+            },
+            collection_name=collection_name,
+        )
 
-
-def get_retriever(collection_name: str) -> VectorStoreRetriever:
-
-    vector_store = get_milvus_client(collection_name)
-    retriever = vector_store.as_retriever(
-        search_type="similarity", search_kwargs={"k": 5}
-    )
-
-    return retriever
-
-
-print()
+        logger.info("[VECTOR DB]Milvus client initialized successfully")
+        return vector_store
+    except Exception as e:
+        logger.error(f"[VECTOR DB]Failed to initialize Milvus client: {e}")
+        return None

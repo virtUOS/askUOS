@@ -19,6 +19,7 @@ warm_up_queries = [
     "According to the examination regulations, how are the thesis and oral exam graded?, Mathematics",
     "Wie viele ECTS-Punkte habe ich in meinem Bachelor (Biologie)?",
     "Muss ich im Grundschullehramt Mathe und Deutsch studieren?",
+    "I cannot log into HisInOne, what can I do?",
     "Welche Schnupperangebote bietet die Uni OS?",
     "Kann ich Biologie und Sport auf Lehramt studieren?",
     "What are the application deadlines for the fall and spring semesters for the Computer Science Program?",

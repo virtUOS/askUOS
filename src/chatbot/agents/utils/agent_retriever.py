@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from functools import partial
-from typing import Optional
-
-from langchain.tools import BaseTool
-from langchain_core.callbacks import Callbacks
 from langchain_core.prompts import PromptTemplate, format_document
-from langchain_core.pydantic_v1 import BaseModel, Field
 
-from src.chatbot.db.clients import get_milvus_client, get_retriever
+from src.chatbot.db.clients import get_milvus_client
 from src.chatbot.tools.utils.tool_helpers import visited_docs
+from src.chatbot_log.chatbot_logger import logger
+
+# TODO: REFACTOR EVERYTHING INTO ONE FUNCTION
+
+HIS_IN_ONE_COLLECTON = "troubleshooting"
+EXAMINATION_REGULATIONS_COLLECTION = "examination_regulations"
+DOCUMENT_SEPARATOR = "\n\n"
+DOCUMENT_PROMPT = PromptTemplate.from_template("{page_content}")
+NOT_FOUND_MESSAGE = "Result: No documents found"
 
 
 def _get_relevant_documents(
@@ -19,38 +22,53 @@ def _get_relevant_documents(
     filter_program_name: str,
 ) -> str:
     # TODO: add a filter for the program name WHEN searching
-    document_separator = "\n\n"
-    document_prompt = PromptTemplate.from_template("{page_content}")
-    # retriever = retriever = get_retriever("examination_regulations")
-    vector_store = get_milvus_client("examination_regulations")
 
-    # docs = retriever.invoke(query)
-    docs = vector_store.similarity_search(
-        query, expr=f"source LIKE '%{filter_program_name}%'", k=5
-    )
+    vector_store = get_milvus_client(EXAMINATION_REGULATIONS_COLLECTION)
+    if vector_store is None:
+        logger.error(
+            f"[VECTOR DB]Failed to get Milvus client for collection: {EXAMINATION_REGULATIONS_COLLECTION}"
+        )
+        return NOT_FOUND_MESSAGE
 
-    results = []
-    # example {'pk': 'f707471d-7369-43e0-a94a-4293', 'source': 'data/documents/PVO-10-31.pdf', 'page': 38}
+    try:
+        docs = vector_store.similarity_search(
+            query, expr=f"source LIKE '%{filter_program_name}%'", k=5
+        )
 
-    for doc in docs:
-        # TODO consider moving this to the graph state
-        visited_docs().append(doc.metadata)
-        results.append(format_document(doc, document_prompt))
+        results = []
+        # example {'pk': 'f707471d-7369-43e0-a94a-4293', 'source': 'data/documents/PVO-10-31.pdf', 'page': 38}
 
-    return document_separator.join(results)
+        for doc in docs:
+            # TODO consider moving this to the graph state
+            visited_docs().append(doc.metadata)
+            results.append(format_document(doc, DOCUMENT_PROMPT))
+
+        return DOCUMENT_SEPARATOR.join(results)
+    except Exception as e:
+        logger.error(f"[VECTOR DB]Error during similarity search: {e}")
+        return NOT_FOUND_MESSAGE
 
 
-# docs = retriever.invoke("master thesis biology", filter={'source like "Economics"'})
+def retriever_his_in_one(query: str) -> str:
 
+    vector_store = get_milvus_client(HIS_IN_ONE_COLLECTON)
+    if vector_store is None:
+        logger.error(
+            f"[VECTOR DB]Failed to get Milvus client for collection: {HIS_IN_ONE_COLLECTON}"
+        )
+        return NOT_FOUND_MESSAGE
 
-# client.describe_collection(collection_name='examination_regulations')
-# {'collection_name': 'examination_regulations',
-#  'auto_id': False, 'num_shards': 1, 'description': '',
-#  'fields': [{'field_id': 100, 'name': 'text', 'description': '', 'type': <DataType.VARCHAR: 21>, 'params': {'max_length': 65535}},
-#             {'field_id': 101, 'name': 'pk', 'description': '', 'type': <DataType.VARCHAR: 21>, 'params': {'max_length': 65535}, 'is_primary': True},
-#             {'field_id': 102, 'name': 'vector', 'description': '', 'type': <DataType.FLOAT_VECTOR: 101>, 'params': {'dim': 1024}},
-#             {'field_id': 103, 'name': 'source', 'description': '', 'type': <DataType.VARCHAR: 21>, 'params': {'max_length': 65535}},
-#             {'field_id': 104, 'name': 'page', 'description': '', 'type': <DataType.INT64: 5>, 'params': {}}],
-#  'functions': [], 'aliases': [], 'collection_id': 456074387336045529, 'consistency_level': 1, 'properties': {}, 'num_partitions': 1, 'enable_dynamic_field': False}
+    try:
+        docs = vector_store.similarity_search(query, k=5)
 
-# data/documents/Modulbeschreibungen_ConflictStudiesPeacebuilding_EN_2021-03.pdf
+        results = []
+
+        for doc in docs:
+
+            results.append(format_document(doc, DOCUMENT_PROMPT))
+
+        return DOCUMENT_SEPARATOR.join(results)
+
+    except Exception as e:
+        logger.error(f"[VECTOR DB]Error during similarity search: {e}")
+        return NOT_FOUND_MESSAGE

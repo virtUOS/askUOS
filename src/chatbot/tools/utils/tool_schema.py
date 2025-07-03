@@ -25,3 +25,9 @@ class RetrieverInput(BaseModel):
     filter_program_name: str = Field(
         description="Keyword to filter the documents by study program name, e.g. Biologie, Informatik, Kognitionswissenschaft, Cognitive Science, Chemie, Mathematik, Physik, Psychologie, Wirtschaftsinformatik, Wirtschaftswissenschaften etc."
     )
+
+
+class HisInOneInput(BaseModel):
+    """Input to the retriever for the HISinOne tool."""
+
+    query: str = Field(description="query to look up in retriever")

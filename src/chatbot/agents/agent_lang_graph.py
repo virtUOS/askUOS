@@ -22,16 +22,22 @@ from pydantic import BaseModel, Field, PrivateAttr
 from typing_extensions import TypedDict
 
 from src.chatbot.agents.utils.agent_helpers import llm, llm_optional
-from src.chatbot.agents.utils.agent_retriever import _get_relevant_documents
+from src.chatbot.agents.utils.agent_retriever import (
+    _get_relevant_documents,
+    retriever_his_in_one,
+)
 from src.chatbot.agents.utils.exceptions import MustContainSystemMessageException
-from src.chatbot.db.clients import get_retriever
 from src.chatbot.prompt.main import (
     get_prompt_length,
     get_system_prompt,
     translate_prompt,
 )
 from src.chatbot.tools.utils.tool_helpers import visited_docs
-from src.chatbot.tools.utils.tool_schema import RetrieverInput, SearchInputWeb
+from src.chatbot.tools.utils.tool_schema import (
+    HisInOneInput,
+    RetrieverInput,
+    SearchInputWeb,
+)
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
@@ -220,13 +226,20 @@ class GraphNodesMixin:
         from src.chatbot.tools.search_web_tool import search_uni_web
 
         return [
-            create_retriever_tool(
-                retriever=get_retriever(
-                    "troubleshooting"
-                ),  # TODO make this configurable
+            StructuredTool.from_function(
                 name="HISinOne_troubleshooting_questions",
+                func=retriever_his_in_one,
                 description=translate_prompt()["HISinOne_troubleshooting_questions"],
+                args_shema=HisInOneInput,
+                handle_tool_errors=True,
             ),
+            # create_retriever_tool(
+            #     retriever=retriever_his_in_one(
+            #         "troubleshooting"
+            #     ),  # TODO make this configurable
+            #     name="HISinOne_troubleshooting_questions",
+            #     description=translate_prompt()["HISinOne_troubleshooting_questions"],
+            # ),
             StructuredTool.from_function(
                 name="examination_regulations",
                 func=_get_relevant_documents,
