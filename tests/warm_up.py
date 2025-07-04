@@ -5,10 +5,12 @@ sys.path.append("/app")
 import sys
 from typing import List
 
-from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.agent_lang_graph import \
+    CampusManagementOpenAIToolsAgent
 
 # do not include REPEATED queries or very similar queries (tests will fail)
 warm_up_queries = [
+    "According to the examination regulations, how are the thesis and oral exam graded?, Mathematics",
     "Wo liegt der NC bei Sport?",
     "hi",
     "who are you",
@@ -16,7 +18,6 @@ warm_up_queries = [
     "Für welche Studiengänge brauche ich ein Latinum?",
     "Wo liegt der NC bei Sport?",
     "Wie viele ECTS-Punkte habe ich in meinem Bachelor (Mathematik)?",
-    "According to the examination regulations, how are the thesis and oral exam graded?, Mathematics",
     "Wie viele ECTS-Punkte habe ich in meinem Bachelor (Biologie)?",
     "Muss ich im Grundschullehramt Mathe und Deutsch studieren?",
     "I cannot log into HisInOne, what can I do?",

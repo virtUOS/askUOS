@@ -1,20 +1,21 @@
-# code taking from langchain.tools.retriever. The code is modified to return the references of the documents
+import os
 
-from __future__ import annotations
-
-from langchain_core.prompts import PromptTemplate, format_document
-
-from src.chatbot.db.clients import get_milvus_client
+from src.chatbot.db.clients import milvus_client
+from src.chatbot.embeddings.main import get_embeddings
 from src.chatbot.tools.utils.tool_helpers import visited_docs
 from src.chatbot_log.chatbot_logger import logger
-
-# TODO: REFACTOR EVERYTHING INTO ONE FUNCTION
 
 HIS_IN_ONE_COLLECTON = "troubleshooting"
 EXAMINATION_REGULATIONS_COLLECTION = "examination_regulations"
 DOCUMENT_SEPARATOR = "\n\n"
-DOCUMENT_PROMPT = PromptTemplate.from_template("{page_content}")
 NOT_FOUND_MESSAGE = "Result: No documents found"
+
+search_params = {
+    "metric_type": "L2",
+    "offset": 0,
+    "ignore_growing": False,
+    "params": {"nprobe": 10},
+}
 
 
 def _get_relevant_documents(
@@ -23,25 +24,37 @@ def _get_relevant_documents(
 ) -> str:
     # TODO: add a filter for the program name WHEN searching
 
-    vector_store = get_milvus_client(EXAMINATION_REGULATIONS_COLLECTION)
-    if vector_store is None:
-        logger.error(
-            f"[VECTOR DB]Failed to get Milvus client for collection: {EXAMINATION_REGULATIONS_COLLECTION}"
-        )
-        return NOT_FOUND_MESSAGE
-
     try:
-        docs = vector_store.similarity_search(
-            query, expr=f"source LIKE '%{filter_program_name}%'", k=5
+
+        # test if the collection is loaded
+        loaded = milvus_client.client.get_load_state(
+            collection_name=EXAMINATION_REGULATIONS_COLLECTION
+        )
+        if loaded["state"].name != "Loaded":
+            logger.warning(
+                f"[VECTOR DB]Collection {EXAMINATION_REGULATIONS_COLLECTION} is not loaded. Current state: {loaded}"
+            )
+
+        # get query vector
+        query_vector = get_embeddings(query)
+
+        docs = milvus_client.client.search(
+            collection_name=EXAMINATION_REGULATIONS_COLLECTION,
+            output_fields=["pk", "source", "text", "page"],
+            data=[query_vector],
+            search_params=search_params,
+            filter=f"source LIKE '%{filter_program_name}%'",
         )
 
         results = []
-        # example {'pk': 'f707471d-7369-43e0-a94a-4293', 'source': 'data/documents/PVO-10-31.pdf', 'page': 38}
 
-        for doc in docs:
+        # TODO: IMPLEMENT A RERANKING FUNCTION
+        for doc in docs[0]:
             # TODO consider moving this to the graph state
-            visited_docs().append(doc.metadata)
-            results.append(format_document(doc, DOCUMENT_PROMPT))
+            source = os.path.basename(doc["entity"]["source"])
+            page = doc["entity"]["page"]
+            visited_docs().append((source, page))
+            results.append(f'Source: {source} \nText: {doc["entity"]["text"]}')
 
         return DOCUMENT_SEPARATOR.join(results)
     except Exception as e:
@@ -51,21 +64,29 @@ def _get_relevant_documents(
 
 def retriever_his_in_one(query: str) -> str:
 
-    vector_store = get_milvus_client(HIS_IN_ONE_COLLECTON)
-    if vector_store is None:
-        logger.error(
-            f"[VECTOR DB]Failed to get Milvus client for collection: {HIS_IN_ONE_COLLECTON}"
+    # test if the collection is loaded
+    loaded = milvus_client.client.get_load_state(collection_name=HIS_IN_ONE_COLLECTON)
+    if loaded["state"].name != "Loaded":
+        logger.warning(
+            f"[VECTOR DB]Collection {HIS_IN_ONE_COLLECTON} is not loaded. Current state: {loaded}"
         )
-        return NOT_FOUND_MESSAGE
 
     try:
-        docs = vector_store.similarity_search(query, k=5)
+        # get query vector
+        query_vector = get_embeddings(query)
+
+        docs = milvus_client.client.search(
+            collection_name=HIS_IN_ONE_COLLECTON,
+            output_fields=["pk", "text"],
+            data=[query_vector],
+            search_params=search_params,
+        )
 
         results = []
 
-        for doc in docs:
+        for doc in docs[0]:
 
-            results.append(format_document(doc, DOCUMENT_PROMPT))
+            results.append(doc["entity"]["text"])
 
         return DOCUMENT_SEPARATOR.join(results)
 

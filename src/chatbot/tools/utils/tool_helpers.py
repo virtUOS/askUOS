@@ -75,18 +75,17 @@ class ReferenceRetriever:
         if not self.__dict__:
             self.docs_references = []
 
-    def format_references(self):
+    def format_references(self) -> dict:
         """
         Formats the references in a human-readable format.
         """
         references = {}
 
-        for doc in self.docs_references:
-            source = os.path.basename(doc["source"])
+        for source, page in self.docs_references:
             if source not in references:
-                references[source] = {doc["page"]}
+                references[source] = {page}
             else:
-                references[source].add(doc["page"])
+                references[source].add(page)
 
         return references
 

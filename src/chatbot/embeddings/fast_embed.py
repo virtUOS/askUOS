@@ -9,3 +9,9 @@ def get_fast_embed_model():
     return FastEmbedEmbeddings(
         model_name=settings.embedding.connection_settings.model_name,
     )
+
+
+def embed_query(query: str) -> list[float]:
+    """Embed a query using FastEmbed."""
+    model = get_fast_embed_model()
+    return model.embed_query(query)

@@ -22,3 +22,17 @@ def get_ollama_embeddings() -> OllamaEmbeddings:
     )
 
     return embeddings
+
+
+def get_ollama_embeddings_vector(query: str) -> list[float]:
+    """
+    Get the vector representation of a query using Ollama embeddings.
+
+    Args:
+        query (str): The input query to be embedded.
+
+    Returns:
+        list[float]: The vector representation of the query.
+    """
+    embeddings = get_ollama_embeddings()
+    return embeddings.embed_query(query)

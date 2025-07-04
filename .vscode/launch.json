@@ -235,6 +235,7 @@
             "name": "clientdb",
             "type": "debugpy",
             "request": "launch",
+             "env":{ "PYTHONPATH": "/app"},
             "program": "./src/chatbot/db/clients.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
