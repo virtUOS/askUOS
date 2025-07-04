@@ -1,7 +1,12 @@
 import asyncio
+import threading
 from typing import List, Optional
 
 import nest_asyncio
+from pymilvus import MilvusClient
+
+from src.chatbot_log.chatbot_logger import logger
+from src.config.core_config import settings
 
 # from langchain_core.vectorstores import VectorStoreRetriever
 # from langchain_milvus import Milvus
@@ -60,14 +65,6 @@ def ensure_event_loop():
 #     except Exception as e:
 #         logger.error(f"[VECTOR DB]Failed to initialize Milvus client: {e}")
 #         return None
-
-
-import threading
-
-from pymilvus import Collection, MilvusClient
-
-from src.chatbot_log.chatbot_logger import logger
-from src.config.core_config import settings
 
 
 class MilvusSingleton:
