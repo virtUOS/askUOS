@@ -35,7 +35,24 @@ class OllamaSingleton:
         return cls._instance
 
 
-ollama_embedding = OllamaSingleton()
+if settings.embedding.type == "Ollama":
+    ollama_embedding = OllamaSingleton()
+
+
+def get_ollama_embeddings_vector(query: str) -> list[float]:
+    """
+    Get the vector representation of a query using Ollama embeddings.
+
+    Args:
+        query (str): The input query to be embedded.
+
+    Returns:
+        list[float]: The vector representation of the query.
+    """
+
+    # TODO: Needs to  implemented asynchronously
+    return ollama_embedding.embed_query(query)
+
 
 # def get_ollama_embeddings() -> OllamaEmbeddings:
 #     """
@@ -57,18 +74,3 @@ ollama_embedding = OllamaSingleton()
 #     )
 
 #     return embeddings
-
-
-def get_ollama_embeddings_vector(query: str) -> list[float]:
-    """
-    Get the vector representation of a query using Ollama embeddings.
-
-    Args:
-        query (str): The input query to be embedded.
-
-    Returns:
-        list[float]: The vector representation of the query.
-    """
-
-    # TODO: Needs to  implemented asynchronously
-    return ollama_embedding.embed_query(query)
