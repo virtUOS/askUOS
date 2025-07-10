@@ -64,16 +64,10 @@ def extract_pdf_text(href: str, pdf_bytes: bytes) -> str:
 
 class ReferenceRetriever:
 
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(ReferenceRetriever, cls).__new__(cls)
-        return cls._instance
+    __slots__ = ("docs_references",)
 
     def __init__(self) -> None:
-        if not self.__dict__:
-            self.docs_references = []
+        self.docs_references = []
 
     def format_references(self) -> dict:
         """
@@ -99,6 +93,6 @@ class ReferenceRetriever:
         return self.docs_references
 
 
-visited_docs = ReferenceRetriever()
+# visited_docs = ReferenceRetriever()
 # visited_links = VisitedLinks()
 # do_not_visit_links = DoNotVisitLinks()

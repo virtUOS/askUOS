@@ -32,7 +32,7 @@ from src.chatbot.prompt.main import (
     get_system_prompt,
     translate_prompt,
 )
-from src.chatbot.tools.utils.tool_helpers import visited_docs
+from src.chatbot.tools.utils.tool_helpers import ReferenceRetriever
 from src.chatbot.tools.utils.tool_schema import (
     HisInOneInput,
     RetrieverInput,
@@ -389,7 +389,7 @@ class GraphNodesMixin:
         about_application = False
         teaching_degree = False
         search_query = []
-        visited_docs.clear()
+        self._visited_docs.clear()
 
         for tool_call in message.tool_calls:
             try:
@@ -412,6 +412,17 @@ class GraphNodesMixin:
                     # TODO IF no results are found, the tool result is empty and the agent should generate a new query and search again
                     # TODO even when no results are found, the entire graph executes e.g. grade_documents edge
                     tool_result = tool_result[0]
+
+                # TODO: Unify all vector db based tools. They all should return the same format (text,(source, page))
+                elif tool_call["name"] == "examination_regulations":
+
+                    tool_result = self._tools_by_name[tool_call["name"]].invoke(
+                        tool_call["args"]
+                    )
+                    self._visited_docs.docs_references = [
+                        *tool_result[1]
+                    ]  # each element of the form (source, page)
+                    tool_result = tool_result[0]  # the text of the document
 
                 else:
                     tool_result = self._tools_by_name[tool_call["name"]].invoke(
@@ -664,6 +675,7 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
     _prompt_length: int = PrivateAttr(default=None)
     _agent_direct_msg: str = PrivateAttr(default=None)
     _visited_links: List[str] = PrivateAttr(default=[])
+    _visited_docs: ReferenceRetriever = PrivateAttr(default=ReferenceRetriever())
 
     # _clean_tool_message: str = PrivateAttr(default=None)
     # _curated_answer: str = PrivateAttr(default=None)

@@ -2,7 +2,6 @@ import os
 
 from src.chatbot.db.clients import milvus_client
 from src.chatbot.embeddings.main import get_embeddings
-from src.chatbot.tools.utils.tool_helpers import visited_docs
 from src.chatbot_log.chatbot_logger import logger
 
 HIS_IN_ONE_COLLECTON = "troubleshooting"
@@ -21,8 +20,10 @@ search_params = {
 def _get_relevant_documents(
     query: str,
     filter_program_name: str,
-) -> str:
+) -> tuple[str, list[tuple[str, int]]]:
     # TODO: add a filter for the program name WHEN searching
+
+    ref = []
 
     try:
 
@@ -49,29 +50,32 @@ def _get_relevant_documents(
         results = []
 
         # TODO: IMPLEMENT A RERANKING FUNCTION
+
         for doc in docs[0]:
             # TODO consider moving this to the graph state
             source = os.path.basename(doc["entity"]["source"])
             page = doc["entity"]["page"]
-            visited_docs().append((source, page))
+            ref.append((source, page))
             results.append(f'Source: {source} \nText: {doc["entity"]["text"]}')
 
-        return DOCUMENT_SEPARATOR.join(results)
+        return DOCUMENT_SEPARATOR.join(results), ref
     except Exception as e:
         logger.error(f"[VECTOR DB]Error during similarity search: {e}")
-        return NOT_FOUND_MESSAGE
+        return NOT_FOUND_MESSAGE, ref
 
 
 def retriever_his_in_one(query: str) -> str:
 
-    # test if the collection is loaded
-    loaded = milvus_client.client.get_load_state(collection_name=HIS_IN_ONE_COLLECTON)
-    if loaded["state"].name != "Loaded":
-        logger.warning(
-            f"[VECTOR DB]Collection {HIS_IN_ONE_COLLECTON} is not loaded. Current state: {loaded}"
-        )
-
     try:
+
+        # test if the collection is loaded
+        loaded = milvus_client.client.get_load_state(
+            collection_name=HIS_IN_ONE_COLLECTON
+        )
+        if loaded["state"].name != "Loaded":
+            logger.warning(
+                f"[VECTOR DB]Collection {HIS_IN_ONE_COLLECTON} is not loaded. Current state: {loaded}"
+            )
         # get query vector
         query_vector = get_embeddings(query)
 

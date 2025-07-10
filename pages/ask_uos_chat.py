@@ -17,7 +17,6 @@ from src.chatbot.agents.utils.exceptions import MaxMessageHistoryException
 from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.prompt.prompt_date import get_current_date
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
-from src.chatbot.tools.utils.tool_helpers import visited_docs
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
@@ -263,7 +262,7 @@ class ChatApp:
                 )
                 st.markdown(f"{response}\n\n{further_help_msg}")
                 # clear the docs references
-                visited_docs.clear()
+                graph._visited_docs.clear()
 
             except ProgrammableSearchException as e:
                 response = session_state["_"](
@@ -271,7 +270,7 @@ class ChatApp:
                 )
                 st.markdown(f"{response}\n{further_help_msg}")
                 # clear the docs references
-                visited_docs.clear()
+                graph._visited_docs.clear()
 
             except Exception as e:
                 logger.exception(f"Error while processing the user's query: {e}")
@@ -279,7 +278,7 @@ class ChatApp:
                     "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
                 )
                 # clear the docs references
-                visited_docs.clear()
+                graph._visited_docs.clear()
                 st.markdown(f"{response}\n{further_help_msg}")
 
             return response, to_stream
@@ -304,7 +303,7 @@ class ChatApp:
                 )
 
                 self.store_response(response, prompt, graph)
-                if visited_docs():
+                if graph._visited_docs():
                     self.display_visited_docs()
 
                 if graph._visited_links:
@@ -340,7 +339,8 @@ class ChatApp:
     def display_visited_docs(self):
         """Display the documents visited for the current user query."""
 
-        references = visited_docs.format_references()
+        graph = self.get_agent()
+        references = graph._visited_docs.format_references()
         reference_examination_regulations = "https://www.uni-osnabrueck.de/studium/im-studium/zugangs-zulassungs-und-pruefungsordnungen/"
         message = session_state["_"](
             "The information provided draws on the documents below that can be found in the [University Website]({}). We encourage you to visit the site to explore these resources for additional details and insights!"
@@ -358,7 +358,7 @@ class ChatApp:
             # TODO: Remove page numbers, these are wrong. Temporary
             # st.markdown(f"- **{key}**,  **{page_label}**: {page_list}")
             st.markdown(f"- **{key}**")
-        visited_docs.clear()
+        graph._visited_docs.clear()
 
     def display_visited_links(self):
         """Display the links visited for the current user query."""

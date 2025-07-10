@@ -5,8 +5,7 @@ sys.path.append("/app")
 import sys
 from typing import List
 
-from src.chatbot.agents.agent_lang_graph import \
-    CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 
 # do not include REPEATED queries or very similar queries (tests will fail)
 warm_up_queries = [
