@@ -7,6 +7,7 @@ import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 from streamlit import session_state
+from streamlit_cookies_controller import CookieController
 from streamlit_feedback import streamlit_feedback
 
 from pages.utils import initialize_session_sate, load_css, setup_page
@@ -20,8 +21,16 @@ from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
+user_id = str(uuid.uuid4())
+
+from langchain_redis import RedisChatMessageHistory
+
 # max number of messages after which a summary is generated
 MAX_MESSAGE_HISTORY = 5
+
+HUMAN_AVATAR = "./static/Icon-User.svg"
+ASSISTANT_AVATAR = "./static/Icon-chatbot.svg"
+ROLES = ("ai", "human")
 
 
 class ChatApp:
@@ -43,8 +52,34 @@ class ChatApp:
     def __init__(self):
         if not self.__dict__:
 
-            setup_page()
             load_css()
+
+    def get_history(self, user_id: str) -> RedisChatMessageHistory:
+        #
+        history = RedisChatMessageHistory(
+            redis_url="redis://redis:6379",
+            session_id=user_id,
+            ttl=60 * 60 * 3,  # 3 hours
+        )
+        return history
+
+    def get_user_id(self) -> str:
+        """Get the user ID cookie or generate a new one."""
+
+        if st.session_state["ask_uos_user_id"] is not None:
+            return st.session_state["ask_uos_user_id"]
+
+        ask_uos_user_id = self.controller.get("ask_uos_user_id")
+
+        if ask_uos_user_id:
+            st.session_state["ask_uos_user_id"] = ask_uos_user_id
+        else:
+            user_id = str(uuid.uuid4())
+            self.controller.set("ask_uos_user_id", user_id, max_age=60 * 60 * 24 * 365)
+
+            st.session_state["ask_uos_user_id"] = user_id
+
+        return st.session_state["ask_uos_user_id"]
 
     def show_warning(self):
         """Display a warning message to the user."""
@@ -60,28 +95,60 @@ class ChatApp:
 
     def initialize_chat(self):
         """Initialize the chat messages in session state if not present."""
-        if "messages" not in st.session_state:
+
+        history = self.get_history(self.get_user_id())
+
+        if not history.messages:
+            # If no messages in history, initialize with a greeting message
             greeting_message = session_state["_"](
                 "Hello! I am happy to assist you with questions about the University of Osnabrück, including information about study programs, application processes, and admission requirements. \n How can I help you today?"
             )
-            st.session_state["messages"] = [
-                {
-                    "role": "assistant",
-                    "avatar": "./static/Icon-chatbot.svg",
-                    "content": greeting_message,
-                }
-            ]
+            history.add_ai_message(greeting_message)
+
+        # if "messages" not in st.session_state:
+        #     greeting_message = session_state["_"](
+        #         "Hello! I am happy to assist you with questions about the University of Osnabrück, including information about study programs, application processes, and admission requirements. \n How can I help you today?"
+        #     )
+        #     st.session_state["messages"] = [
+        #         {
+        #             "role": "assistant",
+        #             "avatar": "./static/Icon-chatbot.svg",
+        #             "content": greeting_message,
+        #         }
+        #     ]
         if "conversation_summary" not in st.session_state:
             st.session_state["conversation_summary"] = []
 
     def display_chat_messages(self):
         """Display chat messages stored in the session state."""
-        for message in st.session_state["messages"]:
-            with st.chat_message(message["role"], avatar=message["avatar"]):
-                st.write(message["content"])
+
+        history = self.get_history(self.get_user_id())
+        messages = history.messages
+
+        for m in messages:
+            role = m.type
+            if role == ROLES[1]:  # "human"
+                with st.chat_message(role, avatar=HUMAN_AVATAR):
+                    st.write(m.content)
+
+            elif role == ROLES[0]:  # "ai"
+                with st.chat_message(role, avatar=ASSISTANT_AVATAR):
+                    st.write(m.content)
+
+            else:
+                logger.error(
+                    f"Unknown message type: {m.type}. Expected one of {ROLES}."
+                )
+
+        # for message in st.session_state["messages"]:
+        #     with st.chat_message(message["role"], avatar=message["avatar"]):
+        #         st.write(message["content"])
 
     def handle_user_input(self):
         """Handle user input and generate a response."""
+
+        history = self.get_history(self.get_user_id())
+
         if prompt := st.chat_input(placeholder=session_state["_"]("Message")):
             if not session_state.feedback_saved:
                 self.log_feedback()
@@ -89,14 +156,18 @@ class ChatApp:
             st.session_state.user_feedback_faces = None
             st.session_state.user_feedback_form = None
 
-            st.session_state.messages.append(
-                {"role": "user", "content": prompt, "avatar": "./static/Icon-User.svg"}
-            )
-            with st.chat_message("user", avatar="./static/Icon-User.svg"):
+            history.add_user_message(prompt)
+            # st.session_state.messages.append(
+            #     {"role": "user", "content": prompt, "avatar": "./static/Icon-User.svg"}
+            # )
+            with st.chat_message(ROLES[1], avatar="./static/Icon-User.svg"):
                 st.write(prompt)
 
-            if st.session_state.messages[-1]["role"] != "assistant":
+            if history.messages[-1].type != ROLES[0]:  # "ai"
                 self.generate_response(prompt)
+
+            # if st.session_state.messages[-1]["role"] != "assistant":
+            #     self.generate_response(prompt)
 
     def get_agent(self):
         if st.session_state["agent"] is None:
@@ -115,6 +186,8 @@ class ChatApp:
     def generate_response(self, prompt):
         """Generate a response from the assistant based on user prompt."""
 
+        history_redis = self.get_history(self.get_user_id())
+
         graph = self.get_agent()
 
         further_help_msg = session_state["_"](
@@ -132,6 +205,7 @@ class ChatApp:
         def stream_graph_updates(user_input):
             response = ""
             to_stream = ""
+            # TODO USE THE ID RETRIEVED FROM COOKIE CONTROLLER
             thread_id = 1
             config = {
                 "configurable": {"thread_id": thread_id},
@@ -154,7 +228,7 @@ class ChatApp:
                 else None
             )
             # messages that are not still summarized. remaining_msg = len(messages) - (MAX_MESSAGE_HISTORY * number_of_summaries); IF remaining_msg ==0 return the last two messages
-            history = self._get_conversation_history()
+            history = self._get_conversation_history(history_redis)
             # system_user_prompt = get_prompt(history + [("user", user_input)])
             system_user_prompt = get_system_prompt(
                 conversation_summary, history, user_input, current_date
@@ -283,7 +357,7 @@ class ChatApp:
 
             return response, to_stream
 
-        with st.chat_message("assistant", avatar="./static/Icon-chatbot.svg"):
+        with st.chat_message(ROLES[0], avatar="./static/Icon-chatbot.svg"):
             with st.spinner(session_state["_"]("Generating response...")):
                 logger.info(f"User's query: {prompt}")
 
@@ -311,7 +385,7 @@ class ChatApp:
 
             # self.store_response(response, prompt)
 
-    def _get_chat_history(self, messages: List[Dict[str, str]], k=MAX_MESSAGE_HISTORY):
+    def _get_chat_history(self, messages: List, k=MAX_MESSAGE_HISTORY):
         """
         Retrieve and store the last k messages from the chat history.
 
@@ -378,17 +452,25 @@ class ChatApp:
                 )
 
     def store_response(
-        self, output: str, prompt: str, graph: CampusManagementOpenAIToolsAgent
+        self,
+        output: str,
+        prompt: str,
+        graph: CampusManagementOpenAIToolsAgent,
     ):
         """Store the assistant's response and prompt in session state."""
 
-        st.session_state.messages.append(
-            {
-                "role": "assistant",
-                "content": output,
-                "avatar": "./static/Icon-chatbot.svg",
-            }
-        )
+        history_redis = self.get_history(self.get_user_id())
+
+        # store the response in the Redis chat history
+        history_redis.add_ai_message(output)
+
+        # st.session_state.messages.append(
+        #     {
+        #         "role": "assistant",
+        #         "content": output,
+        #         "avatar": "./static/Icon-chatbot.svg",
+        #     }
+        # )
         st.session_state.user_query = prompt
 
         # summarize the conversation
@@ -396,14 +478,14 @@ class ChatApp:
             st.session_state["conversation_summary"]
         )  # number of summaries
         if (
-            len(st.session_state.messages) >= MAX_MESSAGE_HISTORY
+            len(history_redis.messages) >= MAX_MESSAGE_HISTORY
             # and len(st.session_state.messages) % MAX_MESSAGE_HISTORY == 0
             and (number_of_summaries * MAX_MESSAGE_HISTORY + MAX_MESSAGE_HISTORY)
-            <= len(st.session_state["messages"])
+            <= len(history_redis.messages)
         ):
 
             if number_of_summaries == 0:
-                history = self._get_chat_history(st.session_state["messages"])
+                history = self._get_chat_history(history_redis.messages)
 
                 st.session_state["conversation_summary"].append(
                     graph.summarize_conversation(
@@ -415,7 +497,7 @@ class ChatApp:
                 st.session_state["conversation_summary"].append(
                     graph.summarize_conversation(
                         self._get_chat_history(
-                            st.session_state["messages"][
+                            history_redis.messages[
                                 -MAX_MESSAGE_HISTORY * number_of_summaries :
                             ]
                         ),
@@ -426,18 +508,14 @@ class ChatApp:
                 )
             # TODO if a summary is generated, MAKE SURE THAT THE SUMMARY IS NOT GREATER THAT MAX_TOKEN_SUMMARY. IF IT IS, THEN summarize it again
 
-    def _convert_messages(self, messages: List[Dict[str, str]]) -> List:
+    # TODO: DELETE FUNCTION. Objects are already saved to REDIS using the right type
+    def _convert_messages(self, messages: List) -> List:
 
         chat_history = []
         for record in messages:
-            if record["role"] == "user":
-                chat_history.append(
-                    HumanMessage(content=record["content"], additional_kwargs={})
-                )
-            elif record["role"] == "assistant":
-                chat_history.append(
-                    AIMessage(content=record["content"], additional_kwargs={})
-                )
+            if record.type == ROLES[0] or record.type == ROLES[1]:
+                chat_history.append(record)
+
             else:
                 chat_history.append(
                     ToolMessage(content=record["content"], additional_kwargs={})
@@ -446,17 +524,17 @@ class ChatApp:
         logger.debug(f"Chat History -------{chat_history}--------")
         return chat_history
 
-    def _get_conversation_history(self):
+    def _get_conversation_history(self, history_redis: RedisChatMessageHistory):
 
         if st.session_state.get("conversation_summary", None):
 
             # number of summarized messages
             k = len(st.session_state["conversation_summary"]) * MAX_MESSAGE_HISTORY
 
-            if len(st.session_state["messages"]) > k:
+            if len(history_redis.messages) > k:
                 # messages that have not been summarized yet
                 conversation_history = self._get_chat_history(
-                    st.session_state["messages"][k:],  # get the last k messages
+                    history_redis.messages[k:],  # get the last k messages
                 )
 
                 # conversation_history = deque(conversation_history)
@@ -482,10 +560,10 @@ class ChatApp:
                 # )
                 try:
                     conversation_history.append(
-                        self._get_chat_history(st.session_state["messages"])[-2]
+                        self._get_chat_history(history_redis.messages)[-2]
                     )
                     conversation_history.append(
-                        self._get_chat_history(st.session_state["messages"])[-1]
+                        self._get_chat_history(history_redis.messages)[-1]
                     )
                 except IndexError:
                     raise MaxMessageHistoryException(
@@ -493,7 +571,7 @@ class ChatApp:
                     )
 
         else:
-            conversation_history = self._get_chat_history(st.session_state["messages"])
+            conversation_history = self._get_chat_history(history_redis.messages)
 
         return list(conversation_history)
 
@@ -556,7 +634,9 @@ class ChatApp:
     def run(self):
         """Main method to run the application logic."""
         st.title("ask.UOS")
+
         initialize_session_sate()
+
         self.show_warning()
         self.initialize_chat()
         self.display_chat_messages()
@@ -566,5 +646,10 @@ class ChatApp:
 
 
 if __name__ == "__main__":
+    setup_page()
+    controller = CookieController()
+    user_id = controller.get("ask_uos_user_id")
+    print(user_id)
+
     app = ChatApp()
     app.run()
