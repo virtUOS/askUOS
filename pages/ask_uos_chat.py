@@ -7,7 +7,6 @@ import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 from streamlit import session_state
-from streamlit_cookies_controller import CookieController
 from streamlit_feedback import streamlit_feedback
 
 from pages.utils import initialize_session_sate, load_css, setup_page
@@ -21,9 +20,9 @@ from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
-user_id = str(uuid.uuid4())
 
 from langchain_redis import RedisChatMessageHistory
+from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
 
 # max number of messages after which a summary is generated
 MAX_MESSAGE_HISTORY = 5
@@ -51,11 +50,11 @@ class ChatApp:
 
     def __init__(self):
         if not self.__dict__:
-
+            self.controller = CookieController()
             load_css()
 
     def get_history(self, user_id: str) -> RedisChatMessageHistory:
-        #
+        #  TODO: catch error when the client sends a cookie that is not a valid UUID
         history = RedisChatMessageHistory(
             redis_url="redis://redis:6379",
             session_id=user_id,
@@ -64,22 +63,31 @@ class ChatApp:
         return history
 
     def get_user_id(self) -> str:
-        """Get the user ID cookie or generate a new one."""
+        """Get the user ID from cookies or generate a new one, handling Streamlit rerun and returning users."""
 
-        if st.session_state["ask_uos_user_id"] is not None:
+        # If already in session_state, use it
+        if (
+            "ask_uos_user_id" in st.session_state
+            and st.session_state["ask_uos_user_id"]
+        ):
             return st.session_state["ask_uos_user_id"]
 
+        # Try to get from cookies
         ask_uos_user_id = self.controller.get("ask_uos_user_id")
-
         if ask_uos_user_id:
             st.session_state["ask_uos_user_id"] = ask_uos_user_id
-        else:
-            user_id = str(uuid.uuid4())
-            self.controller.set("ask_uos_user_id", user_id, max_age=60 * 60 * 24 * 365)
+            return ask_uos_user_id
 
-            st.session_state["ask_uos_user_id"] = user_id
+        # If we haven't tried waiting for the cookie yet, do so now
+        if not st.session_state.get("_uos_cookie_waited", False):
+            st.session_state["_uos_cookie_waited"] = True
+            st.stop()  # Wait for browser to send cookies on next run
 
-        return st.session_state["ask_uos_user_id"]
+        # If we already waited and still no cookie, generate a new one
+        user_id = str(uuid.uuid4())
+        self.controller.set("ask_uos_user_id", user_id, max_age=60 * 60 * 24 * 365)
+        st.session_state["ask_uos_user_id"] = user_id
+        return user_id
 
     def show_warning(self):
         """Display a warning message to the user."""
@@ -93,10 +101,10 @@ class ChatApp:
                 session_state["show_warning"] = False
                 st.rerun()
 
-    def initialize_chat(self):
+    def initialize_chat(self, ask_uos_user_id: str):
         """Initialize the chat messages in session state if not present."""
 
-        history = self.get_history(self.get_user_id())
+        history = self.get_history(ask_uos_user_id)
 
         if not history.messages:
             # If no messages in history, initialize with a greeting message
@@ -122,7 +130,8 @@ class ChatApp:
     def display_chat_messages(self):
         """Display chat messages stored in the session state."""
 
-        history = self.get_history(self.get_user_id())
+        user_id = self.get_user_id()
+        history = self.get_history(user_id)
         messages = history.messages
 
         for m in messages:
@@ -147,7 +156,8 @@ class ChatApp:
     def handle_user_input(self):
         """Handle user input and generate a response."""
 
-        history = self.get_history(self.get_user_id())
+        user_id = self.get_user_id()
+        history = self.get_history(user_id)
 
         if prompt := st.chat_input(placeholder=session_state["_"]("Message")):
             if not session_state.feedback_saved:
@@ -186,7 +196,8 @@ class ChatApp:
     def generate_response(self, prompt):
         """Generate a response from the assistant based on user prompt."""
 
-        history_redis = self.get_history(self.get_user_id())
+        user_id = self.get_user_id()
+        history_redis = self.get_history(user_id)
 
         graph = self.get_agent()
 
@@ -395,7 +406,6 @@ class ChatApp:
                                              sender and the message content respectively. The 'avatar' key represents the icon used when displaying the message.
 
 
-
         """
 
         if not messages:
@@ -442,11 +452,11 @@ class ChatApp:
             for link in graph._visited_links:
                 st.markdown(
                     f"""
-                    
+
                         <div class="truncate">
                             <span>&#8226;</span> <a href="{link}" target="_blank" rel="noopener noreferrer">{link}</a>
                         </div>
-                    
+
                         """,
                     unsafe_allow_html=True,
                 )
@@ -459,7 +469,8 @@ class ChatApp:
     ):
         """Store the assistant's response and prompt in session state."""
 
-        history_redis = self.get_history(self.get_user_id())
+        user_id = self.get_user_id()
+        history_redis = self.get_history(user_id)
 
         # store the response in the Redis chat history
         history_redis.add_ai_message(output)
@@ -631,14 +642,17 @@ class ChatApp:
             logger.info(f"Feedback= {feedback}")
             session_state.feedback_saved = True
 
+    # These methods are now replaced by the get_user_id method
+
     def run(self):
         """Main method to run the application logic."""
         st.title("ask.UOS")
-
         initialize_session_sate()
-
+        RemoveEmptyElementContainer()
+        # Get or create user ID using our method
+        user_id = self.get_user_id()
         self.show_warning()
-        self.initialize_chat()
+        self.initialize_chat(user_id)
         self.display_chat_messages()
         self.handle_user_input()
         self.show_feedback_faces()
@@ -646,10 +660,5 @@ class ChatApp:
 
 
 if __name__ == "__main__":
-    setup_page()
-    controller = CookieController()
-    user_id = controller.get("ask_uos_user_id")
-    print(user_id)
-
     app = ChatApp()
     app.run()
