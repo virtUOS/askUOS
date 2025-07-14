@@ -1,4 +1,5 @@
 import streamlit as st
+from langchain_core.messages import BaseMessage
 from streamlit import session_state
 
 from pages.language import translate
@@ -23,6 +24,7 @@ def initialize_session_sate() -> None:
         "selected_language": settings.language,
         "agent_language": settings.language,
         "agent": None,
+        "ask_uos_user_id": None,
     }
 
     for key, value in defaults.items():
@@ -44,3 +46,14 @@ def load_css() -> None:
     """Load custom CSS styles."""
     with open("./pages/static/style.css") as css:
         st.markdown(f"<style>{css.read()}</style>", unsafe_allow_html=True)
+
+
+from langchain_core.messages import BaseMessage
+
+
+class SummaryMessage(BaseMessage):
+    type: str = "summary"
+
+    def __init__(self, content: str, **kwargs):
+        super().__init__(content=content, **kwargs)
+        self.content = content

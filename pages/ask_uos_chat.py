@@ -4,12 +4,14 @@ from collections import deque
 from typing import Dict, List, Optional
 
 import streamlit as st
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
+from langchain_redis import RedisChatMessageHistory
 from langgraph.errors import GraphRecursionError
 from streamlit import session_state
+from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
 from streamlit_feedback import streamlit_feedback
 
-from pages.utils import initialize_session_sate, load_css, setup_page
+from pages.utils import SummaryMessage, initialize_session_sate, load_css, setup_page
 
 # from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
@@ -20,16 +22,12 @@ from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
-
-from langchain_redis import RedisChatMessageHistory
-from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
-
 # max number of messages after which a summary is generated
 MAX_MESSAGE_HISTORY = 5
 
 HUMAN_AVATAR = "./static/Icon-User.svg"
 ASSISTANT_AVATAR = "./static/Icon-chatbot.svg"
-ROLES = ("ai", "human")
+ROLES = ("ai", "human", "summary")
 
 
 class ChatApp:
@@ -50,6 +48,7 @@ class ChatApp:
 
     def __init__(self):
         if not self.__dict__:
+            # setup_page()
             self.controller = CookieController()
             load_css()
 
@@ -124,25 +123,35 @@ class ChatApp:
         #             "content": greeting_message,
         #         }
         #     ]
-        if "conversation_summary" not in st.session_state:
-            st.session_state["conversation_summary"] = []
+        # if "conversation_summary" not in st.session_state:
+        #     st.session_state["conversation_summary"] = []
 
     def display_chat_messages(self):
         """Display chat messages stored in the session state."""
 
         user_id = self.get_user_id()
         history = self.get_history(user_id)
+        # stores the summary messages
+        st.session_state["conversation_summary"] = []
+        # human and assistant messages (these are used in the system prompt)
+        st.session_state["messages"] = []
+        # all messages from the history, see ROLES
         messages = history.messages
 
         for m in messages:
             role = m.type
             if role == ROLES[1]:  # "human"
+                st.session_state["messages"].append(m)
                 with st.chat_message(role, avatar=HUMAN_AVATAR):
                     st.write(m.content)
 
             elif role == ROLES[0]:  # "ai"
+                st.session_state["messages"].append(m)
                 with st.chat_message(role, avatar=ASSISTANT_AVATAR):
                     st.write(m.content)
+
+            elif role == ROLES[2]:  # "summary"
+                st.session_state["conversation_summary"].append(m.content)
 
             else:
                 logger.error(
@@ -196,9 +205,6 @@ class ChatApp:
     def generate_response(self, prompt):
         """Generate a response from the assistant based on user prompt."""
 
-        user_id = self.get_user_id()
-        history_redis = self.get_history(user_id)
-
         graph = self.get_agent()
 
         further_help_msg = session_state["_"](
@@ -239,7 +245,7 @@ class ChatApp:
                 else None
             )
             # messages that are not still summarized. remaining_msg = len(messages) - (MAX_MESSAGE_HISTORY * number_of_summaries); IF remaining_msg ==0 return the last two messages
-            history = self._get_conversation_history(history_redis)
+            history = self._get_conversation_history(st.session_state["messages"])
             # system_user_prompt = get_prompt(history + [("user", user_input)])
             system_user_prompt = get_system_prompt(
                 conversation_summary, history, user_input, current_date
@@ -396,30 +402,6 @@ class ChatApp:
 
             # self.store_response(response, prompt)
 
-    def _get_chat_history(self, messages: List, k=MAX_MESSAGE_HISTORY):
-        """
-        Retrieve and store the last k messages from the chat history.
-
-        Args:
-            messages (List[Dict[str, str]]): A list of message dictionaries, where each dictionary contains
-                                             'role', 'content' and 'avatar' keys representing the role of the message
-                                             sender and the message content respectively. The 'avatar' key represents the icon used when displaying the message.
-
-
-        """
-
-        if not messages:
-            return []
-
-        # if len(messages) > k:
-        #     messages = messages[-k:]  # get the last k messages
-        # chat_history = [
-        #     {"role": record["role"], "content": record["content"]}
-        #     for record in messages
-        # ]
-
-        return self._convert_messages(messages)
-
     def display_visited_docs(self):
         """Display the documents visited for the current user query."""
 
@@ -496,57 +478,98 @@ class ChatApp:
         ):
 
             if number_of_summaries == 0:
-                history = self._get_chat_history(history_redis.messages)
 
-                st.session_state["conversation_summary"].append(
-                    graph.summarize_conversation(
-                        history,
-                    )
+                summary_msg = SummaryMessage(
+                    content=graph.summarize_conversation(history_redis.messages)
                 )
+                history_redis.add_message(summary_msg)
+
+                # st.session_state["conversation_summary"].append(
+                #     graph.summarize_conversation(
+                #         history,
+                #     )
+                # )
             else:
                 # if there is a previoius summary, update it
-                st.session_state["conversation_summary"].append(
-                    graph.summarize_conversation(
-                        self._get_chat_history(
-                            history_redis.messages[
-                                -MAX_MESSAGE_HISTORY * number_of_summaries :
-                            ]
-                        ),
+                summary_msg = SummaryMessage(
+                    content=graph.summarize_conversation(
+                        history_redis.messages[
+                            -MAX_MESSAGE_HISTORY * number_of_summaries :
+                        ],
                         st.session_state["conversation_summary"][
                             -1
                         ],  # get the last summary
                     )
                 )
+                history_redis.add_message(summary_msg)
+
+                # st.session_state["conversation_summary"].append(
+                #     graph.summarize_conversation(
+                #         self._get_chat_history(
+                #             history_redis.messages[
+                #                 -MAX_MESSAGE_HISTORY * number_of_summaries :
+                #             ]
+                #         ),
+                #         st.session_state["conversation_summary"][
+                #             -1
+                #         ],  # get the last summary
+                #     )
+                # )
             # TODO if a summary is generated, MAKE SURE THAT THE SUMMARY IS NOT GREATER THAT MAX_TOKEN_SUMMARY. IF IT IS, THEN summarize it again
 
     # TODO: DELETE FUNCTION. Objects are already saved to REDIS using the right type
-    def _convert_messages(self, messages: List) -> List:
+    # def _convert_messages(self, messages: List) -> List:
 
-        chat_history = []
-        for record in messages:
-            if record.type == ROLES[0] or record.type == ROLES[1]:
-                chat_history.append(record)
+    #     chat_history = []
+    #     for record in messages:
+    #         if record.type == ROLES[0] or record.type == ROLES[1]:
+    #             chat_history.append(record)
 
-            else:
-                chat_history.append(
-                    ToolMessage(content=record["content"], additional_kwargs={})
-                )
+    #         elif record.type == ROLES[2]:  # "summary"
+    #             continue  # excludes # "summary"
+    #         else:
+    #             chat_history.append(
+    #                 ToolMessage(content=record["content"], additional_kwargs={})
+    #             )
 
-        logger.debug(f"Chat History -------{chat_history}--------")
-        return chat_history
+    #     logger.debug(f"Chat History -------{chat_history}--------")
+    #     return chat_history
 
-    def _get_conversation_history(self, history_redis: RedisChatMessageHistory):
+    # def _get_chat_history(self, messages: List, k=MAX_MESSAGE_HISTORY):
+    #     """
+    #     Retrieve and store the last k messages from the chat history.
 
+    #     Args:
+    #         messages (List[Dict[str, str]]): A list of message dictionaries, where each dictionary contains
+    #                                          'role', 'content' and 'avatar' keys representing the role of the message
+    #                                          sender and the message content respectively. The 'avatar' key represents the icon used when displaying the message.
+
+    #     """
+
+    #     if not messages:
+    #         return []
+
+    #     # if len(messages) > k:
+    #     #     messages = messages[-k:]  # get the last k messages
+    #     # chat_history = [
+    #     #     {"role": record["role"], "content": record["content"]}
+    #     #     for record in messages
+    #     # ]
+
+    #     return self._convert_messages(messages)
+
+    def _get_conversation_history(self, history):
+        """
+        history: Filtered HumanMessage and AIMessage objects from the chat history.
+        """
         if st.session_state.get("conversation_summary", None):
 
             # number of summarized messages
             k = len(st.session_state["conversation_summary"]) * MAX_MESSAGE_HISTORY
 
-            if len(history_redis.messages) > k:
+            if len(history.messages) > k:
                 # messages that have not been summarized yet
-                conversation_history = self._get_chat_history(
-                    history_redis.messages[k:],  # get the last k messages
-                )
+                conversation_history = history[k:]  # get the last k messages
 
                 # conversation_history = deque(conversation_history)
                 # # Two ai messages cannot be consecutive
@@ -570,21 +593,17 @@ class ChatApp:
                 #     AIMessage(content=st.session_state["conversation_summary"][-1])
                 # )
                 try:
-                    conversation_history.append(
-                        self._get_chat_history(history_redis.messages)[-2]
-                    )
-                    conversation_history.append(
-                        self._get_chat_history(history_redis.messages)[-1]
-                    )
+                    conversation_history.append(history[-2])
+                    conversation_history.append(history[-1])
                 except IndexError:
                     raise MaxMessageHistoryException(
                         "MAX_MESSAGE_HISTORY must be >= 2. Summarizing only allowed when there are 2 or more messages."
                     )
 
         else:
-            conversation_history = self._get_chat_history(history_redis.messages)
+            conversation_history = history
 
-        return list(conversation_history)
+        return conversation_history
 
     def show_feedback_faces(self):
         streamlit_feedback(
@@ -652,6 +671,7 @@ class ChatApp:
         # Get or create user ID using our method
         user_id = self.get_user_id()
         self.show_warning()
+        # DO NOT CHANGE THE ORDER IN WHICH THESE METHODS ARE CALLED
         self.initialize_chat(user_id)
         self.display_chat_messages()
         self.handle_user_input()
