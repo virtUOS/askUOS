@@ -1,15 +1,15 @@
-langchain=== 0.2.6
-langchain-community===0.2.6
-langchain_experimental===0.0.62
+langchain
+langchain-community
+langchain_experimental
 sentence-transformers===3.0.1
 tk===0.1.0
 pypdf===4.0.1
-langchain-openai=== 0.1.13
+langchain-openai
 pypdf===4.0.1
 PyPDF2===3.0.1
 fastembed===0.2.1
 streamlit===1.39.0
-pydantic-settings===2.3.4
+pydantic-settings
 matplotlib
 streamlit-feedback
 langchain-milvus

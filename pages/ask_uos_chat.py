@@ -4,14 +4,14 @@ from collections import deque
 from typing import Dict, List, Optional
 
 import streamlit as st
-from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_redis import RedisChatMessageHistory
 from langgraph.errors import GraphRecursionError
 from streamlit import session_state
 from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
 from streamlit_feedback import streamlit_feedback
 
-from pages.utils import SummaryMessage, initialize_session_sate, load_css, setup_page
+from pages.utils import initialize_session_sate, load_css, setup_page
 
 # from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
 from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
@@ -27,7 +27,7 @@ MAX_MESSAGE_HISTORY = 5
 
 HUMAN_AVATAR = "./static/Icon-User.svg"
 ASSISTANT_AVATAR = "./static/Icon-chatbot.svg"
-ROLES = ("ai", "human", "summary")
+ROLES = ("ai", "human")
 
 
 class ChatApp:
@@ -146,12 +146,14 @@ class ChatApp:
                     st.write(m.content)
 
             elif role == ROLES[0]:  # "ai"
-                st.session_state["messages"].append(m)
-                with st.chat_message(role, avatar=ASSISTANT_AVATAR):
-                    st.write(m.content)
+                # check if the message is a summary
+                if m.additional_kwargs.get("is_summary", False):
+                    st.session_state["conversation_summary"].append(m.content)
 
-            elif role == ROLES[2]:  # "summary"
-                st.session_state["conversation_summary"].append(m.content)
+                else:
+                    st.session_state["messages"].append(m)
+                    with st.chat_message(role, avatar=ASSISTANT_AVATAR):
+                        st.write(m.content)
 
             else:
                 logger.error(
@@ -479,8 +481,9 @@ class ChatApp:
 
             if number_of_summaries == 0:
 
-                summary_msg = SummaryMessage(
-                    content=graph.summarize_conversation(history_redis.messages)
+                summary_msg = AIMessage(
+                    content=graph.summarize_conversation(history_redis.messages),
+                    additional_kwargs={"is_summary": True},
                 )
                 history_redis.add_message(summary_msg)
 
@@ -491,7 +494,7 @@ class ChatApp:
                 # )
             else:
                 # if there is a previoius summary, update it
-                summary_msg = SummaryMessage(
+                summary_msg = AIMessage(
                     content=graph.summarize_conversation(
                         history_redis.messages[
                             -MAX_MESSAGE_HISTORY * number_of_summaries :
@@ -499,7 +502,8 @@ class ChatApp:
                         st.session_state["conversation_summary"][
                             -1
                         ],  # get the last summary
-                    )
+                    ),
+                    additional_kwargs={"is_summary": True},
                 )
                 history_redis.add_message(summary_msg)
 
@@ -567,7 +571,7 @@ class ChatApp:
             # number of summarized messages
             k = len(st.session_state["conversation_summary"]) * MAX_MESSAGE_HISTORY
 
-            if len(history.messages) > k:
+            if len(history) > k:
                 # messages that have not been summarized yet
                 conversation_history = history[k:]  # get the last k messages
 
