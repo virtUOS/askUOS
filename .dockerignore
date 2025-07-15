@@ -11,7 +11,7 @@ docker.compose.yml
 
 # readme
 README.md
-
+LICENSE
 # git
 .git
 .gitattributes
