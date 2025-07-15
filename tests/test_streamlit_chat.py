@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import redis.asyncio as redis
 from langchain.evaluation import load_evaluator
+from langchain_redis import RedisChatMessageHistory
 from streamlit.testing.v1 import AppTest
 
 from pages.ask_uos_chat import MAX_MESSAGE_HISTORY
@@ -31,6 +32,29 @@ class BaseTestStreamlitApp(unittest.TestCase):
 
         asyncio.run(clear_cache())
         time.sleep(0.5)  # Allow time for cache clear to complete
+
+    def _check_app_state(self, at, test_name=""):
+        """Helper method to check app state and debug issues."""
+        if at.exception:
+            print(f"App exception in {test_name}: {at.exception}")
+            raise at.exception
+
+        print(f"Chat inputs available in {test_name}: {len(at.chat_input)}")
+        if len(at.chat_input) == 0:
+            # Try to access session state safely
+            try:
+                session_state_dict = dict(at.session_state)
+                print(
+                    f"Session state keys in {test_name}: {list(session_state_dict.keys())}"
+                )
+            except Exception as e:
+                print(f"Could not access session state in {test_name}: {e}")
+
+            print(
+                f"Available elements in {test_name}: chat_input={len(at.chat_input)}, button={len(at.button)}, text_input={len(at.text_input)}"
+            )
+
+        return len(at.chat_input) > 0
 
     def test_several_users(self):
         # Create three separate user IDs to simulate different users
@@ -57,21 +81,28 @@ class BaseTestStreamlitApp(unittest.TestCase):
                 mock_controller3,
             ]
 
-            at1 = AppTest.from_file(
-                "/app/pages/ask_uos_chat.py", default_timeout=90
-            ).run()
+            at1 = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=90)
+            # Pre-populate session state to avoid st.stop() in get_user_id
+            at1.session_state["ask_uos_user_id"] = user_id1
+            at1.session_state["_uos_cookie_waited"] = True
+            at1.run()
+            self.assertTrue(self._check_app_state(at1, "test_several_users at1"))
 
             # Reset for second instance
             mock_controller_class.side_effect = [mock_controller2]
-            at2 = AppTest.from_file(
-                "/app/pages/ask_uos_chat.py", default_timeout=90
-            ).run()
+            at2 = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=90)
+            at2.session_state["ask_uos_user_id"] = user_id2
+            at2.session_state["_uos_cookie_waited"] = True
+            at2.run()
+            self.assertTrue(self._check_app_state(at2, "test_several_users at2"))
 
             # Reset for third instance
             mock_controller_class.side_effect = [mock_controller3]
-            at3 = AppTest.from_file(
-                "/app/pages/ask_uos_chat.py", default_timeout=90
-            ).run()
+            at3 = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=90)
+            at3.session_state["ask_uos_user_id"] = user_id3
+            at3.session_state["_uos_cookie_waited"] = True
+            at3.run()
+            self.assertTrue(self._check_app_state(at3, "test_several_users at3"))
 
         # [instance of the app, initial message count, [user_query_1, user_query_2,...], user_id]
         apps = [[at1, 0, [], user_id1], [at2, 0, [], user_id2], [at3, 0, [], user_id3]]
@@ -85,8 +116,6 @@ class BaseTestStreamlitApp(unittest.TestCase):
             try:
                 for at in apps:
                     # Get message count from Redis history instead of session state
-                    from langchain_redis import RedisChatMessageHistory
-
                     history = RedisChatMessageHistory(
                         redis_url="redis://redis:6379",
                         session_id=at[3],  # user_id
@@ -98,6 +127,12 @@ class BaseTestStreamlitApp(unittest.TestCase):
 
                     # add the query to the list of queries
                     at[2].append(test_query)
+
+                    # Ensure chat input is available before using it
+                    if len(at[0].chat_input) == 0:
+                        print(f"No chat input available for user {at[3]}")
+                        continue
+
                     at[0].chat_input[0].set_value(test_query).run()
                     assert not at[0].exception
 
@@ -144,10 +179,12 @@ class BaseTestStreamlitApp(unittest.TestCase):
                 # Check visited links uniqueness across users
                 visited_links = []
                 for app in apps:
-                    if hasattr(app[0].session_state.get("agent", {}), "_visited_links"):
-                        visited_links.append(
-                            app[0].session_state["agent"]._visited_links
-                        )
+                    try:
+                        agent = app[0].session_state["agent"]
+                        if hasattr(agent, "_visited_links"):
+                            visited_links.append(agent._visited_links)
+                    except (KeyError, AttributeError):
+                        pass  # agent not in session state
 
                 tuple_visited_links = [tuple(i) for i in visited_links if i]
                 if tuple_visited_links:
@@ -194,7 +231,7 @@ class BaseTestStreamlitApp(unittest.TestCase):
                 self.assertIn(query, user_messages)
 
             # Collect message contents for uniqueness check
-            message_contents = {msg.content for msg in non_summary_messages}
+            message_contents = {str(msg.content) for msg in non_summary_messages}
             histories.append(message_contents)
 
             # Log summary lengths
@@ -233,12 +270,15 @@ class BaseTestStreamlitApp(unittest.TestCase):
 
             at = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=90)
             at.session_state["selected_language"] = "English"
+            # Pre-populate session state to avoid st.stop() in get_user_id
+            at.session_state["ask_uos_user_id"] = user_id
+            at.session_state["_uos_cookie_waited"] = True
             at.run()
-            assert not at.exception
+
+            # Check app state before proceeding
+            self.assertTrue(self._check_app_state(at, "test_english"))
 
             # Get initial message count from Redis
-            from langchain_redis import RedisChatMessageHistory
-
             history = RedisChatMessageHistory(
                 redis_url="redis://redis:6379",
                 session_id=user_id,
@@ -285,18 +325,23 @@ class BaseTestStreamlitApp(unittest.TestCase):
             mock_controller1.get.return_value = user_id1
             mock_controller_class.return_value = mock_controller1
 
-            at1 = AppTest.from_file(
-                "/app/pages/ask_uos_chat.py", default_timeout=90
-            ).run()
+            at1 = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=90)
+            # Pre-populate session state to avoid st.stop() in get_user_id
+            at1.session_state["ask_uos_user_id"] = user_id1
+            at1.session_state["_uos_cookie_waited"] = True
+            at1.run()
+            self.assertTrue(self._check_app_state(at1, "test_cache_redis at1"))
 
             # Second app instance
             mock_controller2 = MagicMock()
             mock_controller2.get.return_value = user_id2
             mock_controller_class.return_value = mock_controller2
 
-            at2 = AppTest.from_file(
-                "/app/pages/ask_uos_chat.py", default_timeout=90
-            ).run()
+            at2 = AppTest.from_file("/app/pages/ask_uos_chat.py", default_timeout=90)
+            at2.session_state["ask_uos_user_id"] = user_id2
+            at2.session_state["_uos_cookie_waited"] = True
+            at2.run()
+            self.assertTrue(self._check_app_state(at2, "test_cache_redis at2"))
 
         test_query = "What are the requirements for studying Computer Science?"
 
@@ -306,15 +351,16 @@ class BaseTestStreamlitApp(unittest.TestCase):
         first_run_time = time.time() - start_time1
 
         # Track first run results
-        first_links = (
-            at1.session_state["agent"]._visited_links
-            if at1.session_state.get("agent")
-            else []
-        )
+        first_links = []
+        second_links = []
+        try:
+            agent = at1.session_state["agent"]
+            if hasattr(agent, "_visited_links"):
+                first_links = agent._visited_links
+        except (KeyError, AttributeError):
+            pass  # agent not in session state
 
         # Get first response from Redis
-        from langchain_redis import RedisChatMessageHistory
-
         history1 = RedisChatMessageHistory(
             redis_url="redis://redis:6379",
             session_id=user_id1,
@@ -334,11 +380,13 @@ class BaseTestStreamlitApp(unittest.TestCase):
         second_run_time = time.time() - start_time2
 
         # Get results from second run
-        second_links = (
-            at2.session_state["agent"]._visited_links
-            if at2.session_state.get("agent")
-            else []
-        )
+
+        try:
+            agent = at2.session_state["agent"]
+            if hasattr(agent, "_visited_links"):
+                second_links = agent._visited_links
+        except (KeyError, AttributeError):
+            pass  # agent not in session state
 
         history2 = RedisChatMessageHistory(
             redis_url="redis://redis:6379",
