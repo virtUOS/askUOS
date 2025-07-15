@@ -133,7 +133,7 @@ class ChatApp:
         history = self.get_history(user_id)
         # stores the summary messages
         st.session_state["conversation_summary"] = []
-        # human and assistant messages (these are used in the system prompt)
+        # human and assistant/ai messages (these are used in the system prompt)
         st.session_state["messages"] = []
         # all messages from the history, see ROLES
         messages = history.messages
@@ -178,6 +178,7 @@ class ChatApp:
             st.session_state.user_feedback_form = None
 
             history.add_user_message(prompt)
+            st.session_state["messages"].append(HumanMessage(content=prompt))
             # st.session_state.messages.append(
             #     {"role": "user", "content": prompt, "avatar": "./static/Icon-User.svg"}
             # )
@@ -249,6 +250,7 @@ class ChatApp:
             # messages that are not still summarized. remaining_msg = len(messages) - (MAX_MESSAGE_HISTORY * number_of_summaries); IF remaining_msg ==0 return the last two messages
             history = self._get_conversation_history(st.session_state["messages"])
             # system_user_prompt = get_prompt(history + [("user", user_input)])
+
             system_user_prompt = get_system_prompt(
                 conversation_summary, history, user_input, current_date
             )
@@ -562,7 +564,7 @@ class ChatApp:
 
     #     return self._convert_messages(messages)
 
-    def _get_conversation_history(self, history):
+    def _get_conversation_history(self, history: List):
         """
         history: Filtered HumanMessage and AIMessage objects from the chat history.
         """
@@ -592,6 +594,7 @@ class ChatApp:
 
             else:
                 # when there is only a summary, append the last two messages
+
                 conversation_history = []
                 # conversation_history.append(
                 #     AIMessage(content=st.session_state["conversation_summary"][-1])

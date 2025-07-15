@@ -15,7 +15,6 @@ warm_up_queries = [
     "who are you",
     "How do I apply for on-campus housing?",
     "Für welche Studiengänge brauche ich ein Latinum?",
-    "Wo liegt der NC bei Sport?",
     "Wie viele ECTS-Punkte habe ich in meinem Bachelor (Mathematik)?",
     "Wie viele ECTS-Punkte habe ich in meinem Bachelor (Biologie)?",
     "Muss ich im Grundschullehramt Mathe und Deutsch studieren?",
