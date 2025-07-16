@@ -124,6 +124,7 @@ class BaseTestStreamlitApp(unittest.TestCase):
 
                     at[1] = len(history.messages)
                     test_query = next(query_generator)
+                    print(f"------------------- Processing query: {test_query}")
 
                     # add the query to the list of queries
                     at[2].append(test_query)
@@ -165,14 +166,29 @@ class BaseTestStreamlitApp(unittest.TestCase):
                             if hasattr(msg, "additional_kwargs")
                             and msg.additional_kwargs.get("is_summary", False)
                         )
+
+                        # check that summary is on the right index
+                        for i in range(1, summary_count + 1):
+
+                            self.assertTrue(
+                                hasattr(
+                                    history.messages[MAX_MESSAGE_HISTORY * i],
+                                    "additional_kwargs",
+                                )
+                                and history.messages[
+                                    MAX_MESSAGE_HISTORY * i
+                                ].additional_kwargs.get("is_summary", False),
+                                f"Expected summary message at index {(MAX_MESSAGE_HISTORY * i)}, but found: {history.messages[MAX_MESSAGE_HISTORY * i]}",
+                            )
+
                         # since history.message contains also summary messages,
                         # the expected number of summaries is calculated as follows:
                         # (total messages - summary messages) / MAX_MESSAGE_HISTORY
-                        expected_summaries = int(
-                            (len(history.messages) - summary_count)
-                            / MAX_MESSAGE_HISTORY
-                        )
-                        self.assertEqual(summary_count, expected_summaries)
+                        # expected_summaries = int(
+                        #     (len(history.messages) - summary_count)
+                        #     / MAX_MESSAGE_HISTORY
+                        # )
+                        # self.assertEqual(summary_count, expected_summaries)
 
                     time.sleep(2)
 

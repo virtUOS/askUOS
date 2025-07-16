@@ -28,6 +28,10 @@ warm_up_queries = [
     "According to the examination regulations, can I write my Master's thesis in English?, Mathematics",
     "Kann ich Geschichte als Hauptfach studieren?",
     "Welchen NC brauche ich für Psychologie?",
+    "Gibt es an der Uni psychologische Beratung für Studierende?",
+    "Wie kann ich ein Urlaubssemester beantragen und was sind die Voraussetzungen?",
+    "Welche Fristen gelten für ein Auslandssemester?",
+    "Welche Fristen gelten beim BAföG-Antrag?",
 ]
 
 
