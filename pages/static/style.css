@@ -132,10 +132,24 @@ span[data-testid="stHeaderActionElements"] a {
     }
 }
 
-/* Fix the position of the input */
-.stChatInput {
-    position: fixed; 
-    bottom: 30px;    /* Distance from the bottom */
-    z-index: 1000;   /* Ensure it stays on top of other elements */
+/* Always align feedback faces to the right inside the chat container */
+.st-key-user_feedback_faces {
+    display: flex !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin-left: auto !important;
+    margin-right: 0 !important;
+    padding-right: 0.5rem !important;
+    box-sizing: border-box;
+}
 
+/* On mobile, prevent column stacking for feedback faces */
+@media (max-width: 600px) {
+    .st-key-user_feedback_faces {
+        justify-content: flex-end !important;
+        margin-left: auto !important;
+        margin-right: 0 !important;
+        width: 100% !important;
+    }
 }
