@@ -9,7 +9,6 @@ from langchain_redis import RedisChatMessageHistory
 from langgraph.errors import GraphRecursionError
 from streamlit import session_state
 from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
-from streamlit_feedback import streamlit_feedback
 
 from pages.utils import initialize_session_sate, load_css, setup_page
 
@@ -21,6 +20,9 @@ from src.chatbot.prompt.prompt_date import get_current_date
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
+
+# from streamlit_feedback import streamlit_feedback
+
 
 # max number of messages after which a summary is generated
 MAX_MESSAGE_HISTORY = 5
@@ -50,7 +52,7 @@ class ChatApp:
         if not self.__dict__:
             # setup_page()
             self.controller = CookieController()
-            load_css()
+            # load_css()
 
     def get_history(self, user_id: str) -> RedisChatMessageHistory:
         #  TODO: catch error when the client sends a cookie that is not a valid UUID
@@ -613,62 +615,73 @@ class ChatApp:
         return conversation_history
 
     def show_feedback_faces(self):
-        streamlit_feedback(
-            feedback_type="faces",
-            key="user_feedback_faces",
-        )
+        """Display feedback faces for user interaction."""
+        _, right = st.columns([3, 1])
+        with right:
+            st.feedback("faces", key="user_feedback_faces")
 
     def ask_further_feedback(self):
-        if session_state.user_feedback_faces:
+        if (
+            "user_feedback_faces" in session_state
+            and session_state.user_feedback_faces is not None
+        ):
 
-            with st.expander(session_state["_"]("**Rate the response**")):
+            if 0 <= session_state.user_feedback_faces <= 4:
 
-                with st.form("feedback_form", clear_on_submit=True):
+                with st.expander(session_state["_"]("**Rate the response**")):
 
-                    text_rating = st.text_area(
-                        "text_rating",
-                        label_visibility="hidden",
-                        placeholder=session_state["_"](
-                            "[Optional] We look forward to your feedback"
-                        ),
-                        height=150,
-                    )
+                    with st.form("feedback_form", clear_on_submit=True):
 
-                    if st.form_submit_button(session_state["_"]("Submit")):
-                        session_state.user_feedback_form = text_rating
-                        self.log_feedback()
-
-                        st.markdown(
-                            """
-                            <style>
-                                .stExpander {
-                                    display: none;
-                                }
-                            </style>
-                            """,
-                            unsafe_allow_html=True,
+                        text_rating = st.text_area(
+                            "text_rating",
+                            label_visibility="hidden",
+                            placeholder=session_state["_"](
+                                "[Optional] We look forward to your feedback"
+                            ),
+                            height=150,
                         )
+
+                        if st.form_submit_button(session_state["_"]("Submit")):
+                            session_state.user_feedback_form = text_rating
+                            self.log_feedback()
+
+                            st.markdown(
+                                """
+                                <style>
+                                    .stExpander {
+                                        display: none;
+                                    }
+                                </style>
+                                """,
+                                unsafe_allow_html=True,
+                            )
 
     def log_feedback(self):
 
-        feedback = {}
+        if (
+            "user_feedback_faces" in session_state
+            and session_state.user_feedback_faces is not None
+        ):
 
-        if session_state.user_feedback_faces:
-            feedback["score"] = session_state.user_feedback_faces["score"]
+            feedback = {}
+            # There are five faces, so the score is between 0 and 4. 4 being the best score
+            if 0 <= session_state.user_feedback_faces <= 4:
+                feedback["score"] = session_state.user_feedback_faces
 
-        if session_state.user_feedback_form:
-            feedback["text_rating"] = session_state.user_feedback_form
+            if session_state.user_feedback_form:
+                feedback["text_rating"] = session_state.user_feedback_form
 
-        if session_state.user_feedback_faces or session_state.user_feedback_form:
+            if (
+                0 <= session_state.user_feedback_faces <= 4
+                or session_state.user_feedback_form
+            ):
 
-            feedback["user_query"] = session_state.user_query
-            feedback["response"] = st.session_state.messages[-1]["content"]
-            feedback["time_taken"] = session_state.time_taken
+                feedback["user_query"] = session_state.user_query
+                feedback["response"] = st.session_state.messages[-1].content
+                feedback["time_taken"] = session_state.time_taken
 
-            logger.info(f"Feedback= {feedback}")
-            session_state.feedback_saved = True
-
-    # These methods are now replaced by the get_user_id method
+                logger.info(f"Feedback= {feedback}")
+                session_state.feedback_saved = True
 
     def run(self):
         """Main method to run the application logic."""
