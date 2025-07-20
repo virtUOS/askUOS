@@ -8,12 +8,13 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_redis import RedisChatMessageHistory
 from langgraph.errors import GraphRecursionError
 from streamlit import session_state
-from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
+from streamlit_cookies_controller import (CookieController,
+                                          RemoveEmptyElementContainer)
 
 from pages.utils import initialize_session_sate, load_css, setup_page
-
 # from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
-from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.agent_lang_graph import \
+    CampusManagementOpenAIToolsAgent
 from src.chatbot.agents.utils.exceptions import MaxMessageHistoryException
 from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.prompt.prompt_date import get_current_date
@@ -619,7 +620,10 @@ class ChatApp:
         )
         selected = st.feedback("faces", key="user_feedback_faces")
         if selected is not None:
-            st.markdown(msg.format(selected + 1))
+            try:
+                st.markdown(msg.format(selected + 1))
+            except Exception as e:
+                logger.error(f"Error displaying feedback message: {e}")
 
     def ask_further_feedback(self):
         if (
@@ -703,3 +707,9 @@ class ChatApp:
 if __name__ == "__main__":
     app = ChatApp()
     app.run()
+
+
+# Check if we're in a test environment
+# import sys
+# if 'pytest' in sys.modules or 'unittest' in sys.modules or 'streamlit.testing' in sys.modules:
+#     return
