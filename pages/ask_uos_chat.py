@@ -8,13 +8,12 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_redis import RedisChatMessageHistory
 from langgraph.errors import GraphRecursionError
 from streamlit import session_state
-from streamlit_cookies_controller import (CookieController,
-                                          RemoveEmptyElementContainer)
+from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
 
 from pages.utils import initialize_session_sate, load_css, setup_page
+
 # from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
-from src.chatbot.agents.agent_lang_graph import \
-    CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.agents.utils.exceptions import MaxMessageHistoryException
 from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.prompt.prompt_date import get_current_date
@@ -52,14 +51,39 @@ class ChatApp:
             self.controller = CookieController()
             load_css()
 
+    def _validate_user_id(self, user_id: str) -> Optional[str]:
+        """Validate that the user_id is a valid UUID string."""
+
+        if not user_id or not isinstance(user_id, str):
+            return None
+        try:
+            # This will raise ValueError if not a valid UUID
+            val = uuid.UUID(user_id)
+            return str(val)  # Return the normalized UUID string
+        except (ValueError, TypeError):
+            return None
+
     def get_history(self, user_id: str) -> RedisChatMessageHistory:
-        #  TODO: catch error when the client sends a cookie that is not a valid UUID
-        history = RedisChatMessageHistory(
-            redis_url="redis://redis:6379",
-            session_id=user_id,
-            ttl=60 * 60 * 3,  # 3 hours
-        )
-        return history
+        validated_user_id = self._validate_user_id(user_id)
+        if not validated_user_id:
+            logger.warning(f"Invalid user_id attempted: {user_id!r}")
+            st.warning(
+                "Invalid session. Please refresh the page or clear your browser cookies."
+            )
+            st.stop()
+        try:
+            history = RedisChatMessageHistory(
+                redis_url="redis://redis:6379",
+                session_id=validated_user_id,
+                ttl=60 * 60 * 2,  # 2 hours
+            )
+            return history
+        except Exception as e:
+            logger.error(f"Error retrieving chat history for user: {e}")
+            st.warning(
+                "There was an error while loading previous messages. If this issue persists, try using a different browser or contact support."
+            )
+            st.stop()
 
     def get_user_id(self) -> str:
         """Get the user ID from cookies or generate a new one, handling Streamlit rerun and returning users."""
