@@ -167,12 +167,12 @@ class GraphEdgesMixin:
 
         try:
             # score = scored_result.binary_score.lower()
-            score = scored_result["binary_score"].lower()
+            score = scored_result.binary_score.lower()
             if score.lower() in ["yes", "ja"]:
                 # TODO Further process the relevant paragraphs
                 # self._clean_tool_message = scored_result.relevant_paragraphs
                 logger.debug(
-                    f"[GRADE DOCUMENTS EDGE] DECISION: DOCS RELEVANT. Reason: {scored_result['reason']}"
+                    f"[GRADE DOCUMENTS EDGE] DECISION: DOCS RELEVANT. Reason: {scored_result.reason}"
                 )
                 if state.get("teaching_degree", False):
                     return "generate_teaching_degree_node"
@@ -184,7 +184,7 @@ class GraphEdgesMixin:
 
             else:
                 logger.debug(
-                    f"[GRADE DOCUMENTS EDGE] DECISION: DOCS NOT RELEVANT. Reason: {scored_result['reason']}"
+                    f"[GRADE DOCUMENTS EDGE] DECISION: DOCS NOT RELEVANT. Reason: {scored_result.reason}"
                 )
                 return "rewrite"
         except Exception as e:
@@ -215,7 +215,7 @@ class GraphNodesMixin:
     """Mixin class handling node operations in the graph."""
 
     @staticmethod
-    def create_tools() -> List[BaseTool]:
+    def create_tools() -> List:
         """Create and configure tools for the chatbot agent.
 
         Returns:
@@ -360,17 +360,17 @@ class GraphNodesMixin:
             {"question": state["user_initial_query"], "context": state["messages"][-1]}
         )
 
-        if score["judgement_binary"].lower() == "no":
+        if score.judgement_binary.lower() == "no":
             msg = [HumanMessage(content=translate_prompt()["use_tool_msg"])]
             logger.debug(
-                f"[JUGE NODE] The agent should have used a tool. Reason: {score['reason']}"
+                f"[JUGE NODE] The agent should have used a tool. Reason: {score.reason}"
             )
             return {
                 "messages": state["messages"] + msg,
-                "score_judgement_binary": score["judgement_binary"],
+                "score_judgement_binary": score.judgement_binary,
             }
 
-        return {"score_judgement_binary": score["judgement_binary"]}
+        return {"score_judgement_binary": score.judgement_binary}
 
     def tool_node(self, state: Dict) -> Dict:
         """Process tool calls."""
@@ -644,7 +644,7 @@ class GraphNodesMixin:
             }
         )
 
-        if response["binary_score"].lower() == "no":
+        if response.binary_score.lower() == "no":
             # serve new answer
             self._curated_answer = response["new_answer"]
         else:

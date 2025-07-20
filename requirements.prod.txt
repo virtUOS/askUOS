@@ -1,21 +1,19 @@
-langchain=== 0.2.6
-langchain-community===0.2.6
-langchain_experimental===0.0.62
-sentence-transformers===3.0.1
-tk===0.1.0
-pypdf===4.0.1
-langchain-openai=== 0.1.13
+langchain=== 0.3.26
+langchain-community===0.3.27
+langchain-ollama===0.3.5
+langchain_experimental===0.3.4
+langchain-openai=== 0.3.28
+langchain-redis===0.2.3
+langchain-milvus===0.2.1
+langgraph===0.5.3
+pydantic-settings===2.10.1
 pypdf===4.0.1
 PyPDF2===3.0.1
 fastembed===0.2.1
-streamlit===1.39.0
-pydantic-settings===2.3.4
-streamlit-feedback===0.1.3
-langchain-milvus
-langgraph
+streamlit===1.47.0
+streamlit-cookies-controller===0.0.4
 tqdm
-pymilvus
+pymilvus===2.5.12
 crawl4AI===0.6.3
 redis
 nest_asyncio
-langchain-ollama
