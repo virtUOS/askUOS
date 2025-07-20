@@ -100,3 +100,6 @@ msgstr "**Bewerten Sie die Antwort**"
 
 msgid "If you need personal assistance regarding studying at the university, you can visit the [StudiOS]({}) (Studierenden-Information Osnabrück) or [ZSB]({}) (Zentrale Studienberatung Osnabrück) website."
 msgstr "Wenn Sie persönliche Unterstützung zum Studium an der Universität benötigen, können Sie die Website des [StudiOS]({}) (Studierenden-Information Osnabrück) oder der [ZSB]({}) (Zentrale Studienberatung Osnabrück) besuchen."
+
+msgid "You have selected a rating of **{}** out of 5. Thank you for your feedback!"
+msgstr "Sie haben die Bewertung **{}** von 5 ausgewählt. Vielen Dank für Ihr Feedback!"

@@ -142,6 +142,8 @@ span[data-testid="stHeaderActionElements"] a {
     margin-right: 0 !important;
     padding-right: 0.5rem !important;
     box-sizing: border-box;
+    flex-wrap: nowrap !important;           /* Prevent wrapping to multiple rows */
+    overflow-x: auto;                       /* Allow horizontal scroll if needed */
 }
 
 /* On mobile, prevent column stacking for feedback faces */
@@ -153,3 +155,23 @@ span[data-testid="stHeaderActionElements"] a {
         width: 100% !important;
     }
 }
+
+/* Make feedback faces (icons/buttons) look like Material UI Sentiment faces */
+.st-key-user_feedback_faces button,
+.st-key-user_feedback_faces .st-emotion-cache-1w33g9o {
+    font-size: 1.7rem !important;           /* 30% smaller than 2.4rem */
+    width: 2.2rem !important;
+    height: 2.2rem !important;
+    min-width: 2.2rem !important;
+    min-height: 2.2rem !important;
+    line-height: 2.2rem !important;
+    padding: 0 !important;
+    color: #555 !important;
+    background: none !important;
+    border-radius: 50% !important;
+    transition: background 0.2s, color 0.2s;
+    margin: 0 0.15rem !important;
+    vertical-align: middle;
+}
+
+

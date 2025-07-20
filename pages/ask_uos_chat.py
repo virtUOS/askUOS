@@ -21,9 +21,6 @@ from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
-# from streamlit_feedback import streamlit_feedback
-
-
 # max number of messages after which a summary is generated
 MAX_MESSAGE_HISTORY = 5
 
@@ -52,7 +49,7 @@ class ChatApp:
         if not self.__dict__:
             # setup_page()
             self.controller = CookieController()
-            # load_css()
+            load_css()
 
     def get_history(self, user_id: str) -> RedisChatMessageHistory:
         #  TODO: catch error when the client sends a cookie that is not a valid UUID
@@ -616,9 +613,13 @@ class ChatApp:
 
     def show_feedback_faces(self):
         """Display feedback faces for user interaction."""
-        _, right = st.columns([3, 1])
-        with right:
-            st.feedback("faces", key="user_feedback_faces")
+
+        msg = st.session_state["_"](
+            "You have selected a rating of **{}** out of 5. Thank you for your feedback!"
+        )
+        selected = st.feedback("faces", key="user_feedback_faces")
+        if selected is not None:
+            st.markdown(msg.format(selected + 1))
 
     def ask_further_feedback(self):
         if (
