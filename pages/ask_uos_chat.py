@@ -23,10 +23,34 @@ from src.config.core_config import settings
 
 # max number of messages after which a summary is generated
 MAX_MESSAGE_HISTORY = 5
-
+MAX_MESSAGES_PER_USER = 100  # Limit for the number of messages per user (Redis)
 HUMAN_AVATAR = "./static/Icon-User.svg"
 ASSISTANT_AVATAR = "./static/Icon-chatbot.svg"
 ROLES = ("ai", "human")
+
+from redisvl.query import CountQuery, FilterQuery, TextQuery  # type: ignore
+from redisvl.query.filter import Tag  # type: ignore
+
+
+class LimitedRedisChatMessageHistory(RedisChatMessageHistory):
+
+    def add_message(self, message):
+        super().add_message(message)
+        # After adding, enforce the limit
+        # Query all message IDs for this session, sorted by timestamp
+        session_filter = Tag("session_id") == self.session_id
+        # Get all message IDs and timestamps
+        filter_query = FilterQuery(
+            filter_expression=session_filter,
+            return_fields=["id", "timestamp"],
+            num_results=10000,
+        ).sort_by("timestamp", asc=True)
+        results = self.index.query(filter_query)
+        # If over the limit, delete the oldest
+        if len(results) > MAX_MESSAGES_PER_USER:
+            # Get the IDs of the oldest messages to delete
+            to_delete = [msg["id"] for msg in results[:-MAX_MESSAGES_PER_USER]]
+            self.index.drop_keys(to_delete)
 
 
 class ChatApp:
@@ -47,7 +71,7 @@ class ChatApp:
 
     def __init__(self):
         if not self.__dict__:
-            # setup_page()
+            setup_page()
             self.controller = CookieController()
             load_css()
 
@@ -63,7 +87,7 @@ class ChatApp:
         except (ValueError, TypeError):
             return None
 
-    def get_history(self, user_id: str) -> RedisChatMessageHistory:
+    def get_history(self, user_id: str) -> LimitedRedisChatMessageHistory:
         validated_user_id = self._validate_user_id(user_id)
         if not validated_user_id:
             logger.warning(f"Invalid user_id attempted: {user_id!r}")
@@ -72,7 +96,7 @@ class ChatApp:
             )
             st.stop()
         try:
-            history = RedisChatMessageHistory(
+            history = LimitedRedisChatMessageHistory(
                 redis_url="redis://redis:6379",
                 session_id=validated_user_id,
                 ttl=60 * 60 * 2,  # 2 hours
@@ -714,7 +738,7 @@ class ChatApp:
 
     def run(self):
         """Main method to run the application logic."""
-        st.title("ask.UOS")
+        # st.title("ask.UOS")
         initialize_session_sate()
         RemoveEmptyElementContainer()
         # Get or create user ID using our method
