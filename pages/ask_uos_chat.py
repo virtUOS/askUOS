@@ -138,6 +138,23 @@ class ChatApp:
 
     def show_warning(self):
         """Display a warning message to the user."""
+
+        if session_state.get("show_warning", True) is False:
+            return
+
+        # Always check the cookie first
+        warning_cookie = self.controller.get("ask_uos_warning_accepted")
+
+        # Only accept the expected value, ignore anything else
+        if warning_cookie is not None:
+            if warning_cookie == "accepted":
+                session_state["show_warning"] = False
+                return
+            else:
+                # Malformed or tampered cookie, remove it
+                self.controller.remove("ask_uos_warning_accepted")
+
+        # Only show the warning if not already accepted
         if session_state.get("show_warning", True):
             st.warning(
                 session_state["_"](
@@ -145,6 +162,11 @@ class ChatApp:
                 )
             )
             if st.button(session_state["_"]("I understand")):
+                # Set the cookie BEFORE updating session_state and rerunning
+
+                self.controller.set(
+                    "ask_uos_warning_accepted", "accepted", max_age=60 * 60 * 24 * 90
+                )
                 session_state["show_warning"] = False
                 st.rerun()
 
@@ -770,8 +792,9 @@ class ChatApp:
         # Get or create user ID using our method
         user_id = self.get_user_id()
         self.show_delete_button()
-        self.show_warning()
+        # self.show_warning()
         # DO NOT CHANGE THE ORDER IN WHICH THESE METHODS ARE CALLED
+
         self.initialize_chat(user_id)
         self.display_chat_messages()
         self.handle_user_input()
@@ -782,9 +805,3 @@ class ChatApp:
 if __name__ == "__main__":
     app = ChatApp()
     app.run()
-
-
-# Check if we're in a test environment
-# import sys
-# if 'pytest' in sys.modules or 'unittest' in sys.modules or 'streamlit.testing' in sys.modules:
-#     return
