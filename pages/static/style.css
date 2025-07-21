@@ -181,4 +181,41 @@ span[data-testid="stHeaderActionElements"] a {
     vertical-align: middle;
 }
 
+/* Delete button styling */
+.st-key-delete_chat {
+    float: right !important;
+    text-align: right !important;
+}
+
+.st-key-delete_chat .stButton {
+    display: flex !important;
+    justify-content: flex-end !important;
+}
+
+.st-key-delete_chat button {
+    margin-left: auto !important;
+}
+
+/* Mobile responsive delete button */
+@media (max-width: 768px) {
+    .stHorizontalBlock .stColumn:last-child {
+        text-align: right !important;
+        display: flex !important;
+        justify-content: flex-end !important;
+        align-items: flex-start !important;
+    }
+    
+    .st-key-delete_chat {
+        float: right !important;
+        text-align: right !important;
+        margin-left: auto !important;
+        width: auto !important;
+    }
+    
+    .st-key-delete_chat .stButton {
+        justify-content: flex-end !important;
+        margin-left: auto !important;
+    }
+}
+
 

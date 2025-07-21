@@ -103,3 +103,12 @@ msgstr "Wenn Sie persönliche Unterstützung zum Studium an der Universität ben
 
 msgid "You have selected a rating of **{}** out of 5. Thank you for your feedback!"
 msgstr "Sie haben die Bewertung **{}** von 5 ausgewählt. Vielen Dank für Ihr Feedback!"
+
+msgid "Clear chat history"
+msgstr "Chatverlauf löschen"
+
+msgid "There was an error while clearing the chat history. Please try again later."
+msgstr "Beim Löschen des Chatverlaufs ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut."
+
+msgid "There was an error while loading previous messages. If this issue persists, try using a different browser or contact support."
+msgstr "Beim Laden vorheriger Nachrichten ist ein Fehler aufgetreten. Falls das Problem weiterhin besteht, versuchen Sie es mit einem anderen Browser oder wenden Sie sich an den Support."

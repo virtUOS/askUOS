@@ -212,6 +212,32 @@ class ChatApp:
         #     with st.chat_message(message["role"], avatar=message["avatar"]):
         #         st.write(message["content"])
 
+    def show_delete_button(self):
+        """Display a delete button in the top-right corner."""
+
+        col1, col2 = st.columns([4, 1])
+        with col2:
+            if st.button(
+                "🗑️",
+                key="delete_chat",
+                help=st.session_state["_"]("Clear chat history"),
+                use_container_width=False,
+            ):
+                try:
+                    user_id = self.get_user_id()
+                    history = self.get_history(user_id)
+                    history.clear()
+                    st.session_state["messages"] = []
+                    st.session_state["conversation_summary"] = []
+                    st.rerun()
+                except Exception as e:
+                    logger.error(f"Error clearing chat history: {e}")
+                    st.error(
+                        session_state["_"](
+                            "There was an error while clearing the chat history. Please try again later."
+                        )
+                    )
+
     def handle_user_input(self):
         """Handle user input and generate a response."""
 
@@ -743,6 +769,7 @@ class ChatApp:
         RemoveEmptyElementContainer()
         # Get or create user ID using our method
         user_id = self.get_user_id()
+        self.show_delete_button()
         self.show_warning()
         # DO NOT CHANGE THE ORDER IN WHICH THESE METHODS ARE CALLED
         self.initialize_chat(user_id)
