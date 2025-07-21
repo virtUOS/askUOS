@@ -738,7 +738,7 @@ class ChatApp:
 
     def run(self):
         """Main method to run the application logic."""
-        # st.title("ask.UOS")
+        st.title("ask.UOS")
         initialize_session_sate()
         RemoveEmptyElementContainer()
         # Get or create user ID using our method

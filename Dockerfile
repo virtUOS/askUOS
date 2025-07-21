@@ -75,6 +75,10 @@ RUN echo $(which python)
 # Install Playwright browsers
 RUN playwright install
 RUN crawl4ai-setup
+
+# Needed for dev in container
+RUN apt-get install git -y
+RUN git config --global --add safe.directory /app
 # Expose the port that Streamlit will run on
 EXPOSE 8501
 
