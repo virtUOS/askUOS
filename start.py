@@ -36,7 +36,9 @@ def display_welcome_message():
 
 
 def start_chat_button():
-    with st.container(key="start-chat"):
+    with st.container(
+        key="start-chat"
+    ):  # do not change the key name, it is used in the CSS to style the button
         button_name = (
             session_state["_"]("Continue Chatting")
             if session_state.chat_started
