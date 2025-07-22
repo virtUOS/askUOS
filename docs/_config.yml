@@ -1,0 +1,116 @@
+# GitHub Pages Configuration
+
+To make this documentation available through GitHub Pages, add the following configuration file:
+
+```yaml
+# _config.yml
+title: ask.UOS Documentation
+description: AI chatbot for applicants and students
+baseurl: ""
+url: "https://your-username.github.io"
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+theme: minima
+
+# Navigation
+header_pages:
+  - getting-started.md
+  - configuration.md
+  - architecture/overview.md
+
+# Plugins
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+# Collections for better organization
+collections:
+  architecture:
+    output: true
+    permalink: /:collection/:name/
+  components:
+    output: true
+    permalink: /:collection/:name/
+  deployment:
+    output: true
+    permalink: /:collection/:name/
+
+# Kramdown settings
+kramdown:
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    css_class: 'highlight'
+```
+
+## Directory Structure for GitHub Pages
+
+```
+docs/
+├── index.md                      # Main documentation page
+├── getting-started.md             # Quick start guide
+├── configuration.md               # Configuration reference
+├── _config.yml                    # Jekyll configuration
+├── architecture/
+│   ├── overview.md                # System architecture
+│   ├── software.md                # Software components
+│   ├── bot.md                     # AI agent architecture
+│   └── data-flow.md               # Data processing flow
+├── components/
+│   ├── chat-interface.md          # Frontend components
+│   ├── ai-agent.md                # AI agent details
+│   ├── web-search.md              # Web search tool
+│   └── vector-db.md               # Database integration
+├── deployment/
+│   ├── docker.md                  # Container setup
+│   ├── environment.md             # Environment config
+│   └── production.md              # Production deployment
+├── development/
+│   ├── setup.md                   # Development setup
+│   ├── api.md                     # API reference
+│   └── contributing.md            # Contribution guidelines
+└── operations/
+    ├── monitoring.md              # System monitoring
+    ├── troubleshooting.md         # Common issues
+    └── performance.md             # Performance optimization
+```
+
+## Setup Instructions
+
+1. **Enable GitHub Pages** in your repository settings
+2. **Set Source** to `/docs` folder
+3. **Choose Theme** (optional, default theme works well)
+4. **Add _config.yml** to the docs directory
+5. **Commit and Push** - GitHub Pages will build automatically
+
+## Custom Styling (Optional)
+
+Create `assets/css/style.scss` for custom styling:
+
+```scss
+---
+---
+
+@import "minima";
+
+/* Custom styles for code blocks */
+.highlight {
+    border-radius: 6px;
+    padding: 1em;
+}
+
+/* Navigation improvements */
+.site-nav {
+    .page-link {
+        margin-left: 20px;
+    }
+}
+
+/* Mermaid diagram styling */
+.mermaid {
+    text-align: center;
+    margin: 20px 0;
+}
+```

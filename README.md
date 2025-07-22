@@ -2,20 +2,38 @@
 
 *AI chatbot for applicants and students – get instant answers about studies, teaching, and campus life.*
 
-(Under development)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://docker.com)
+[![Python](https://img.shields.io/badge/Python-3.11-green.svg)](https://python.org)
+[![LangChain](https://img.shields.io/badge/LangChain-orange.svg)](https://langchain.com)
+[![Streamlit](https://img.shields.io/badge/Streamlit-red.svg)](https://streamlit.io)
 
----
+## 📖 Documentation
 
-## Table of Contents
+**Documentation is available at: [docs/](./docs/)**
 
-- [Overview](#overview)
-- [Features](#features)
-- [Setup](#setup)
-  - [Development with Docker](#development-with-docker)
-  - [Production with Docker](#production-with-docker)
-- [Configuration](#configuration)
-- [Milvus Vector DB](#milvus-vector-db)
-- [Translation Mechanism](#translation-mechanism)
+- **[Getting Started](./docs/getting-started.md)** - Quick setup and installation
+- **[Architecture](./docs/architecture/overview.md)** - System design and components
+- **[Configuration](./docs/configuration.md)** - Configuration options and setup
+- **[Deployment](./docs/deployment/docker.md)** - Docker and production deployment
+
+##  Quick Start
+
+```bash
+# 1. Clone and configure
+git clone <your-repo-url>
+cd askuos
+cp config_example.yaml config.yaml
+cp .env.dev-example .env.dev
+
+# 2. Add your OpenAI API key to .env.dev
+echo "OPENAI_API_KEY=your_api_key_here" >> .env.dev
+
+# 3. Start the application
+docker compose up -d
+
+# 4. Access the chatbot
+open http://localhost:8501
+```
 
 ---
 
