@@ -35,4 +35,4 @@ Documentation for ask.UOS, an AI chatbot for university-related queries.
 
 ---
 
-*Last updated: {{ site.time | date: "%B %d, %Y" }}*
+
