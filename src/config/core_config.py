@@ -11,6 +11,7 @@ from src.chatbot_log.chatbot_logger import logger
 
 from .models import (
     ApplicationConfig,
+    ChatPageConfig,
     EmbeddingSettings,
     Legal,
     LogSettings,
@@ -39,6 +40,7 @@ class Settings(BaseSettings):
     milvus_settings: MilvusSettings
     language: Literal["Deutsch", "English"]
     start_page: StartPageConfig
+    chat_page: ChatPageConfig
     legal: Optional[Legal] = (
         None  # Optional legal information (e.g., data protection, imprint)
     )

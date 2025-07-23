@@ -110,5 +110,11 @@ msgstr "Chatverlauf löschen"
 msgid "There was an error while clearing the chat history. Please try again later."
 msgstr "Beim Löschen des Chatverlaufs ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut."
 
+msgid "Delete"
+msgstr "Löschen"
+
+msgid "Cancel"
+msgstr "Abbrechen"
+
 msgid "There was an error while loading previous messages. If this issue persists, try using a different browser or contact support."
 msgstr "Beim Laden vorheriger Nachrichten ist ein Fehler aufgetreten. Falls das Problem weiterhin besteht, versuchen Sie es mit einem anderen Browser oder wenden Sie sich an den Support."

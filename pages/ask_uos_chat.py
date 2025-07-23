@@ -23,7 +23,7 @@ from src.config.core_config import settings
 
 # max number of messages after which a summary is generated
 MAX_MESSAGE_HISTORY = 5
-MAX_MESSAGES_PER_USER = 100  # Limit for the number of messages per user (Redis)
+MAX_MESSAGES_PER_USER = 150  # Limit for the number of messages per user (Redis)
 HUMAN_AVATAR = "./static/Icon-User.svg"
 ASSISTANT_AVATAR = "./static/Icon-chatbot.svg"
 ROLES = ("ai", "human")
@@ -230,36 +230,6 @@ class ChatApp:
                     f"Unknown message type: {m.type}. Expected one of {ROLES}."
                 )
 
-        # for message in st.session_state["messages"]:
-        #     with st.chat_message(message["role"], avatar=message["avatar"]):
-        #         st.write(message["content"])
-
-    def show_delete_button(self):
-        """Display a delete button in the top-right corner."""
-
-        col1, col2 = st.columns([4, 1])
-        with col2:
-            if st.button(
-                "🗑️",
-                key="delete_chat",
-                help=st.session_state["_"]("Clear chat history"),
-                use_container_width=False,
-            ):
-                try:
-                    user_id = self.get_user_id()
-                    history = self.get_history(user_id)
-                    history.clear()
-                    st.session_state["messages"] = []
-                    st.session_state["conversation_summary"] = []
-                    st.rerun()
-                except Exception as e:
-                    logger.error(f"Error clearing chat history: {e}")
-                    st.error(
-                        session_state["_"](
-                            "There was an error while clearing the chat history. Please try again later."
-                        )
-                    )
-
     def handle_user_input(self):
         """Handle user input and generate a response."""
 
@@ -283,9 +253,6 @@ class ChatApp:
 
             if history.messages[-1].type != ROLES[0]:  # "ai"
                 self.generate_response(prompt)
-
-            # if st.session_state.messages[-1]["role"] != "assistant":
-            #     self.generate_response(prompt)
 
     def get_agent(self):
         if st.session_state["agent"] is None:
@@ -784,6 +751,44 @@ class ChatApp:
                 logger.info(f"Feedback= {feedback}")
                 session_state.feedback_saved = True
 
+    @st.dialog("ask.UOS")
+    def delete_chat_history(self):
+        """Display a dialog to confirm chat history deletion."""
+        message = (
+            settings.chat_page.delete_message_dialog_box_german
+            if settings.language == "Deutsch"
+            else settings.chat_page.delete_message_dialog_box_english
+        )
+        st.markdown(message)
+        if st.button(
+            session_state["_"]("Delete"),
+            key="confirm_delete_chat",
+            use_container_width=True,
+        ):
+            user_id = self.get_user_id()
+            history = self.get_history(user_id)
+            history.clear()
+            st.session_state["messages"] = []
+            st.session_state["conversation_summary"] = []
+            st.rerun()
+        if st.button(
+            session_state["_"]("Cancel"),
+            key="cancel_delete_chat",
+            use_container_width=True,
+        ):
+            st.rerun()
+
+    def show_delete_button(self):
+        """Display a delete button below the chat input, full width and horizontal."""
+        # Add a small space
+        if st.button(
+            f'🗑️ {session_state["_"]("Clear chat history")}',
+            key="delete_chat",
+            help=session_state["_"]("Clear all chat history"),
+        ):
+            self.delete_chat_history()
+        st.write("")  # Add a small space
+
     def run(self):
         """Main method to run the application logic."""
         st.title("ask.UOS")
@@ -791,7 +796,7 @@ class ChatApp:
         RemoveEmptyElementContainer()
         # Get or create user ID using our method
         user_id = self.get_user_id()
-        self.show_delete_button()
+
         # self.show_warning()
         # DO NOT CHANGE THE ORDER IN WHICH THESE METHODS ARE CALLED
 
@@ -800,6 +805,9 @@ class ChatApp:
         self.handle_user_input()
         self.show_feedback_faces()
         self.ask_further_feedback()
+
+        # Move the delete button to the very end
+        self.show_delete_button()
 
 
 if __name__ == "__main__":
