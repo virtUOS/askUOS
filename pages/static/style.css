@@ -6,6 +6,45 @@ body * {
     color: #3e3e3f;
 }
 
+/* Remove excessive space at the top for mobile view */
+@media (max-width: 600px) {
+    body {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    [data-testid="stAppViewContainer"] {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+    
+    /* Reduce header height */
+    .stAppHeader {
+        height: 40px !important;
+        min-height: 40px !important;
+        padding: 0 !important;
+    }
+    
+    /* Reduce toolbar height */
+    .stAppToolbar {
+        height: 40px !important;
+        min-height: 40px !important;
+        padding: 4px 8px !important;
+    }
+    
+    /* Reduce main container top spacing */
+    .stMain {
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+    }
+    
+    /* Reduce main block container top spacing */
+    .stMainBlockContainer {
+        padding-top: 0.5rem !important;
+        margin-top: 0 !important;
+    }
+}
+
 
 /* start.py */
 
