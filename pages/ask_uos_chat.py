@@ -754,6 +754,9 @@ class ChatApp:
     @st.dialog("ask.UOS")
     def delete_chat_history(self):
         """Display a dialog to confirm chat history deletion."""
+
+        if "delete" in st.query_params:
+            st.query_params.delete = "false"
         message = (
             settings.chat_page.delete_message_dialog_box_german
             if settings.language == "Deutsch"
@@ -806,8 +809,16 @@ class ChatApp:
         self.show_feedback_faces()
         self.ask_further_feedback()
 
-        # Move the delete button to the very end
-        self.show_delete_button()
+        if st.query_params.get("delete", "false") == "true":
+            # If delete query param is set, show the delete dialog
+            self.delete_chat_history()
+
+        if st.query_params.get("in_widget", "false") == "false":
+            # If not in widget mode, show the delete button
+            self.show_delete_button()
+
+        # delete button
+        # self.show_delete_button()
 
 
 if __name__ == "__main__":
