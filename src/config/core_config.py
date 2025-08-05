@@ -17,6 +17,7 @@ from .models import (
     LogSettings,
     MilvusSettings,
     ModelConfig,
+    RAGFlowSettings,
     SearchConfig,
     StartPageConfig,
 )
@@ -38,6 +39,7 @@ class Settings(BaseSettings):
     application: ApplicationConfig
     embedding: EmbeddingSettings
     milvus_settings: MilvusSettings
+    ragflow_settings: RAGFlowSettings
     language: Literal["Deutsch", "English"]
     start_page: StartPageConfig
     chat_page: ChatPageConfig

@@ -28,6 +28,11 @@ embedding:
   chunk_size: 3500 # Make sure this is not higher than the context window of the model
   chunk_overlap: 50
 
+ragflow_settings:
+  # RAGFlow settings
+  base_url: "https://ragflow-instance.de"  # Base URL for RAGFlow API
+  chunk_size: 10  # Number of chunks to retrieve per request
+
 milvus_settings:
   # Milvus vector database configuration
   uri: "http://standalone:19530" # Useful for Docker or Kubernetes deployments. User docker compose service name (Usually "milvus" or "standalone")

@@ -94,3 +94,12 @@ class ChatPageConfig(BaseModel):
 
     delete_message_dialog_box_english: str
     delete_message_dialog_box_german: str
+
+
+class RAGFlowSettings(BaseModel):
+    """
+    Configuration for RAGFlow settings.
+    """
+
+    base_url: str
+    chunk_size: int = 10  # Number of chunks to retrieve per request

@@ -173,6 +173,19 @@
         },
 
 
+
+        {
+            "name": "ragflow_client",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./src/chatbot/db/ragflow_client.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+
         {
             "name": "custom_crawl",
             "type": "debugpy",
