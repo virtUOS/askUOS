@@ -48,7 +48,7 @@ class RAGFlowSingleton:
         self.base_url = base_url or settings.ragflow_settings.base_url
         self.dbs = {}
 
-    def get_db_id(self, db_name: str) -> str:
+    async def get_db_id(self, db_name: str) -> str:
         """
         Get the database ID for a given database name.
 
@@ -56,21 +56,41 @@ class RAGFlowSingleton:
         if db_name in self.dbs.keys():
             return self.dbs[db_name]
 
-        response = requests.get(
-            f"{self.base_url}/api/v1/datasets?name={db_name}",
-            headers={"Authorization": f"Bearer {self.api_key}"},
-        )
-        datasets = response.json()
-        if datasets:
-            self.dbs[db_name] = datasets["data"][0]["id"]
-            logger.debug(f"Database ID for '{db_name}': {self.dbs[db_name]}")
-            return datasets["data"][0]["id"]
-        else:
-            logger.error(f"Database '{db_name}' not found.")
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{self.base_url}/api/v1/datasets?name={db_name}",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+            ) as response:
+                if response.status == 200:
+                    datasets = await response.json()
+                    if datasets and "data" in datasets and datasets["data"]:
+                        self.dbs[db_name] = datasets["data"][0]["id"]
+                        logger.debug(
+                            f"Database ID for '{db_name}': {self.dbs[db_name]}"
+                        )
+                        return datasets["data"][0]["id"]
+                    else:
+                        logger.error(f"Database '{db_name}' not found.")
+                        raise ValueError(f"Database '{db_name}' not found.")
+                else:
+                    logger.error(f"Failed to fetch database ID: {response.status}")
+                    raise ValueError("Failed to fetch database ID.")
 
-            raise ValueError(f"Database '{db_name}' not found.")
+        # response = requests.get(
+        #     f"{self.base_url}/api/v1/datasets?name={db_name}",
+        #     headers={"Authorization": f"Bearer {self.api_key}"},
+        # )
+        # datasets = response.json()
+        # if datasets:
+        #     self.dbs[db_name] = datasets["data"][0]["id"]
+        #     logger.debug(f"Database ID for '{db_name}': {self.dbs[db_name]}")
+        #     return datasets["data"][0]["id"]
+        # else:
+        #     logger.error(f"Database '{db_name}' not found.")
 
-    def retrieve_chunks(
+        #     raise ValueError(f"Database '{db_name}' not found.")
+
+    async def retrieve_chunks(
         self,
         query: str,
         db_id: str,
@@ -79,33 +99,57 @@ class RAGFlowSingleton:
         """
         Retrieve chunks from the RAGFlow database based on a query.
         """
-        response = requests.post(
-            f"{self.base_url}/api/v1/retrieval",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            },
-            json={
-                "question": query,
-                "dataset_ids": [db_id],
-                "document_ids": [],
-                "page_size": page_size,
-                "cross_languages": ["German", "English"],
-            },
-        )
-        r = response.json()
-        chunks = [Chunk(**chunk) for chunk in r["data"]["chunks"]]
-        return chunks
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{self.base_url}/api/v1/retrieval",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}",
+                },
+                json={
+                    "question": query,
+                    "dataset_ids": [db_id],
+                    "document_ids": [],
+                    "page_size": page_size,
+                    "cross_languages": ["German", "English"],
+                },
+            ) as response:
+                if response.status == 200:
+                    r = await response.json()
+                    chunks = [Chunk(**chunk) for chunk in r["data"]["chunks"]]
+                    return chunks
+                else:
+                    logger.error(f"Failed to retrieve chunks: {response.status}")
+                    raise ValueError("Failed to retrieve chunks.")
+
+        # response = requests.post(
+        #     f"{self.base_url}/api/v1/retrieval",
+        #     headers={
+        #         "Content-Type": "application/json",
+        #         "Authorization": f"Bearer {self.api_key}",
+        #     },
+        #     json={
+        #         "question": query,
+        #         "dataset_ids": [db_id],
+        #         "document_ids": [],
+        #         "page_size": page_size,
+        #         "cross_languages": ["German", "English"],
+        #     },
+        # )
+        # r = response.json()
+        # chunks = [Chunk(**chunk) for chunk in r["data"]["chunks"]]
+        # return chunks
         # return chunks
 
-    def run(self, query: str, db_name: str) -> List[Chunk]:
+    async def run(self, query: str, db_name: str) -> List[Chunk]:
         """
         Run the retrieval process for a given query and database name.
         """
         chunks = []
         try:
-            db_id = self.get_db_id(db_name)
-            chunks = self.retrieve_chunks(query, db_id)
+            db_id = await self.get_db_id(db_name)
+            chunks = await self.retrieve_chunks(query, db_id)
             logger.debug(
                 f"Retrieved {len(chunks)} chunks for query '{query}' in database '{db_name}'."
             )
@@ -113,8 +157,13 @@ class RAGFlowSingleton:
             logger.error(f"Error retrieving chunks: {e}")
         return chunks
 
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+
+        return asyncio.run(self.run(*args, **kwds))
+
 
 ragflowretriever = RAGFlowSingleton()
 
 
-ragflowretriever.run("Credit points computer science", "UOS_PO")
+ragflowretriever("Credit points computer science", "UOS_PO")
+print()
