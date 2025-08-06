@@ -24,6 +24,7 @@ def initialize_session_sate() -> None:
         "agent_language": settings.language,
         "agent": None,
         "ask_uos_user_id": None,
+        "input_key_counter": 0,
     }
 
     for key, value in defaults.items():

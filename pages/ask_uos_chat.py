@@ -236,7 +236,10 @@ class ChatApp:
         user_id = self.get_user_id()
         history = self.get_history(user_id)
 
-        if prompt := st.chat_input(placeholder=session_state["_"]("Message")):
+        if prompt := st.chat_input(
+            placeholder=session_state["_"]("Message"),
+            key=f"chat_input_{st.session_state.input_key_counter}",
+        ):
             if not session_state.feedback_saved:
                 self.log_feedback()
             st.session_state.feedback_saved = False
@@ -253,6 +256,10 @@ class ChatApp:
 
             if history.messages[-1].type != ROLES[0]:  # "ai"
                 self.generate_response(prompt)
+
+            st.session_state.input_key_counter += 1
+
+            st.rerun()  # Rerun to update the chat messages and input field
 
     def get_agent(self):
         if st.session_state["agent"] is None:
