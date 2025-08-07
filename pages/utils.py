@@ -25,6 +25,8 @@ def initialize_session_sate() -> None:
         "agent": None,
         "ask_uos_user_id": None,
         "input_key_counter": 0,
+        "visited_docs": None,
+        "visited_links": None,
     }
 
     for key, value in defaults.items():

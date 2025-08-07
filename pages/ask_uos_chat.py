@@ -31,6 +31,8 @@ ROLES = ("ai", "human")
 from redisvl.query import CountQuery, FilterQuery, TextQuery  # type: ignore
 from redisvl.query.filter import Tag  # type: ignore
 
+# TODO : Remove all the display references logic once streamlit integrates pull request  Fix st.chat_input collapse after submit #12081
+
 
 class LimitedRedisChatMessageHistory(RedisChatMessageHistory):
 
@@ -207,8 +209,20 @@ class ChatApp:
         st.session_state["messages"] = []
         # all messages from the history, see ROLES
         messages = history.messages
+        num_msgs = len(messages)
+        exist_references = bool(
+            st.session_state.get("visited_docs")
+            or st.session_state.get("visited_links")
+        )
 
-        for m in messages:
+        def display_references():
+            """Display references if they exist."""
+            if st.session_state.get("visited_links", None):
+                self.display_visited_links()
+            elif st.session_state.get("visited_docs", None):
+                self.display_visited_docs()
+
+        for idx, m in enumerate(messages):
             role = m.type
             if role == ROLES[1]:  # "human"
                 st.session_state["messages"].append(m)
@@ -223,6 +237,20 @@ class ChatApp:
                 else:
                     st.session_state["messages"].append(m)
                     with st.chat_message(role, avatar=ASSISTANT_AVATAR):
+
+                        if exist_references:
+                            if idx == num_msgs - 1:
+                                st.markdown(m.content)
+                                display_references()
+                                # since this is the last message; break the loop
+                                break
+                            # the only way two ai msg are consecutive is if the last message is a summary
+                            if idx == num_msgs - 2:
+                                if messages[idx + 1].type == ROLES[0]:
+                                    st.markdown(m.content)
+                                    display_references()
+                                    continue
+
                         st.write(m.content)
 
             else:
@@ -240,6 +268,7 @@ class ChatApp:
             placeholder=session_state["_"]("Message"),
             key=f"chat_input_{st.session_state.input_key_counter}",
         ):
+
             if not session_state.feedback_saved:
                 self.log_feedback()
             st.session_state.feedback_saved = False
@@ -258,7 +287,6 @@ class ChatApp:
                 self.generate_response(prompt)
 
             st.session_state.input_key_counter += 1
-
             st.rerun()  # Rerun to update the chat messages and input field
 
     def get_agent(self):
@@ -469,18 +497,22 @@ class ChatApp:
 
                 self.store_response(response, prompt, graph)
                 if graph._visited_docs():
-                    self.display_visited_docs()
+                    st.session_state["visited_docs"] = (
+                        graph._visited_docs.format_references()
+                    )
+                    graph._visited_docs.clear()
+                    # self.display_visited_docs()
 
                 if graph._visited_links:
-                    self.display_visited_links()
-
-            # self.store_response(response, prompt)
+                    st.session_state["visited_links"] = graph._visited_links
+                    # self.display_visited_links()
 
     def display_visited_docs(self):
         """Display the documents visited for the current user query."""
 
-        graph = self.get_agent()
-        references = graph._visited_docs.format_references()
+        # graph = self.get_agent()
+        # references = graph._visited_docs.format_references()
+        references = st.session_state["visited_docs"]
         reference_examination_regulations = "https://www.uni-osnabrueck.de/studium/im-studium/zugangs-zulassungs-und-pruefungsordnungen/"
         message = session_state["_"](
             "The information provided draws on the documents below that can be found in the [University Website]({}). We encourage you to visit the site to explore these resources for additional details and insights!"
@@ -498,14 +530,13 @@ class ChatApp:
             # TODO: Remove page numbers, these are wrong. Temporary
             # st.markdown(f"- **{key}**,  **{page_label}**: {page_list}")
             st.markdown(f"- **{key}**")
-        graph._visited_docs.clear()
+        st.session_state["visited_docs"] = None
 
     def display_visited_links(self):
         """Display the links visited for the current user query."""
 
-        graph = self.get_agent()
         with st.expander(session_state["_"]("Sources")):
-            for link in graph._visited_links:
+            for link in st.session_state["visited_links"]:
                 st.markdown(
                     f"""
 
@@ -516,6 +547,7 @@ class ChatApp:
                         """,
                     unsafe_allow_html=True,
                 )
+        st.session_state["visited_links"] = None
 
     def store_response(
         self,
@@ -801,7 +833,8 @@ class ChatApp:
 
     def run(self):
         """Main method to run the application logic."""
-        st.title("ask.UOS")
+        with st.container(key="page-header-container"):
+            st.title("ask.UOS")
         initialize_session_sate()
         RemoveEmptyElementContainer()
         # Get or create user ID using our method
