@@ -12,7 +12,6 @@ import logging
 import os
 from typing import List, Optional
 
-from clients import get_milvus_client
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
@@ -20,6 +19,8 @@ from langchain_core.documents.base import Document
 from langchain_core.vectorstores import VectorStore
 from pydantic import DirectoryPath, FilePath, validate_call
 from tqdm import tqdm
+
+from src.chatbot.db.milvus_client import get_milvus_client
 
 # Configurations
 EMBEDDING_MODEL = "intfloat/multilingual-e5-large"

@@ -20,6 +20,7 @@ from .models import (
     RAGFlowSettings,
     SearchConfig,
     StartPageConfig,
+    VectorDBConfig,
 )
 
 
@@ -38,8 +39,7 @@ class Settings(BaseSettings):
     model: ModelConfig
     application: ApplicationConfig
     embedding: EmbeddingSettings
-    milvus_settings: MilvusSettings
-    ragflow_settings: RAGFlowSettings
+    vector_db_settings: VectorDBConfig
     language: Literal["Deutsch", "English"]
     start_page: StartPageConfig
     chat_page: ChatPageConfig

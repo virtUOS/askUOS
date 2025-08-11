@@ -1,8 +1,9 @@
-from typing import ClassVar, List, Literal, Optional, Tuple, Type
+from typing import ClassVar, List, Literal, Optional, Tuple, Type, Union
 
 from pydantic import BaseModel
 
 EmbeddingType = Literal["FastEmbed", "Ollama"]
+VectorDBType = Literal["Milvus", "Infinity-RAGFlow"]
 
 
 class SearchConfig(BaseModel):
@@ -78,6 +79,24 @@ class MilvusSettings(BaseModel):
     token: Optional[str] = "root:Milvus"
 
 
+class RAGFlowSettings(BaseModel):
+    """
+    Configuration for RAGFlow settings.
+    """
+
+    base_url: str
+    chunk_size: int = 10  # Number of chunks to retrieve per request
+
+
+class VectorDBConfig(BaseModel):
+    """
+    Configuration for the vector database.
+    """
+
+    type: VectorDBType = "Milvus"
+    settings: Union[MilvusSettings, RAGFlowSettings]
+
+
 class StartPageConfig(BaseModel):
     """
     Configuration for the start page.
@@ -94,12 +113,3 @@ class ChatPageConfig(BaseModel):
 
     delete_message_dialog_box_english: str
     delete_message_dialog_box_german: str
-
-
-class RAGFlowSettings(BaseModel):
-    """
-    Configuration for RAGFlow settings.
-    """
-
-    base_url: str
-    chunk_size: int = 10  # Number of chunks to retrieve per request
