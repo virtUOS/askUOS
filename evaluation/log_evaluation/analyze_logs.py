@@ -14,7 +14,7 @@ LOGS_DIR = f"evaluation/data/logs_prod/log-{DATE}/log.csv"
 
 if not os.path.exists(f"evaluation/data/results/result-{DATE}"):
     os.makedirs(f"evaluation/data/results/result-{DATE}")
-SAVE_USER_QUERIES = f"evaluation/data/results/result-{DATE}/user_queries.txt"
+SAVE_USER_QUERIES = f"evaluation/data/results/result-{DATE}/user_queries.csv"
 FEEDBACK_DATA = f"evaluation/data/results/result-{DATE}/feedback_data.csv"
 SAVE_GRAPHS = f"evaluation/data/results/result-{DATE}/"
 SAVE_SUMMARY_REPORT = f"evaluation/data/results/result-{DATE}/summary_report.txt"
@@ -207,9 +207,12 @@ def save_user_queries(df):
     user_queries = [q for q in user_queries if "" not in q]
     # Deduplicate while preserving order
     unique_queries = list(dict.fromkeys(user_queries))
-    with open(SAVE_USER_QUERIES, "w", encoding="utf-8") as f:
+    # Save to CSV with a column named 'query'
+    with open(SAVE_USER_QUERIES, "w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["query"])
         for query in unique_queries:
-            f.write(f"{query}\n")
+            writer.writerow([query])
 
 
 def extract_feedback_to_csv(df):
