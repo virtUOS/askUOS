@@ -1,5 +1,6 @@
 import csv
 import json
+import os
 import re
 from datetime import datetime
 
@@ -8,8 +9,11 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-DATE = "june-2025"
+DATE = "august-2025"
 LOGS_DIR = f"evaluation/data/logs_prod/log-{DATE}/log.csv"
+
+if not os.path.exists(f"evaluation/data/results/result-{DATE}"):
+    os.makedirs(f"evaluation/data/results/result-{DATE}")
 SAVE_USER_QUERIES = f"evaluation/data/results/result-{DATE}/user_queries.txt"
 FEEDBACK_DATA = f"evaluation/data/results/result-{DATE}/feedback_data.csv"
 SAVE_GRAPHS = f"evaluation/data/results/result-{DATE}/"
@@ -197,10 +201,14 @@ def read_logs(file_path):
 
 
 def save_user_queries(df):
-    # Filter for user queries and save to file
+    # Filter for user queries and deduplicate while preserving order
     user_queries = df[df["user_query"].notna()]["user_query"].tolist()
+    # Exclude queries containing the escape character
+    user_queries = [q for q in user_queries if "" not in q]
+    # Deduplicate while preserving order
+    unique_queries = list(dict.fromkeys(user_queries))
     with open(SAVE_USER_QUERIES, "w", encoding="utf-8") as f:
-        for query in user_queries:
+        for query in unique_queries:
             f.write(f"{query}\n")
 
 
