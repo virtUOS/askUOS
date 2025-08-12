@@ -34,7 +34,7 @@ def retrieve_from_infinity_ragflow(collection_name: str, query: str):
         for chunk in chunks:
             source = chunk.document_keyword
             page = chunk.page
-            ref.append(Reference(source, page, chunk.id))
+            ref.append(Reference(source, page, chunk.document_id))
             results.append(f"Source: {source} \nText: {chunk.content}")
         return DOCUMENT_SEPARATOR.join(results), ref
     except Exception as e:
@@ -116,6 +116,7 @@ def _get_relevant_documents(
         return NOT_FOUND_MESSAGE, ref
 
 
+# used by the hisinone tool
 def retriever_his_in_one(query: str) -> str:
 
     try:

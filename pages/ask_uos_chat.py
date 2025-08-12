@@ -475,22 +475,46 @@ class ChatApp:
         graph = self.get_agent()
         references = graph._visited_docs.format_references()
         reference_examination_regulations = "https://www.uni-osnabrueck.de/studium/im-studium/zugangs-zulassungs-und-pruefungsordnungen/"
+        reference_fagflow = None
         message = session_state["_"](
             "The information provided draws on the documents below that can be found in the [University Website]({}). We encourage you to visit the site to explore these resources for additional details and insights!"
         )
 
-        st.markdown(message.format(reference_examination_regulations))
-        for key, value in references.items():
+        if settings.vector_db_settings.type == "Infinity-RAGFlow":
+            reference_fagflow = "{}/document/{}?ext=pdf&prefix=document"
+        else:
+            st.markdown(message.format(reference_examination_regulations))
+
+        for k, value in references.items():
             # TODO add translation
             page_label = (
                 session_state["_"]("Pages")
-                if len(value) > 1
+                if len(value["page"]) > 1
                 else session_state["_"]("Page")
             )
-            page_list = ", ".join(map(str, value))
-            # TODO: Remove page numbers, these are wrong. Temporary
-            # st.markdown(f"- **{key}**,  **{page_label}**: {page_list}")
-            st.markdown(f"- **{key}**")
+            page_list = ", ".join(map(str, value["page"]))
+
+            if value["doc_id"] is not None and reference_fagflow is not None:
+                st.markdown(
+                    f"- [{k}]({reference_fagflow.format(settings.vector_db_settings.settings.base_url,value['doc_id'])}),  **{page_label}**: {page_list}"
+                )
+            else:
+
+                st.markdown(f"- **{k}**,  **{page_label}**: {page_list}")
+                # st.markdown(f"- **{key}**")
+
+        # st.markdown(message.format(reference_examination_regulations))
+        # for key, value in references.items():
+        #     # TODO add translation
+        #     page_label = (
+        #         session_state["_"]("Pages")
+        #         if len(value) > 1
+        #         else session_state["_"]("Page")
+        #     )
+        #     page_list = ", ".join(map(str, value))
+        #     # TODO: Remove page numbers, these are wrong. Temporary
+        #     # st.markdown(f"- **{key}**,  **{page_label}**: {page_list}")
+        #     st.markdown(f"- **{key}**")
         graph._visited_docs.clear()
 
     def display_visited_links(self):

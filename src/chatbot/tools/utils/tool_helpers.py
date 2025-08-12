@@ -5,6 +5,7 @@ import urllib.parse
 from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
+from src.chatbot.agents.utils.agent_retriever import Reference
 from src.chatbot.utils.pdf_reader import read_pdf_from_url
 from src.chatbot_log.chatbot_logger import logger
 
@@ -62,12 +63,13 @@ def extract_pdf_text(href: str, pdf_bytes: bytes) -> str:
     return re.sub(r"(\n\s*|\n\s+\n\s+)", "\n", text.strip())
 
 
+# TODO use dataclass instead
 class ReferenceRetriever:
 
     __slots__ = ("docs_references",)
 
     def __init__(self) -> None:
-        self.docs_references = []
+        self.docs_references: list[Reference] = []
 
     def format_references(self) -> dict:
         """
@@ -75,11 +77,11 @@ class ReferenceRetriever:
         """
         references = {}
 
-        for source, page in self.docs_references:
+        for source, page, doc_id in self.docs_references:
             if source not in references:
-                references[source] = {page}
+                references[source] = {"page": {page}, "doc_id": doc_id}
             else:
-                references[source].add(page)
+                references[source]["page"].add(page)
 
         return references
 
