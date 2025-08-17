@@ -1,165 +1,277 @@
 import asyncio
+import logging
 import os
-from typing import Literal
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from typing import List, Literal, Optional, Tuple
+from urllib.parse import unquote, urlparse
 
-import requests
 from crawl4ai import *
 from dotenv import load_dotenv
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
+from tqdm.asyncio import tqdm
+
+# Load environment variables
+load_dotenv()
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 SITE_MAP = "/app/data_ingestion/sitemap.xml"
-OUTPUT_DIR = "/app/data_ingestion/faqs_output"
-
-
-target_elements = ["main", "div#content"]
-
-browser_config = BrowserConfig(
-    headless=True,
-    verbose=True,
-)
-
-run_config = CrawlerRunConfig(
-    # cache_mode=CacheMode.ENABLED,
-    cache_mode=CacheMode.DISABLED,
-    target_elements=target_elements,
-    scan_full_page=True,
-    stream=False,
-)
-
-
-client = ChatOpenAI(
-    base_url=os.getenv("VLLM_BASE_URL"),
-    api_key=os.getenv("VLLM"),
-    model="google/gemma-3-27b-it",
-    temperature=0,
-    streaming=True,
-)
+OUTPUT_DIR = "/app/data_ingestion/faqs_output_md"
+MODEL_NAME = "google/gemma-3-27b-it"
+TARGET_ELEMENTS = ["main", "div#content"]
 
 
 class IsPageFAQ(BaseModel):
     is_faq: Literal["yes", "no"] = Field(
-        description="Indicates whether the page is a FAQ page or not. "
+        description="Indicates whether the page is a FAQ page or not."
     )
     reason: str = Field(
         description="Reasoning behind the classification of the page as a FAQ or not."
     )
 
 
-llm_structured_output = client.with_structured_output(IsPageFAQ)
+class FAQDetectorConfig:
+    """Configuration class for FAQ detector."""
+
+    def __init__(
+        self,
+        sitemap_path: str = SITE_MAP,
+        output_dir: str = OUTPUT_DIR,
+        target_elements: List[str] = None,
+        model_name: str = MODEL_NAME,
+    ):
+        self.sitemap_path = sitemap_path
+        self.output_dir = Path(output_dir)
+        self.target_elements = target_elements or TARGET_ELEMENTS
+        self.model_name = model_name
+
+        # Ensure output directory exists
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
 
-prompt = PromptTemplate(
-    template="""
-        You are judge that assess if the content of web page is Frequently ask question FAQ page or not. 
-        Follow these guidelines:
+class FAQDetector:
+    """Main class for detecting FAQ pages from sitemap URLs."""
 
-            1. A FAQ page typically contains a list of questions and their corresponding answers, often organized by topic.
-            2. If the content is a list of questions and answers, it is an FAQ page.
-            3. If the content **only mentions** or **references** an FAQ without providing a list of questions and answers, it is not an FAQ page.
-            4. If the content is a single question and answer, it is not an FAQ page.
-            5. If the content is a general information page without any questions and answers, it is not an FAQ page.
-            6. If the content is a blog post or article that discusses a topic without a structured Q&A format, it is not an FAQ page.
+    def __init__(self, config: FAQDetectorConfig):
+        self.config = config
+        self._setup_crawler_config()
+        self._setup_llm()
+        self._setup_prompt()
 
-        ### Evaluation Task:
-        Determine if the content of the web page is a FAQ page or not based on the provided criteria. 
-        - If it is a FAQ page, respond with "yes" and provide a brief reason.
-        - If it is not a FAQ page, respond with "no" and provide a brief reason.
-        
-        Proceed with the evaluation based on these criteria.
+    def _setup_crawler_config(self) -> None:
+        """Setup crawler configuration."""
+        self.browser_config = BrowserConfig(
+            headless=True,
+            verbose=True,
+        )
 
-        ### Web Page Content to be Evaluated:
-        {content}
+        self.run_config = CrawlerRunConfig(
+            cache_mode=CacheMode.DISABLED,
+            target_elements=self.config.target_elements,
+            scan_full_page=True,
+            stream=False,
+        )
+
+    def _setup_llm(self) -> None:
+        """Setup language model client."""
+        self.client = ChatOpenAI(
+            base_url=os.getenv("VLLM_BASE_URL"),
+            api_key=os.getenv("VLLM"),
+            model=self.config.model_name,
+            temperature=0,
+        )
+        self.llm_structured_output = self.client.with_structured_output(IsPageFAQ)
+
+    def _setup_prompt(self) -> None:
+        """Setup the prompt template for FAQ classification."""
+        self.prompt = PromptTemplate(
+            template="""
+            You are an evaluator determining whether the content of a web page qualifies as a Frequently Asked Questions (FAQ) page. 
+            Follow these guidelines:
+
+                1. A FAQ page typically contains a list of questions and their corresponding answers, often organized by topic.
+                2. If the content is a list of questions and answers, it is an FAQ page.
+                3. If the content **only mentions** or **references** an FAQ without providing a list of questions and answers, it is NOT  an FAQ page.
+                4. If the content is a single question and answer, it is NOT an FAQ page.
+                5. If the content is a general information page without any questions and answers, it is not an FAQ page.
+                6. If the content is a blog post or article that discusses a topic without a structured Q&A format, it is not an FAQ page.
+
+            ### Evaluation Task:
+            Determine if the content of the web page is a FAQ page or not based on the provided criteria. 
+            - If it is a FAQ page, respond with "yes" and provide a brief reason.
+            - If it is not a FAQ page, respond with "no" and provide a brief reason.
+            
+            Proceed with the evaluation based on these criteria.
+
+            ### Web Page Content to be Evaluated:
+            {content}
             """,
-    input_variables=["content"],
-)
-
-
-async def run_crawler(url: str):
-
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        result = await crawler.arun(
-            url=url,
-            config=run_config,
+            input_variables=["content"],
         )
 
-        return result
-
-
-def classify_faq_page(urls_file: str):
-    """Classify if the content is a FAQ page."""
-
-    not_faq_urls = []
-    page_is_faq = []
-    judge_fail_urls = []
-    with open(urls_file, "r") as file:
-        urls = file.read().splitlines()
-
-    for url in urls:
-
-        res = asyncio.run(run_crawler(url))
-        content = res.markdown
-
-        chain = prompt | llm_structured_output
-
+    def extract_urls_from_sitemap(self) -> List[str]:
+        """Extract URLs from a sitemap XML file."""
         try:
-            response = chain.invoke(
-                {
-                    "content": content,
-                }
-            )
+            tree = ET.parse(self.config.sitemap_path)
+            root = tree.getroot()
+            ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+            urls = [loc.text for loc in root.findall(".//sm:loc", ns)]
+            logger.info(f"Extracted {len(urls)} URLs from sitemap")
+            return urls
         except Exception as e:
-            judge_fail_urls.append(url)
-            print(f"Error occurred while processing {url}: {e}")
-            continue
+            logger.error(f"Error extracting URLs from sitemap: {e}")
+            return []
 
-        if response.is_faq.lower() == "no":
+    async def crawl_url(self, url: str) -> Optional[str]:
+        """Crawl a single URL and return its content."""
+        try:
+            async with AsyncWebCrawler(config=self.browser_config) as crawler:
+                result = await crawler.arun(url=url, config=self.run_config)
+                return result.markdown
+        except Exception as e:
+            logger.error(f"Error crawling URL {url}: {e}")
+            return None
 
-            not_faq_urls.append(url)
+    def save_faq_content(self, content: str, url: str) -> None:
+        """Save FAQ content to a Markdown file."""
+        try:
+            parsed = urlparse(url)
+            path = unquote(parsed.path.lstrip("/"))
+            if not path:
+                path = "root"
 
-        else:
-            page_is_faq.append(url)
-            # serve existing answer
-            print(f"This url {url} is a FAQ page. Reason: {response.reason}")
+            filename = path.rstrip("/").replace("/", "_")
+            if not filename:
+                filename = "root"
 
-    if not_faq_urls:
-        with open("/app/data_ingestion/not_faq_urls_llm_judge.txt", "w") as file:
-            for url in not_faq_urls:
-                file.write(f"{url}\n")
+            output_file = self.config.output_dir / f"{filename}.md"
 
-    if page_is_faq:
-        with open("/app/data_ingestion/faq_urls_judge_llm.txt", "w") as file:
-            for url in page_is_faq:
-                file.write(f"{url}\n")
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(f"### Frequently Asked Questions. Source: {url}\n\n{content}")
 
-    print(
-        f"-----------------------------Finished processing URLs. Found {len(not_faq_urls)} non-FAQ pages. Urls: {not_faq_urls}"
-    )
+            logger.info(f"FAQ content saved to {output_file}")
+        except Exception as e:
+            logger.error(f"Error saving content for URL {url}: {e}")
 
-    if page_is_faq:
-        print(
-            f"---------------------------------------Found {len(page_is_faq)} FAQ pages. Urls: {page_is_faq}"
-        )
+    def classify_content(self, content: str) -> Optional[IsPageFAQ]:
+        """Classify if the content is a FAQ page using LLM."""
+        try:
+            chain = self.prompt | self.llm_structured_output
+            response = chain.invoke({"content": content})
+            return response
+        except Exception as e:
+            logger.error(f"Error classifying content: {e}")
+            return None
 
-    if judge_fail_urls:
-        print(
-            f"---------------------------------------Found {len(judge_fail_urls)} URLs that failed to process. Urls: {judge_fail_urls}"
-        )
+    def save_url_lists(
+        self, faq_urls: List[str], not_faq_urls: List[str], failed_urls: List[str]
+    ) -> None:
+        """Save the categorized URL lists to files."""
+        base_path = Path("/app/data_ingestion")
 
-    print()
+        if not_faq_urls:
+            with open(base_path / "not_faq_urls_llm_judge.txt", "w") as f:
+                f.write("\n".join(not_faq_urls))
+
+        if faq_urls:
+            with open(base_path / "faq_urls_judge_llm.txt", "w") as f:
+                f.write("\n".join(faq_urls))
+
+        if failed_urls:
+            with open(base_path / "failed_urls.txt", "w") as f:
+                f.write("\n".join(failed_urls))
+
+    async def process_urls(self) -> Tuple[List[str], List[str], List[str]]:
+        """Process all URLs from sitemap and classify them."""
+        urls = self.extract_urls_from_sitemap()
+        if not urls:
+            logger.warning("No URLs found in sitemap")
+            return [], [], []
+
+        faq_urls = []
+        not_faq_urls = []
+        failed_urls = []
+
+        # Create progress bar
+        progress_bar = tqdm(urls, desc="Processing URLs", unit="url", colour="green")
+
+        for url in progress_bar:
+            # Update progress bar description with current URL
+            progress_bar.set_postfix_str(
+                f"Current: {url[:50]}{'...' if len(url) > 50 else ''}"
+            )
+
+            # Crawl the URL
+            content = await self.crawl_url(url)
+            if content is None:
+                failed_urls.append(url)
+                progress_bar.set_postfix_str(
+                    f"Failed: {url[:50]}{'...' if len(url) > 50 else ''}"
+                )
+                continue
+
+            # Classify the content
+            response = self.classify_content(content)
+            if response is None:
+                failed_urls.append(url)
+                progress_bar.set_postfix_str(
+                    f"Classification failed: {url[:50]}{'...' if len(url) > 50 else ''}"
+                )
+                continue
+
+            # Categorize based on classification
+            if response.is_faq.lower() == "yes":
+                faq_urls.append(url)
+                self.save_faq_content(content, url)
+                logger.info(f"FAQ page detected: {url}. Reason: {response.reason}")
+                progress_bar.set_postfix_str(
+                    f"FAQ found: {url[:50]}{'...' if len(url) > 50 else ''}"
+                )
+            else:
+                not_faq_urls.append(url)
+                progress_bar.set_postfix_str(
+                    f"Not FAQ: {url[:50]}{'...' if len(url) > 50 else ''}"
+                )
+
+        # Close progress bar
+        progress_bar.close()
+
+        return faq_urls, not_faq_urls, failed_urls
+
+    async def run(self) -> None:
+        """Main method to run the FAQ detection process."""
+        logger.info("Starting FAQ detection process")
+
+        faq_urls, not_faq_urls, failed_urls = await self.process_urls()
+
+        # Save results
+        self.save_url_lists(faq_urls, not_faq_urls, failed_urls)
+
+        # Log summary
+        logger.info(f"FAQ detection completed:")
+        logger.info(f"  - FAQ pages found: {len(faq_urls)}")
+        logger.info(f"  - Non-FAQ pages: {len(not_faq_urls)}")
+        logger.info(f"  - Failed to process: {len(failed_urls)}")
+
+        if faq_urls:
+            logger.info(f"FAQ URLs: {faq_urls}")
+        if failed_urls:
+            logger.info(f"Failed URLs: {failed_urls}")
 
 
-classify_faq_page("/app/data_ingestion/not_found_urls_scraper.txt")
+async def main():
+    """Main function to run the FAQ detector."""
+    config = FAQDetectorConfig()
+    detector = FAQDetector(config)
+    await detector.run()
 
-# messages = [
-#     (
-#         "system",
-#         "You are a helpful translator. Translate the user sentence to French.",
-#     ),
-#     ("human", "I love programming."),
-# ]
 
-# response = client.invoke(messages)
-
-print()
+if __name__ == "__main__":
+    asyncio.run(main())

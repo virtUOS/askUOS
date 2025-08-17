@@ -203,6 +203,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-"""extract the faq content of this page. DO NOT add anything to the content, DO NOT summarize, keep the original laguage. Provide the result in csv format that match this requirement: If a file is in CSV/TXT format, it must be UTF-8 encoded with TAB as the delimiter to separate questions"""

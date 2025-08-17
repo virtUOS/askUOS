@@ -185,6 +185,39 @@
    
         },
 
+          {
+            "name": "ragflow_test",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./ragflow_test.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+                  {
+            "name": "extract_faqs",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./data_ingestion/extract_faqs.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+                       {
+            "name": "detect_faq",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./data_ingestion/detect_faq.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
 
         {
             "name": "custom_crawl",
