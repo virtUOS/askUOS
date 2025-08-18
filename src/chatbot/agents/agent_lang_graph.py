@@ -3,7 +3,6 @@ import uuid
 from collections import deque
 from typing import Annotated, ClassVar, Dict, List, Literal, Optional, Union
 
-
 from langchain.tools.retriever import create_retriever_tool
 from langchain_core.messages import (
     AIMessage,
@@ -24,6 +23,7 @@ from typing_extensions import TypedDict
 from src.chatbot.agents.utils.agent_helpers import llm, llm_optional
 from src.chatbot.agents.utils.agent_retriever import (
     _get_relevant_documents,
+    retrieve_from_infinity_ragflow,
     retriever_his_in_one,
 )
 from src.chatbot.agents.utils.exceptions import MustContainSystemMessageException
@@ -47,6 +47,7 @@ DEBUG = settings.application.debug
 MESSAGE_HISTORY_LIMIT = 7
 # Maximum number of tokens for the conversation summary
 MAX_TOKEN_SUMMARY = 1000
+FAQ_DB_NAME = "faq_md"  # TODO: make this configurable
 
 
 class State(TypedDict):
@@ -78,6 +79,7 @@ class State(TypedDict):
     )
     tool_messages: Optional[str]
     last_tool_usage: Optional[str]
+    rewrite_query: bool = False  # Flag to indicate if the query should be rewritten
 
 
 class GraphEdgesMixin:
@@ -421,7 +423,7 @@ class GraphNodesMixin:
                     )
                     self._visited_docs.docs_references = [
                         *tool_result[1]
-                    ]  # each element of the form (source, page)
+                    ]  # each element of the form (content, reference)
                     tool_result = tool_result[0]  # the text of the document
 
                 else:
@@ -431,6 +433,14 @@ class GraphNodesMixin:
                 logger.debug(
                     f'[TOOL NODE] Successfully executed tool call:{tool_call["name"]}. Length of tool_resul: {len(tool_call)}'
                 )
+                # TODO this can be async in parallel with the prevrious tool calls
+                if state.get("rewrite_query", False):
+                    # if the agent is in the rewrite state, try to find answer in FAQs
+                    tool_result_faq = retrieve_from_infinity_ragflow(
+                        FAQ_DB_NAME, tool_call["args"].get("query")
+                    )
+                    tool_result = f"{tool_result_faq[0]} \n {tool_result}"  # the text of the document
+
             except Exception as e:
                 logger.exception(
                     f"Error invoking tool: {tool_call['name']} with args: tool_call['args']: {e}"
@@ -495,7 +505,7 @@ class GraphNodesMixin:
         # delete the previous ai message
         messages = state["messages"]
         messages = messages[:-1]
-        return {"messages": messages + msg}
+        return {"messages": messages + msg, "rewrite_query": True}
 
     def generate_helper(self, state, system_message_generate):
 
