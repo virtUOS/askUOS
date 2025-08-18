@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - dev
+      - ragflow
     paths:
       - 'src/**'
       - 'pages/**'
