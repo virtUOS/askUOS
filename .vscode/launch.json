@@ -185,6 +185,8 @@
    
         },
 
+        
+
           {
             "name": "ragflow_test",
             "type": "debugpy",
@@ -201,6 +203,30 @@
             "type": "debugpy",
             "request": "launch",
             "program": "./data_ingestion/extract_faqs.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+
+
+                        {
+            "name": "generate_test_questions",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./data_ingestion/generate_test_questions.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+                        {
+            "name": "crud_ragflow",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./data_ingestion/crud_ragflow.py",
             "cwd": "${workspaceFolder}",
             "env":{ "PYTHONPATH": "/app"},
             "console": "integratedTerminal",
