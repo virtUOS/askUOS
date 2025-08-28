@@ -1,6 +1,9 @@
 import os
 import sys
 
+import pandas as pd
+from tqdm import tqdm
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 import csv
 import sys
@@ -125,7 +128,9 @@ Evaluate the semantic similarity and provide your assessment.
 
         return response
 
-    def evaluate_dataset(self, test_data: List[TestDataPoint]) -> Dict[str, Any]:
+    def evaluate_dataset(
+        self, test_data: List[TestDataPoint], save_results_path: str
+    ) -> Dict[str, Any]:
         """Evaluate a complete dataset and return aggregated results."""
 
         agent = CampusManagementOpenAIToolsAgent.run()
@@ -146,21 +151,26 @@ Evaluate the semantic similarity and provide your assessment.
         low_scores = []
         total_similarity = 0
 
-        for test_point in test_data:
+        for test_point in tqdm(test_data, desc="LLM-Judge Evaluation"):
             user_input = test_point.question
             system_user_prompt = get_system_prompt(
                 conversation_summary, history, user_input, current_date
             )
-            chatbot_response = agent._graph.invoke(
-                {
-                    "messages": system_user_prompt,
-                    "message_history": history,
-                    "user_initial_query": user_input,
-                    "current_date": current_date,
-                },
-                config=config,
-            )
-            chatbot_response = chatbot_response["messages"][0].content
+
+            try:
+                chatbot_response = agent._graph.invoke(
+                    {
+                        "messages": system_user_prompt,
+                        "message_history": history,
+                        "user_initial_query": user_input,
+                        "current_date": current_date,
+                    },
+                    config=config,
+                )
+                chatbot_response = chatbot_response["messages"][0].content
+            except Exception as e:
+                print(f"Error processing question '{test_point.question}': {e}")
+                continue
 
             evaluation = self.evaluate_response(test_point, chatbot_response)
             results.append(
@@ -192,45 +202,46 @@ Evaluate the semantic similarity and provide your assessment.
             f"Average Similarity Score: {avg_similarity} over {num_results} evaluations."
         )
 
-        self.save_results(results, "/app/evaluation/RAG_evaluation/results")
+        self.save_results(results, save_results_path)
 
     def save_results(self, results: List[Dict[str, Any]], output_path: str) -> None:
-        """Save evaluation results to a file."""
-        os.makedirs(output_path, exist_ok=True)
-        results_file = os.path.join(output_path, "semantic_evaluation_results.csv")
-
-        with open(results_file, "w", encoding="utf-8") as file:
-            file.write(
-                "question,expected_answer,chatbot_answer,similarity_score,explanation\n"
+        """Save evaluation results to a CSV file using pandas."""
+        data = []
+        for i, result in enumerate(results):
+            question = result["test_point"].question
+            expected_answer = result["test_point"].expected_answer
+            chatbot_response = result["chatbot_response"]
+            similarity_score = result["evaluation"].similarity_score
+            explanation = result["evaluation"].explanation
+            data.append(
+                {
+                    "question_id_q": i,
+                    "question": question,
+                    "human_answer": expected_answer,
+                    "chatbot_answer": chatbot_response,
+                    "similarity_score": similarity_score,
+                    "explanation": explanation,
+                }
             )
-            for result in results:
-                question = result["test_point"].question.replace('"', '""')
-                expected_answer = result["test_point"].expected_answer.replace(
-                    '"', '""'
-                )
-                chatbot_response = result["chatbot_response"].replace('"', '""')
-                similarity_socore = result["evaluation"].similarity_score
-                explanation = result["evaluation"].explanation.replace('"', '""')
-                file.write(
-                    f'"{question}",""{expected_answer}","{chatbot_response}",{similarity_socore},"{explanation}"\n'
-                )
+        df = pd.DataFrame(data)
+        df.to_csv(output_path, index=False)
 
 
 # Example usage function
-def run_semantic_evaluation_example():
+def run_semantic_evaluation(save_results_path, test_data_path):
     """Example of how to use the semantic evaluation system."""
 
     # Initialize the evaluator
     evaluator = SemanticEvaluator(model_name="gpt-4o-mini")
 
     # Load test data
-    test_data = evaluator.load_test_data(
-        "/app/synthetic_data_gen/test_data/examination_regulations_general_parse_test_data.csv"
-    )
+    test_data = evaluator.load_test_data(test_data_path)
 
     # Evaluate
-    evaluator.evaluate_dataset(test_data[:1])
+    evaluator.evaluate_dataset(test_data[:1], save_results_path)
 
 
 if __name__ == "__main__":
-    run_semantic_evaluation_example()
+    save_results_path = "/app/evaluation/RAG_evaluation/results"
+    test_data_path = "/app/synthetic_data_gen/test_data/examination_regulations_general_parse_test_data.csv"
+    run_semantic_evaluation(save_results_path, test_data_path)
