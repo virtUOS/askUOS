@@ -1,90 +1,62 @@
-# 1. Run the llm as judge first
-# 2. Save the results to be use by the the other metrics
-# 3. Run the other metrics and save the results
-
-"""
-pip install ipykernel
-python3 -m ipykernel install --user
-"""
-
 import json
 import os
 
-import nbformat
-from nbconvert.preprocessors import ExecutePreprocessor
-
+from eval.BERTscore_eval import run_bertscore_eval
+from eval.bleu_eval import run_bleu_eval
 from eval.LLM_as_Judge import SemanticEvaluator
 
-
-def execute_notebook(notebook_path, output_path):
-    """Execute a Jupyter notebook and save the output."""
-    with open(notebook_path) as f:
-        nb = nbformat.read(f, as_version=4)
-
-    ep = ExecutePreprocessor(timeout=600, kernel_name="python3")
-
-    ep.preprocess(nb, {"metadata": {"path": os.path.dirname(notebook_path)}})
-
-    with open(output_path, "w", encoding="utf-8") as f:
-        nbformat.write(nb, f)
+from eval.rouge_eval import run_rouge_eval
 
 
-def run_evaluation_pipeline(
-    save_results_path, test_data_path, save_results_notebook_path
-):
-    """Run the full evaluation pipeline including semantic evaluation."""
-    cwd = os.getcwd()
-    # Step 1: Run semantic evaluation
-    semantic_evaluator = SemanticEvaluator(model_name="gpt-4o-mini")
-    # Load test data
-    test_data = semantic_evaluator.load_test_data(test_data_path)
-    # Evaluate
+def run_semantic_evaluation(save_results_path, test_data_path):
+    evaluator = SemanticEvaluator(model_name="gpt-4o-mini")
+    test_data = evaluator.load_test_data(test_data_path)
+    evaluator.evaluate_dataset(test_data, save_results_path)
 
-    # semantic_evaluator.evaluate_dataset(test_data, save_results_path)
 
-    notebook_config_path = os.path.join(cwd, "eval/notebook_config.json")
-    with open(notebook_config_path, "w") as f:
-        json.dump(
-            {
-                "csv_path_de": save_results_path,
-                "csv_path_mean": os.path.join(cwd, "eval/results"),
-                "output_csv_de": os.path.join(cwd, "eval/results"),
-            },
-            f,
-        )
-
-    # Step 2: Run bleu evaluation, with the results from the semantic evaluation
-    notebook_path = os.path.join(cwd, "eval/bleu_eval.ipynb")
-    output_notebook_path = os.path.join(
-        save_results_notebook_path, "bleu_eval_executed.ipynb"
-    )
-
-    execute_notebook(notebook_path, output_notebook_path)
-
-    # Step 3: Run rouge evaluation
-    notebook_path = os.path.join(cwd, "eval/rouge_eval.ipynb")
-    output_notebook_path = os.path.join(
-        save_results_notebook_path, "rouge_eval_executed.ipynb"
-    )
-    execute_notebook(notebook_path, output_notebook_path)
+def load_config(config_path):
+    with open(config_path, "r") as f:
+        config = json.load(f)
+    return config
 
 
 def main():
-    cwd = os.getcwd()  # if running in docker this will be /app
-    # path to a csv containing the human labeled data. The csv should have the columns: question, expected_answer, source
+    cwd = os.getcwd()
+    # Paths
     test_data_path = os.path.join(cwd, "eval/data/test_samples_german_faq.csv")
-    save_results_path = os.path.join(cwd, "eval/results")
-    # make sure the directory exists
-    os.makedirs(save_results_path, exist_ok=True)
+    results_dir = os.path.join(cwd, "eval/results")
+    os.makedirs(results_dir, exist_ok=True)
+    llm_judge_results_path = os.path.join(results_dir, "llm_judge_results_de.csv")
 
-    save_results_notebook_path = os.path.join(cwd, "eval/results/notebooks")
-    os.makedirs(save_results_notebook_path, exist_ok=True)
-    # TODO: Make sure the data is in german. This file contains the human labeled data, chatbot answers and the llm as judge results
-    save_results_path = os.path.join(save_results_path, "llm_judge_results_de.csv")
+    # 1. Run LLM as Judge and save results
+    print("Running LLM as Judge (semantic evaluation)...")
+    # run_semantic_evaluation(llm_judge_results_path, test_data_path)
 
-    run_evaluation_pipeline(
-        save_results_path, test_data_path, save_results_notebook_path
-    )
+    # 2. Prepare config for metrics
+    config = {
+        "csv_path_de": llm_judge_results_path,
+        "csv_path_mean_bleu": os.path.join(results_dir, "mean_eval_bleu_de.csv"),
+        "csv_path_mean_rouge": os.path.join(results_dir, "mean_eval_rouge_de.csv"),
+        "csv_path_mean_bert": os.path.join(results_dir, "mean_eval_bert_score_de.csv"),
+        "output_csv_bleu": os.path.join(results_dir, "bleu_evaluation_de.csv"),
+        "output_csv_rouge": os.path.join(results_dir, "rouge_evaluation_de.csv"),
+        "output_csv_bert": os.path.join(results_dir, "bert_score_evaluation_de.csv"),
+    }
+
+    # 3. Run BLEU evaluation
+    print("Running BLEU evaluation...")
+    df_bleu = run_bleu_eval(config)
+
+    # 4. Run ROUGE evaluation
+    print("Running ROUGE evaluation...")
+    df_rouge = run_rouge_eval(config)
+
+    # 5. Run BERTScore evaluation
+    print("Running BERTScore evaluation...")
+    df_bert = run_bertscore_eval(config)
+
+    print("All metrics computed and saved.")
 
 
-main()
+if __name__ == "__main__":
+    main()

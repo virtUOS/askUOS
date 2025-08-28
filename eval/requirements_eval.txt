@@ -1,5 +1,5 @@
 sacrebleu
 nbconvert
 pandas
-sacrerouge
 bert-score
+rouge-score
