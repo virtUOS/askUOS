@@ -53,10 +53,10 @@
         },
 
         {
-            "name": "eval_main",
+            "name": "eval_generation",
             "type": "debugpy",
             "request": "launch",
-            "program": "./eval/main.py",
+            "program": "./eval_generation/main.py",
             "cwd": "${workspaceFolder}",
             "env":{ "PYTHONPATH": "/app"},
             "console": "integratedTerminal",
