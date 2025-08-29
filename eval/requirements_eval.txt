@@ -3,3 +3,4 @@ nbconvert
 pandas
 bert-score
 rouge-score
+seaborn

@@ -4,7 +4,6 @@ import os
 from eval.BERTscore_eval import run_bertscore_eval
 from eval.bleu_eval import run_bleu_eval
 from eval.LLM_as_Judge import SemanticEvaluator
-
 from eval.rouge_eval import run_rouge_eval
 
 
@@ -34,7 +33,7 @@ def main():
 
     # 2. Prepare config for metrics
     config = {
-        "csv_path_de": llm_judge_results_path,
+        "csv_path_de": llm_judge_results_path,  # contais llm judge results and bot generated answers.
         "csv_path_mean_bleu": os.path.join(results_dir, "mean_eval_bleu_de.csv"),
         "csv_path_mean_rouge": os.path.join(results_dir, "mean_eval_rouge_de.csv"),
         "csv_path_mean_bert": os.path.join(results_dir, "mean_eval_bert_score_de.csv"),
@@ -42,6 +41,11 @@ def main():
         "output_csv_rouge": os.path.join(results_dir, "rouge_evaluation_de.csv"),
         "output_csv_bert": os.path.join(results_dir, "bert_score_evaluation_de.csv"),
     }
+
+    # save paths to json file. The file will be used by notebooks
+    config_path = os.path.join(cwd, "eval/result_paths.json")
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=4)
 
     # 3. Run BLEU evaluation
     print("Running BLEU evaluation...")
