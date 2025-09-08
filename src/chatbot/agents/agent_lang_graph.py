@@ -134,7 +134,7 @@ class GraphEdgesMixin:
 
         tool_messages = state.get("tool_messages", "")
         if len(tool_messages) < 10:
-            logger.debug("[GRADE DOCUMENTS EDGE] No tool messages found")
+            logger.debug("[LANGGRAPH] GRADE DOCUMENTS EDGE: No tool messages found")
             return "rewrite"
 
         tool_query = " ".join(state["search_query"])
@@ -172,7 +172,7 @@ class GraphEdgesMixin:
                 # TODO Further process the relevant paragraphs
                 # self._clean_tool_message = scored_result.relevant_paragraphs
                 logger.debug(
-                    f"[GRADE DOCUMENTS EDGE] DECISION: DOCS RELEVANT. Reason: {scored_result.reason}"
+                    f"[LANGGRAPH][GRADE DOCUMENTS EDGE] DECISION: DOCS RELEVANT. Reason: {scored_result.reason}"
                 )
                 if state.get("teaching_degree", False):
                     return "generate_teaching_degree_node"
@@ -184,12 +184,12 @@ class GraphEdgesMixin:
 
             else:
                 logger.debug(
-                    f"[GRADE DOCUMENTS EDGE] DECISION: DOCS NOT RELEVANT. Reason: {scored_result.reason}"
+                    f"[LANGGRAPH][GRADE DOCUMENTS EDGE] DECISION: DOCS NOT RELEVANT. Reason: {scored_result.reason}"
                 )
                 return "rewrite"
         except Exception as e:
             logger.error(
-                f"[GRADE DOCUMENTS EDGE] Error occurred while grading documents: {e}"
+                f"[LANGGRAPH][GRADE DOCUMENTS EDGE] Error occurred while grading documents: {e}"
             )
             raise e
 
@@ -315,7 +315,7 @@ class GraphNodesMixin:
             Dict: Updated state with judgement result
         """
 
-        logger.debug("[JUDGE NODE] Evaluating agent's decision to use tools")
+        logger.debug("[LANGGRAPH][JUDGE NODE] Evaluating agent's decision to use tools")
 
         class JudgementResult(BaseModel):
             """Result of agent's tool usage judgement."""
@@ -363,7 +363,7 @@ class GraphNodesMixin:
         if score.judgement_binary.lower() == "no":
             msg = [HumanMessage(content=translate_prompt()["use_tool_msg"])]
             logger.debug(
-                f"[JUGE NODE] The agent should have used a tool. Reason: {score.reason}"
+                f"[LANGGRAPH][JUGE NODE] The agent should have used a tool. Reason: {score.reason}"
             )
             return {
                 "messages": state["messages"] + msg,
@@ -429,11 +429,11 @@ class GraphNodesMixin:
                         tool_call["args"]
                     )
                 logger.debug(
-                    f'[TOOL NODE] Successfully executed tool call:{tool_call["name"]}. Length of tool_resul: {len(tool_call)}'
+                    f'[LANGGRAPH][TOOL NODE] Successfully executed tool call:{tool_call["name"]}. Length of tool_resul: {len(tool_call)}'
                 )
             except Exception as e:
                 logger.exception(
-                    f"Error invoking tool: {tool_call['name']} with args: tool_call['args']: {e}"
+                    f"[LANGGRAPH]Error invoking tool: {tool_call['name']} with args: tool_call['args']: {e}"
                 )
                 raise e
 
@@ -523,7 +523,7 @@ class GraphNodesMixin:
             response = self._llm.invoke(list(message_deque))
         else:
             logger.warning(
-                "No messages history found. Using system message only for generation."
+                "[LANGGRAPH] No messages history found. Using system message only for generation."
             )
             response = self._llm.invoke([system_message_generate])
         return {"messages": messages_history + [response]}
@@ -537,7 +537,7 @@ class GraphNodesMixin:
         Returns:
             Dict: Updated state with generated response
         """
-        logger.debug("[GENERATE NODE] Generating answer")
+        logger.debug("[LANGGRAPH][GENERATE NODE] Generating answer")
 
         # tool_message = self._clean_tool_message or state.get("tool_messages", None)
         tool_message = state.get("tool_messages", None)
@@ -553,7 +553,7 @@ class GraphNodesMixin:
 
     def generate_application(self, state: State) -> Dict:
 
-        logger.debug(["GENERATE APPLICATION NODE] Generating answer"])
+        logger.debug(["[LANGGRAPH][GENERATE APPLICATION NODE] Generating answer"])
         # tool_message = self._clean_tool_message or state.get("tool_messages", None)
         tool_message = state.get("tool_messages", None)
         system_message_generate = SystemMessage(
@@ -575,7 +575,7 @@ class GraphNodesMixin:
         Returns:
             Dict: Updated state with generated response
         """
-        logger.debug("[GENERATE TEACHING DEGREE NODE] Generating answer")
+        logger.debug("[LANGGRAPH][GENERATE TEACHING DEGREE NODE] Generating answer")
         # tool_message = self._clean_tool_message or state.get("tool_messages", None)
         tool_message = state.get("tool_messages", None)
         system_message_generate = SystemMessage(
@@ -593,7 +593,7 @@ class GraphNodesMixin:
     def juge_answer(self, state: State) -> Dict:
         """Judge the generated answer."""
 
-        logger.debug("[JUDGE ANSWER NODE] Judging the answer")
+        logger.debug("[LANGGRAPH][JUDGE ANSWER NODE] Judging the answer")
 
         class JudgeAnswerResult(BaseModel):
             """Result of answer judgement."""
@@ -720,7 +720,9 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
     def shorten_conversation_summary(self, summary: str) -> str:
         """Shorten the conversation summary if it exceeds the maximum token limit."""
 
-        logger.warning(f"[SHORTEN CONVERSATION SUMMARY] Summary length: {len(summary)}")
+        logger.warning(
+            f"[LANGGRAPH][SHORTEN CONVERSATION SUMMARY] Summary length: {len(summary)}"
+        )
         template = translate_prompt()["shorten_conversation_summary"]
 
         prompt = PromptTemplate(template=template, input_variables=["summary"])
@@ -879,7 +881,9 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             return response["messages"][-1].content
 
         except Exception as e:
-            logger.exception(f"An error occurred while generating response: {e}")
+            logger.exception(
+                f"[LANGGRAPH] An error occurred while generating response: {e}"
+            )
             return {
                 "output": "An error has occurred while trying to connect to the data source or APIs. Please try asking the question again."
             }

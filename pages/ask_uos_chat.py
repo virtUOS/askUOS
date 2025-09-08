@@ -92,7 +92,7 @@ class ChatApp:
     def get_history(self, user_id: str) -> LimitedRedisChatMessageHistory:
         validated_user_id = self._validate_user_id(user_id)
         if not validated_user_id:
-            logger.warning(f"Invalid user_id attempted: {user_id!r}")
+            logger.warning(f"[AUTH] Invalid user_id attempted: {user_id!r}")
             st.warning(
                 "Invalid session. Please refresh the page or clear your browser cookies."
             )
@@ -105,7 +105,7 @@ class ChatApp:
             )
             return history
         except Exception as e:
-            logger.error(f"Error retrieving chat history for user: {e}")
+            logger.error(f"[REDIS] Error retrieving chat history for user: {e}")
             st.warning(
                 "There was an error while loading previous messages. If this issue persists, try using a different browser or contact support."
             )
@@ -255,7 +255,7 @@ class ChatApp:
 
             else:
                 logger.error(
-                    f"Unknown message type: {m.type}. Expected one of {ROLES}."
+                    f"[LANGGRAPH] Unknown message type: {m.type}. Expected one of {ROLES}."
                 )
 
     def handle_user_input(self):
@@ -449,7 +449,7 @@ class ChatApp:
 
             except GraphRecursionError as e:
                 # TODO handle recursion limit error
-                logger.exception(f"Recursion Limit reached: {e}")
+                logger.exception(f"[LANGGRAPH] Recursion Limit reached: {e}")
                 response = session_state["_"](
                     "I'm sorry, but I couldn't find enough information to fully answer your question. Could you please try rephrasing your query and ask again?"
                 )
@@ -478,7 +478,6 @@ class ChatApp:
 
         with st.chat_message(ROLES[0], avatar="./static/Icon-chatbot.svg"):
             with st.spinner(session_state["_"]("Generating response...")):
-                logger.info(f"User's query: {prompt}")
 
                 start_time = time.time()
                 settings.time_request_sent = start_time
@@ -492,7 +491,7 @@ class ChatApp:
                 time_taken = end_time - start_time
                 session_state["time_taken"] = time_taken
                 logger.info(
-                    f"Time taken to serve whole answer to the user: {time_taken} seconds"
+                    f"[METRICS]Time taken to serve whole answer to the user: {time_taken} seconds"
                 )
 
                 self.store_response(response, prompt, graph)
@@ -570,6 +569,11 @@ class ChatApp:
         #         "avatar": "./static/Icon-chatbot.svg",
         #     }
         # )
+
+        # Log user query and bot answer
+        logger.info(f"[USERQUERY] User's query: {prompt}")
+        logger.info(f"[BOTANSWER] Assistant's response: {output}")
+
         st.session_state.user_query = prompt
 
         # summarize the conversation
@@ -725,7 +729,7 @@ class ChatApp:
             try:
                 st.markdown(msg.format(selected + 1))
             except Exception as e:
-                logger.error(f"Error displaying feedback message: {e}")
+                logger.error(f"[FEEDBACK] Error displaying feedback message: {e}")
 
     def ask_further_feedback(self):
         if (
@@ -787,7 +791,7 @@ class ChatApp:
                 feedback["response"] = st.session_state.messages[-1].content
                 feedback["time_taken"] = session_state.time_taken
 
-                logger.info(f"Feedback= {feedback}")
+                logger.info(f"[FEEDBACK] Feedback= {feedback}")
                 session_state.feedback_saved = True
 
     @st.dialog("ask.UOS")

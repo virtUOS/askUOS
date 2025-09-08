@@ -134,13 +134,13 @@ def extract_cached_content(cached_content):
     try:
         return ast.literal_eval(cached_content)
     except Exception as e:
-        logger.exception(f"Could not extract cached content: {e}")
+        logger.exception(f"[CACHE] Could not extract cached content: {e}")
         return None
 
 
 async def generate_summary(text: str, query: str) -> str:
     """Generate a summary of the provided text."""
-    logger.info(f"Summarizing content, query: {query}")
+    logger.info(f"[LMM-OPERATION] Summarizing content, query: {query}")
 
     chunk_size = (settings.model.context_window * 4) // 2
     text_splitter = RecursiveCharacterTextSplitter(
@@ -230,7 +230,7 @@ async def get_web_content(
             return result_url, result_content
 
     except Exception as e:
-        logger.exception(f"Error while crawling the URL: {url}", exc_info=True)
+        logger.exception(f"[CRAWL] Error while crawling the URL: {url}", exc_info=True)
         return result_url, result_content
     finally:
         # Cache the result
@@ -240,7 +240,7 @@ async def get_web_content(
                 await client.setex(cache_key, TTL, cache_value)
             except Exception as e:
                 logger.exception(
-                    f"Error while caching content for URL: {url}", exc_info=True
+                    f"[REDIS] Error while caching content for URL: {url}", exc_info=True
                 )
 
 
@@ -277,11 +277,11 @@ async def visit_urls_extract(
             if int(total_results) > 0:
                 links_search = [item["link"] for item in dict_response["items"]]
                 logger.debug(
-                    f"[ProgrammableSearch] Search Engine returned {len(links_search)} results (links)"
+                    f"[SEARCH] Search Engine returned {len(links_search)} results (links)"
                 )
             else:
                 logger.warning(
-                    f"[ProgrammableSearch] No results found by the search engine while requesting this URL: {url}"
+                    f"[SEARCH] No results found by the search engine while requesting this URL: {url}"
                 )
                 return [], []
 
@@ -312,7 +312,7 @@ async def visit_urls_extract(
             if result_content:
                 if len(result_content) < 20:
                     logger.warning(
-                        f"[Crawling] The URL content could not be extracted. Make sure the content is contained in current target elements: {target_elements}. URL: {url}"
+                        f"[CRAWL] The URL content could not be extracted. Make sure the content is contained in current target elements: {target_elements}. URL: {url}"
                     )
                     continue
                 contents.append(
@@ -379,8 +379,10 @@ async def async_search(client, **kwargs) -> Tuple[str, List]:
             final_output_tokens, final_search_tokens = compute_tokens(
                 final_output, query, agent_executor
             )
-            logger.info(f"Search tokens: {final_search_tokens}")
-            logger.info(f"Final output (search + prompt): {final_output_tokens}")
+            logger.info(f"[SEARCH] Search tokens: {final_search_tokens}")
+            logger.info(
+                f"[SEARCH] Final output (search + prompt): {final_output_tokens}"
+            )
 
             # Cache results
             if len(final_output) > 20:
@@ -390,13 +392,13 @@ async def async_search(client, **kwargs) -> Tuple[str, List]:
         return (final_output, visited_urls) if contents else ([], [])
 
     except ProgrammableSearchException as e:
-        logger.exception(f"Error: search engine: {e}", exc_info=True)
+        logger.exception(f"[SEARCH] Error: search engine: {e}", exc_info=True)
         raise ProgrammableSearchException(
             f"Failed: Programmable Search Engine. Status: {e}"
         )
 
     except Exception as e:
-        logger.exception(f"Error while searching the web: {e}", exc_info=True)
+        logger.exception(f"[SEARCH] Error while searching the web: {e}", exc_info=True)
         return [], []
 
 
@@ -410,7 +412,7 @@ def search_uni_web(**kwargs) -> Tuple[str, List]:
         try:
             loop = asyncio.get_running_loop()
             nest_asyncio.apply()
-            logger.debug("Running within an existing event loop")
+            logger.debug("[SYSTEM] Running within an existing event loop")
             client = redis.Redis(host="redis", port=6379, decode_responses=True)
             return asyncio.run_coroutine_threadsafe(
                 async_search(client, **kwargs), loop
@@ -426,7 +428,7 @@ def search_uni_web(**kwargs) -> Tuple[str, List]:
 
             return asyncio.run(complete_search_flow())
     except Exception as e:
-        logger.exception(f"Error in search execution: {str(e)}")
+        logger.exception(f"[SEARCH] Error in search execution: {str(e)}")
         return [], []
 
     # try:
