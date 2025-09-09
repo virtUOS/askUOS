@@ -1,0 +1,19 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: chatbot-logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: ask_uos_logs  # This is the name that will appear in Grafana
+          instance: app_instance_1
+          __path__: /var/log/*.log
