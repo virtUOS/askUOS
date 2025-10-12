@@ -1,7 +1,6 @@
 import os
 from typing import List, NamedTuple
 
-from src.chatbot.db.milvus_client import MilvusSingleton
 from src.chatbot.db.ragflow_client import RAGFlowSingleton
 from src.chatbot.embeddings.main import get_embeddings
 from src.chatbot_log.chatbot_logger import logger
@@ -43,6 +42,8 @@ def retrieve_from_infinity_ragflow(collection_name: str, query: str):
 
 
 def retrieve_from_milvus(collection_name: str, query: str, doc_search_params: dict):
+
+    from src.chatbot.db.milvus_client import MilvusSingleton
 
     search_params = {
         "metric_type": "L2",
