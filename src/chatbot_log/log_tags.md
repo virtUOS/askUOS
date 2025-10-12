@@ -17,6 +17,7 @@
 - CONFIG: Configuration changes
 - SYSTEM: System-level events
 - CACHE: Caching operations
+- VECTOR DB
 
 
 ## Example Usage

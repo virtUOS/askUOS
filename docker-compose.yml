@@ -1,7 +1,7 @@
 networks:
   default:
     name: botnet
-    # external: true
+    external: true
     
 services:
   app:
@@ -11,6 +11,7 @@ services:
     env_file:
       - .env.dev
     volumes:
+      - logs:/app/logs
       - .:/app
       - sqlite-data:/root/.crawl4ai
       - fastembed:/tmp/fastembed_cache/
@@ -27,6 +28,19 @@ services:
       start_period: 30s  # wait for 30 seconds before starting health checks
 
 
+  promtail:
+    image: grafana/promtail:3.2.1
+    container_name: promtail
+    volumes:
+      - ./promtail-config.yaml:/etc/promtail/config.yaml
+      - logs:/var/log
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yaml
+    restart: unless-stopped
+    networks:
+      - default
+  
   redis:
     container_name: ask_uos_redis
     image: redis:latest
@@ -100,6 +114,7 @@ services:
   
 volumes:
   sqlite-data:
+  logs:
   fastembed:
   redis-data:
 
