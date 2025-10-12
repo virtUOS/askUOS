@@ -53,6 +53,17 @@
         },
 
         {
+            "name": "eval_generation",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./eval_generation/main.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+        {
             "name": "topic_adherence_db",
             "type": "debugpy",
             "request": "launch",

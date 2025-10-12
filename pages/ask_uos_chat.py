@@ -31,6 +31,8 @@ ROLES = ("ai", "human")
 from redisvl.query import CountQuery, FilterQuery, TextQuery  # type: ignore
 from redisvl.query.filter import Tag  # type: ignore
 
+# TODO : Remove all the display references logic once streamlit integrates pull request  Fix st.chat_input collapse after submit #12081
+
 
 class LimitedRedisChatMessageHistory(RedisChatMessageHistory):
 
@@ -90,7 +92,7 @@ class ChatApp:
     def get_history(self, user_id: str) -> LimitedRedisChatMessageHistory:
         validated_user_id = self._validate_user_id(user_id)
         if not validated_user_id:
-            logger.warning(f"Invalid user_id attempted: {user_id!r}")
+            logger.warning(f"[AUTH] Invalid user_id attempted: {user_id!r}")
             st.warning(
                 "Invalid session. Please refresh the page or clear your browser cookies."
             )
@@ -103,7 +105,7 @@ class ChatApp:
             )
             return history
         except Exception as e:
-            logger.error(f"Error retrieving chat history for user: {e}")
+            logger.error(f"[REDIS] Error retrieving chat history for user: {e}")
             st.warning(
                 "There was an error while loading previous messages. If this issue persists, try using a different browser or contact support."
             )
@@ -207,8 +209,20 @@ class ChatApp:
         st.session_state["messages"] = []
         # all messages from the history, see ROLES
         messages = history.messages
+        num_msgs = len(messages)
+        exist_references = bool(
+            st.session_state.get("visited_docs")
+            or st.session_state.get("visited_links")
+        )
 
-        for m in messages:
+        def display_references():
+            """Display references if they exist."""
+            if st.session_state.get("visited_links", None):
+                self.display_visited_links()
+            elif st.session_state.get("visited_docs", None):
+                self.display_visited_docs()
+
+        for idx, m in enumerate(messages):
             role = m.type
             if role == ROLES[1]:  # "human"
                 st.session_state["messages"].append(m)
@@ -223,11 +237,25 @@ class ChatApp:
                 else:
                     st.session_state["messages"].append(m)
                     with st.chat_message(role, avatar=ASSISTANT_AVATAR):
+
+                        if exist_references:
+                            if idx == num_msgs - 1:
+                                st.markdown(m.content)
+                                display_references()
+                                # since this is the last message; break the loop
+                                break
+                            # the only way two ai msg are consecutive is if the last message is a summary
+                            if idx == num_msgs - 2:
+                                if messages[idx + 1].type == ROLES[0]:
+                                    st.markdown(m.content)
+                                    display_references()
+                                    continue
+
                         st.write(m.content)
 
             else:
                 logger.error(
-                    f"Unknown message type: {m.type}. Expected one of {ROLES}."
+                    f"[LANGGRAPH] Unknown message type: {m.type}. Expected one of {ROLES}."
                 )
 
     def handle_user_input(self):
@@ -236,7 +264,11 @@ class ChatApp:
         user_id = self.get_user_id()
         history = self.get_history(user_id)
 
-        if prompt := st.chat_input(placeholder=session_state["_"]("Message")):
+        if prompt := st.chat_input(
+            placeholder=session_state["_"]("Message"),
+            key=f"chat_input_{st.session_state.input_key_counter}",
+        ):
+
             if not session_state.feedback_saved:
                 self.log_feedback()
             st.session_state.feedback_saved = False
@@ -253,6 +285,9 @@ class ChatApp:
 
             if history.messages[-1].type != ROLES[0]:  # "ai"
                 self.generate_response(prompt)
+
+            st.session_state.input_key_counter += 1
+            st.rerun()  # Rerun to update the chat messages and input field
 
     def get_agent(self):
         if st.session_state["agent"] is None:
@@ -414,7 +449,7 @@ class ChatApp:
 
             except GraphRecursionError as e:
                 # TODO handle recursion limit error
-                logger.exception(f"Recursion Limit reached: {e}")
+                logger.exception(f"[LANGGRAPH] Recursion Limit reached: {e}")
                 response = session_state["_"](
                     "I'm sorry, but I couldn't find enough information to fully answer your question. Could you please try rephrasing your query and ask again?"
                 )
@@ -443,7 +478,6 @@ class ChatApp:
 
         with st.chat_message(ROLES[0], avatar="./static/Icon-chatbot.svg"):
             with st.spinner(session_state["_"]("Generating response...")):
-                logger.info(f"User's query: {prompt}")
 
                 start_time = time.time()
                 settings.time_request_sent = start_time
@@ -457,23 +491,27 @@ class ChatApp:
                 time_taken = end_time - start_time
                 session_state["time_taken"] = time_taken
                 logger.info(
-                    f"Time taken to serve whole answer to the user: {time_taken} seconds"
+                    f"[METRICS]Time taken to serve whole answer to the user: {time_taken} seconds"
                 )
 
                 self.store_response(response, prompt, graph)
                 if graph._visited_docs():
-                    self.display_visited_docs()
+                    st.session_state["visited_docs"] = (
+                        graph._visited_docs.format_references()
+                    )
+                    graph._visited_docs.clear()
+                    # self.display_visited_docs()
 
                 if graph._visited_links:
-                    self.display_visited_links()
-
-            # self.store_response(response, prompt)
+                    st.session_state["visited_links"] = graph._visited_links
+                    # self.display_visited_links()
 
     def display_visited_docs(self):
         """Display the documents visited for the current user query."""
 
-        graph = self.get_agent()
-        references = graph._visited_docs.format_references()
+        # graph = self.get_agent()
+        # references = graph._visited_docs.format_references()
+        references = st.session_state["visited_docs"]
         reference_examination_regulations = "https://www.uni-osnabrueck.de/studium/im-studium/zugangs-zulassungs-und-pruefungsordnungen/"
         reference_fagflow = None
         message = session_state["_"](
@@ -520,9 +558,8 @@ class ChatApp:
     def display_visited_links(self):
         """Display the links visited for the current user query."""
 
-        graph = self.get_agent()
         with st.expander(session_state["_"]("Sources")):
-            for link in graph._visited_links:
+            for link in st.session_state["visited_links"]:
                 st.markdown(
                     f"""
 
@@ -533,6 +570,7 @@ class ChatApp:
                         """,
                     unsafe_allow_html=True,
                 )
+        st.session_state["visited_links"] = None
 
     def store_response(
         self,
@@ -555,6 +593,11 @@ class ChatApp:
         #         "avatar": "./static/Icon-chatbot.svg",
         #     }
         # )
+
+        # Log user query and bot answer
+        logger.info(f"[USERQUERY] User's query: {prompt}")
+        logger.info(f"[BOTANSWER] Assistant's response: {output}")
+
         st.session_state.user_query = prompt
 
         # summarize the conversation
@@ -710,7 +753,7 @@ class ChatApp:
             try:
                 st.markdown(msg.format(selected + 1))
             except Exception as e:
-                logger.error(f"Error displaying feedback message: {e}")
+                logger.error(f"[FEEDBACK] Error displaying feedback message: {e}")
 
     def ask_further_feedback(self):
         if (
@@ -772,7 +815,7 @@ class ChatApp:
                 feedback["response"] = st.session_state.messages[-1].content
                 feedback["time_taken"] = session_state.time_taken
 
-                logger.info(f"Feedback= {feedback}")
+                logger.info(f"[FEEDBACK] Feedback= {feedback}")
                 session_state.feedback_saved = True
 
     @st.dialog("ask.UOS")
@@ -818,7 +861,8 @@ class ChatApp:
 
     def run(self):
         """Main method to run the application logic."""
-        st.title("ask.UOS")
+        with st.container(key="page-header-container"):
+            st.title("ask.UOS")
         initialize_session_sate()
         RemoveEmptyElementContainer()
         # Get or create user ID using our method

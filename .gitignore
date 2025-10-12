@@ -166,7 +166,7 @@ logs/
 db.png
 
 # Notebooks
-*.ipynb
+#*.ipynb
 
 # Mac
 .DS_Store
