@@ -77,11 +77,14 @@ class ReferenceRetriever:
         """
         references = {}
 
-        for source, page, doc_id in self.docs_references:
-            if source not in references:
-                references[source] = {"page": {page}, "doc_id": doc_id}
+        for item_ref in self.docs_references:
+            if item_ref.source not in references:
+                references[item_ref.source] = {
+                    "page": {item_ref.page},
+                    "doc_id": item_ref.doc_id,
+                }
             else:
-                references[source]["page"].add(page)
+                references[item_ref.source]["page"].add(item_ref.page)
 
         return references
 

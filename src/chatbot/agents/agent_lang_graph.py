@@ -434,8 +434,11 @@ class GraphNodesMixin:
                     f'[LANGGRAPH][TOOL NODE] Successfully executed tool call:{tool_call["name"]}. Length of tool_resul: {len(tool_call)}'
                 )
                 # TODO this can be async in parallel with the prevrious tool calls
-                # TODO: This should be implemented with Milvus
-                if state.get("rewrite_query", False):
+                # TODO: FAQ support only available in RAGFLOW. Needs to be done with Milvus
+                if (
+                    state.get("rewrite_query", False)
+                    and settings.vector_db_settings.type == "Infinity-RAGFlow"
+                ):
                     # if the agent is in the rewrite state, try to find answer in FAQs
                     tool_result_faq = retrieve_from_infinity_ragflow(
                         FAQ_DB_NAME, tool_call["args"].get("query")

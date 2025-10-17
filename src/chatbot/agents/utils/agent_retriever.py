@@ -67,7 +67,7 @@ def retrieve_from_milvus(collection_name: str, query: str, doc_search_params: di
         loaded = milvus_client.client.get_load_state(collection_name=collection_name)
         if loaded["state"].name != "Loaded":
             logger.warning(
-                f"[VECTOR DB]Collection {collection_name} is not loaded. Current state: {loaded}"
+                f"[VECTOR DB][MILVUS]Collection {collection_name} is not loaded. Current state: {loaded}"
             )
 
         # get query vector
@@ -81,7 +81,7 @@ def retrieve_from_milvus(collection_name: str, query: str, doc_search_params: di
         )
         return docs
     except Exception as e:
-        logger.error(f"[VECTOR DB]Error during similarity search: {e}")
+        logger.error(f"[VECTOR DB][MILVUS]Error during similarity search: {e}")
         raise e
 
 

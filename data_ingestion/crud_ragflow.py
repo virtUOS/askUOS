@@ -82,6 +82,10 @@ def insert_metadata_ragflow(
                 headers=headers,
                 json={"meta_fields": post.metadata},
             )
+            if r.status_code != 200:
+                print(f"Error updating metadata for {file_name}: {r.text}")
+            else:
+                print(f"Metadata updated for {file_name}")
 
 
 def main():
@@ -89,9 +93,10 @@ def main():
     # directory = "/app/data/documents"
     # db_name = "examination_regulations_graph"
     db_name = "faq_md"
-    upload_files_ragflow(directory, db_name, save_metadata=True)
+    # upload_files_ragflow(directory, db_name, save_metadata=True)
+    # print(f"Files from {directory} uploaded to RAGFlow database '{db_name}'.")
     insert_metadata_ragflow(directory, db_name)
-    print(f"Files from {directory} uploaded to RAGFlow database '{db_name}'.")
+    print("Files updated")
 
 
 if __name__ == "__main__":
