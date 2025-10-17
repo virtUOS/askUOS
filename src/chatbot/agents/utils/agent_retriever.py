@@ -19,8 +19,10 @@ VECTOR_DB_TYPE = settings.vector_db_settings.type
 
 class Reference(NamedTuple):
     source: str
-    page: int
+    page: int | None = None
     doc_id: str | None = None
+    # TODO Delete once metadata is added to RAGFlow API
+    url_reference_askuos: str | None = None
 
 
 def retrieve_from_infinity_ragflow(collection_name: str, query: str):
@@ -29,12 +31,19 @@ def retrieve_from_infinity_ragflow(collection_name: str, query: str):
     try:
 
         ragflow_client = RAGFlowSingleton()
-        chunks = ragflow_client.get_chunks(query, collection_name)
-        for chunk in chunks:
-            source = chunk.document_keyword
-            page = chunk.page
-            ref.append(Reference(source, page, chunk.document_id))
-            results.append(f"Source: {source} \nText: {chunk.content}")
+        retrieved = ragflow_client.get_chunks(query, collection_name)
+        for retrieved_item in retrieved:
+            source = retrieved_item.chunk.document_keyword
+            page = retrieved_item.chunk.page
+            ref.append(
+                Reference(
+                    source,
+                    page,
+                    retrieved_item.chunk.document_id,
+                    retrieved_item.chunk.url_reference_askuos,
+                )
+            )
+            results.append(f"Source: {source} \nText: {retrieved_item.chunk.content}")
         return DOCUMENT_SEPARATOR.join(results), ref
     except Exception as e:
         logger.error(f"[RAGFlow]Error during similarity search: {e}")

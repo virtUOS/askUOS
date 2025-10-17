@@ -18,6 +18,7 @@
 - SYSTEM: System-level events
 - CACHE: Caching operations
 - VECTOR DB
+- RAGFlow
 
 
 ## Example Usage

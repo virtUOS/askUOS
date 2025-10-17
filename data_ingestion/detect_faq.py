@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SITE_MAP = "/app/data_ingestion/sitemap.xml"
+
 OUTPUT_DIR = "/app/data_ingestion/faqs_output_md"
 MODEL_NAME = "google/gemma-3-27b-it"
 TARGET_ELEMENTS = ["main", "div#content"]
@@ -42,12 +42,10 @@ class FAQDetectorConfig:
 
     def __init__(
         self,
-        sitemap_path: str = SITE_MAP,
         output_dir: str = OUTPUT_DIR,
         target_elements: List[str] = None,
         model_name: str = MODEL_NAME,
     ):
-        self.sitemap_path = sitemap_path
         self.output_dir = Path(output_dir)
         self.target_elements = target_elements or TARGET_ELEMENTS
         self.model_name = model_name
@@ -116,10 +114,21 @@ class FAQDetector:
             input_variables=["content"],
         )
 
-    def extract_urls_from_sitemap(self) -> List[str]:
+    def extract_urls_from_txt_file(self, file_path: str) -> List[str]:
+        """Extract URLs from a text file."""
+        try:
+            with open(file_path, "r") as f:
+                urls = [line.strip() for line in f if line.strip()]
+            logger.info(f"Extracted {len(urls)} URLs from text file")
+            return urls
+        except Exception as e:
+            logger.error(f"Error extracting URLs from text file: {e}")
+            return []
+
+    def extract_urls_from_sitemap(self, sitemap_path: str) -> List[str]:
         """Extract URLs from a sitemap XML file."""
         try:
-            tree = ET.parse(self.config.sitemap_path)
+            tree = ET.parse(sitemap_path)
             root = tree.getroot()
             ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
             urls = [loc.text for loc in root.findall(".//sm:loc", ns)]
@@ -134,12 +143,12 @@ class FAQDetector:
         try:
             async with AsyncWebCrawler(config=self.browser_config) as crawler:
                 result = await crawler.arun(url=url, config=self.run_config)
-                return result.markdown
+                return result
         except Exception as e:
             logger.error(f"Error crawling URL {url}: {e}")
             return None
 
-    def save_faq_content(self, content: str, url: str) -> None:
+    def save_faq_content(self, content: CrawlResult, url: str) -> None:
         """Save FAQ content to a Markdown file."""
         try:
             parsed = urlparse(url)
@@ -154,7 +163,16 @@ class FAQDetector:
             output_file = self.config.output_dir / f"{filename}.md"
 
             with open(output_file, "w", encoding="utf-8") as f:
-                f.write(f"### Frequently Asked Questions. Source: {url}\n\n{content}")
+                f.write(
+                    f"""
+---
+title: "{content.metadata['title'] or 'FAQ Page'}"
+url: "{url}"
+---
+
+### {content.metadata['title'] or 'FAQ Page'}. Source: {url}\n\n{content.markdown}
+"""
+                )
 
             logger.info(f"FAQ content saved to {output_file}")
         except Exception as e:
@@ -188,9 +206,15 @@ class FAQDetector:
             with open(base_path / "failed_urls.txt", "w") as f:
                 f.write("\n".join(failed_urls))
 
-    async def process_urls(self) -> Tuple[List[str], List[str], List[str]]:
+    async def process_urls(
+        self, url_source, url_source_path, classify_content
+    ) -> Tuple[List[str], List[str], List[str]]:
         """Process all URLs from sitemap and classify them."""
-        urls = self.extract_urls_from_sitemap()
+
+        if url_source == "txt":
+            urls = self.extract_urls_from_txt_file(url_source_path)
+        else:
+            urls = self.extract_urls_from_sitemap(url_source_path)
         if not urls:
             logger.warning("No URLs found in sitemap")
             return [], [], []
@@ -210,49 +234,72 @@ class FAQDetector:
 
             # Crawl the URL
             content = await self.crawl_url(url)
-            if content is None:
+            if content.markdown is None:
                 failed_urls.append(url)
                 progress_bar.set_postfix_str(
                     f"Failed: {url[:50]}{'...' if len(url) > 50 else ''}"
                 )
                 continue
 
-            # Classify the content
-            response = self.classify_content(content)
-            if response is None:
-                failed_urls.append(url)
-                progress_bar.set_postfix_str(
-                    f"Classification failed: {url[:50]}{'...' if len(url) > 50 else ''}"
-                )
-                continue
+            if classify_content:
+                # Classify the content
+                response = self.classify_content(content.markdown)
+                if response is None:
+                    failed_urls.append(url)
+                    progress_bar.set_postfix_str(
+                        f"Classification failed: {url[:50]}{'...' if len(url) > 50 else ''}"
+                    )
+                    continue
 
-            # Categorize based on classification
-            if response.is_faq.lower() == "yes":
+                # Categorize based on classification
+                if response.is_faq.lower() == "yes":
+                    faq_urls.append(url)
+                    self.save_faq_content(content, url)
+                    logger.info(f"FAQ page detected: {url}. Reason: {response.reason}")
+                    progress_bar.set_postfix_str(
+                        f"FAQ found: {url[:50]}{'...' if len(url) > 50 else ''}"
+                    )
+                else:
+                    not_faq_urls.append(url)
+                    progress_bar.set_postfix_str(
+                        f"Not FAQ: {url[:50]}{'...' if len(url) > 50 else ''}"
+                    )
+            else:
+                # If not classifying, just save all crawled content as FAQ
                 faq_urls.append(url)
                 self.save_faq_content(content, url)
-                logger.info(f"FAQ page detected: {url}. Reason: {response.reason}")
+                logger.info(f"FAQ page saved without classification: {url}")
                 progress_bar.set_postfix_str(
-                    f"FAQ found: {url[:50]}{'...' if len(url) > 50 else ''}"
+                    f"Saved as FAQ: {url[:50]}{'...' if len(url) > 50 else ''}"
                 )
-            else:
-                not_faq_urls.append(url)
-                progress_bar.set_postfix_str(
-                    f"Not FAQ: {url[:50]}{'...' if len(url) > 50 else ''}"
-                )
-
         # Close progress bar
         progress_bar.close()
 
         return faq_urls, not_faq_urls, failed_urls
 
-    async def run(self) -> None:
-        """Main method to run the FAQ detection process."""
+    async def run(
+        self,
+        url_source: Literal["sitemap", "txt"],
+        url_source_path: str,
+        save_results: bool = True,
+        classify_content: bool = True,
+    ) -> None:
+        """Main method to run the FAQ detection process.
+        Args:
+            url_source: Source type, either 'sitemap' or 'txt'.
+            url_source_path: Path to the sitemap XML file or text file with URLs.
+            save_results: Whether to save the categorized URL lists to files.
+            classify_content: Whether to classify content using LLM. If False, all crawled pages are saved as FAQ.
+        """
         logger.info("Starting FAQ detection process")
 
-        faq_urls, not_faq_urls, failed_urls = await self.process_urls()
+        faq_urls, not_faq_urls, failed_urls = await self.process_urls(
+            url_source, url_source_path, classify_content
+        )
 
-        # Save results
-        self.save_url_lists(faq_urls, not_faq_urls, failed_urls)
+        if save_results:
+            # Save results
+            self.save_url_lists(faq_urls, not_faq_urls, failed_urls)
 
         # Log summary
         logger.info(f"FAQ detection completed:")
@@ -270,7 +317,13 @@ async def main():
     """Main function to run the FAQ detector."""
     config = FAQDetectorConfig()
     detector = FAQDetector(config)
-    await detector.run()
+    # url_source_path = "/app/data_ingestion/sitemap.xml"
+    # url_source_path = "/app/data_ingestion/sitemap-uos-faq_AI_VERIFIED.xml"
+    url_source = "txt"  # Change to "sitemap" to use sitemap.xml
+    url_source_path = "/app/data_ingestion/faq_urls_judge_llm.txt"  # Path
+    await detector.run(
+        url_source, url_source_path, save_results=False, classify_content=False
+    )  # change to True to save a report of the results. Set classify_content to False to skip LLM classification and save all crawled pages as FAQ.
 
 
 if __name__ == "__main__":

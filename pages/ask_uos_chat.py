@@ -553,7 +553,8 @@ class ChatApp:
         #     # TODO: Remove page numbers, these are wrong. Temporary
         #     # st.markdown(f"- **{key}**,  **{page_label}**: {page_list}")
         #     st.markdown(f"- **{key}**")
-        graph._visited_docs.clear()
+        # graph._visited_docs.clear()
+        st.session_state["visited_docs"] = None
 
     def display_visited_links(self):
         """Display the links visited for the current user query."""

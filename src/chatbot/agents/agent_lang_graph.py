@@ -434,12 +434,18 @@ class GraphNodesMixin:
                     f'[LANGGRAPH][TOOL NODE] Successfully executed tool call:{tool_call["name"]}. Length of tool_resul: {len(tool_call)}'
                 )
                 # TODO this can be async in parallel with the prevrious tool calls
+                # TODO: This should be implemented with Milvus
                 if state.get("rewrite_query", False):
                     # if the agent is in the rewrite state, try to find answer in FAQs
                     tool_result_faq = retrieve_from_infinity_ragflow(
                         FAQ_DB_NAME, tool_call["args"].get("query")
                     )
                     tool_result = f"{tool_result_faq[0]} \n {tool_result}"  # the text of the document
+                    # extract references
+                    unique_refs = {
+                        item.url_reference_askuos for item in tool_result_faq[1]
+                    }
+                    self._visited_links += list(unique_refs)
 
             except Exception as e:
                 logger.exception(
