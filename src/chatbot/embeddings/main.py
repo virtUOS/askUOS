@@ -10,7 +10,7 @@ from src.config.models import EmbeddingType
 def get_embeddings(
     query: str, type_embedding: EmbeddingType = settings.embedding.type
 ) -> list[float]:
-    logger.info(f"Initializing {type_embedding} embedding client...")
+    logger.debug(f"Initializing {type_embedding} embedding client...")
 
     try:
         if type_embedding == "FastEmbed":
@@ -21,11 +21,13 @@ def get_embeddings(
         else:
             raise ValueError(f"Unknown embedding type: {type_embedding}")
 
-        logger.info(f"{type_embedding} embedding client initialized successfully")
+        logger.debug(
+            f"[EMBEDDING]{type_embedding} embedding client initialized successfully"
+        )
         return result
 
     except Exception as e:
         logger.error(
-            f"Failed to initialize {type_embedding} embedding client: {str(e)}"
+            f"[EMBEDDING]Failed to initialize {type_embedding} embedding client: {str(e)}"
         )
         raise

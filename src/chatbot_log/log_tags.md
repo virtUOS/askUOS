@@ -19,6 +19,7 @@
 - CACHE: Caching operations
 - VECTOR DB
 - RAGFlow
+- EMBEDDING
 
 
 ## Example Usage

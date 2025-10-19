@@ -19,7 +19,7 @@ class OllamaSingleton:
         if not cls._instance:
             with cls._lock:
                 if not cls._instance:
-                    logger.info("Initializing Ollama embeddings client...")
+                    logger.debug("[EMBEDDING]Initializing Ollama embeddings client...")
                     cls._instance = OllamaEmbeddings(
                         model=settings.embedding.connection_settings.model_name,
                         base_url=settings.embedding.connection_settings.base_url,
@@ -31,7 +31,9 @@ class OllamaSingleton:
                             }
                         },
                     )
-                    logger.info("Ollama embeddings client initialized successfully")
+                    logger.debug(
+                        "[EMBEDDING]Ollama embeddings client initialized successfully"
+                    )
         return cls._instance
 
 
