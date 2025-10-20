@@ -40,7 +40,7 @@ from src.chatbot.tools.utils.tool_schema import (
 )
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
-from src.config.models import VectorDBTypes
+from src.config.models import CollectionNames, VectorDBTypes
 
 OPEN_AI_MODEL = settings.model.model_name
 DEBUG = settings.application.debug
@@ -48,7 +48,6 @@ DEBUG = settings.application.debug
 MESSAGE_HISTORY_LIMIT = 7
 # Maximum number of tokens for the conversation summary
 MAX_TOKEN_SUMMARY = 1000
-FAQ_DB_NAME = "faq_md"  # TODO: make this configurable
 
 
 class State(TypedDict):
@@ -236,13 +235,6 @@ class GraphNodesMixin:
                 args_shema=HisInOneInput,
                 handle_tool_errors=True,
             ),
-            # create_retriever_tool(
-            #     retriever=retriever_his_in_one(
-            #         "troubleshooting"
-            #     ),  # TODO make this configurable
-            #     name="HISinOne_troubleshooting_questions",
-            #     description=translate_prompt()["HISinOne_troubleshooting_questions"],
-            # ),
             StructuredTool.from_function(
                 name="examination_regulations",
                 func=_get_relevant_documents,
@@ -257,13 +249,6 @@ class GraphNodesMixin:
                 args_schema=SearchInputWeb,
                 handle_tool_errors=True,
             ),
-            # StructuredTool.from_function(
-            #     name="university_applications",
-            #     func=university_applications,
-            #     description=translate_prompt(settings.language)[
-            #         "description_university_applications_tool"
-            #     ],  # TODO add eglish description
-            # ),
         ]
 
     @staticmethod
@@ -405,7 +390,7 @@ class GraphNodesMixin:
             ):
                 # if the agent is in the rewrite state, try to find answer in FAQs
                 tool_result_faq = retrieve_from_infinity_ragflow(
-                    FAQ_DB_NAME, message.tool_calls[0]["args"].get("query")
+                    CollectionNames.FAQ, message.tool_calls[0]["args"].get("query")
                 )
                 faq_content = tool_result_faq[0]  # the text of the document
                 # extract references

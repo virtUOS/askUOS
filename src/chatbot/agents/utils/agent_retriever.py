@@ -5,9 +5,8 @@ from src.chatbot.db.ragflow_client import RAGFlowSingleton
 from src.chatbot.embeddings.main import get_embeddings
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
+from src.config.models import CollectionNames, VectorDBTypes
 
-HIS_IN_ONE_COLLECTON = "troubleshooting"
-EXAMINATION_REGULATIONS_COLLECTION = "examination_regulations"
 DOCUMENT_SEPARATOR = "\n\n"
 NOT_FOUND_MESSAGE = "Result: No documents found"
 
@@ -95,7 +94,7 @@ def _get_relevant_documents(
     ref: list[Reference] = []
     results = []
 
-    if VECTOR_DB_TYPE == "Milvus":
+    if VECTOR_DB_TYPE == VectorDBTypes.MILVUS:
 
         try:
             doc_search_params = {
@@ -104,7 +103,7 @@ def _get_relevant_documents(
             }
 
             docs = retrieve_from_milvus(
-                EXAMINATION_REGULATIONS_COLLECTION, query, doc_search_params
+                CollectionNames.EXAMINATION_REGULATIONS, query, doc_search_params
             )
             # TODO: IMPLEMENT A RERANKING FUNCTION
 
@@ -118,9 +117,11 @@ def _get_relevant_documents(
             return DOCUMENT_SEPARATOR.join(results), ref
         except Exception as e:
             return NOT_FOUND_MESSAGE, ref
-    elif VECTOR_DB_TYPE == "Infinity-RAGFlow":
+    elif VECTOR_DB_TYPE == VectorDBTypes.INFINITY_RAGFLOW:
 
-        return retrieve_from_infinity_ragflow(EXAMINATION_REGULATIONS_COLLECTION, query)
+        return retrieve_from_infinity_ragflow(
+            CollectionNames.EXAMINATION_REGULATIONS, query
+        )
     else:
         logger.error(f"[VECTOR DB]Unsupported vector DB type: {VECTOR_DB_TYPE}")
         return NOT_FOUND_MESSAGE, ref
@@ -137,7 +138,9 @@ def retriever_his_in_one(query: str) -> str:
 
         results = []
 
-        docs = retrieve_from_milvus(HIS_IN_ONE_COLLECTON, query, doc_search_params)
+        docs = retrieve_from_milvus(
+            CollectionNames.TROUBLESHOOTING, query, doc_search_params
+        )
 
         for doc in docs[0]:
 

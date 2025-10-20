@@ -20,6 +20,7 @@ from src.chatbot.prompt.prompt_date import get_current_date
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
+from src.config.models import VectorDBTypes
 
 # max number of messages after which a summary is generated
 MAX_MESSAGE_HISTORY = 5
@@ -518,7 +519,7 @@ class ChatApp:
             "The information provided draws on the documents below that can be found in the [University Website]({}). We encourage you to visit the site to explore these resources for additional details and insights!"
         )
 
-        if settings.vector_db_settings.type == "Infinity-RAGFlow":
+        if settings.vector_db_settings.type == VectorDBTypes.INFINITY_RAGFLOW:
             reference_fagflow = "{}/document/{}?ext=pdf&prefix=document"
         else:
             st.markdown(message.format(reference_examination_regulations))

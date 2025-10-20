@@ -11,6 +11,16 @@ class VectorDBTypes(str, Enum):
     INFINITY_RAGFLOW = "Infinity-RAGFlow"
 
 
+class CollectionNames(str, Enum):
+    """
+    Collection names used in the application.
+    """
+
+    EXAMINATION_REGULATIONS = "examination_regulations"
+    FAQ = "faq"
+    TROUBLESHOOTING = "troubleshooting"
+
+
 class SearchConfig(BaseModel):
     """
     Configuration for the search service.
