@@ -38,6 +38,7 @@ from src.chatbot.tools.utils.tool_schema import (
     RetrieverInput,
     SearchInputWeb,
 )
+from src.chatbot.utils.constants import ToolNames
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 from src.config.models import CollectionNames, VectorDBTypes
@@ -229,21 +230,21 @@ class GraphNodesMixin:
 
         return [
             StructuredTool.from_function(
-                name="HISinOne_troubleshooting_questions",
+                name=ToolNames.TROUBLESHOOTING_TOOL,
                 func=retriever_his_in_one,
                 description=translate_prompt()["HISinOne_troubleshooting_questions"],
                 args_shema=HisInOneInput,
                 handle_tool_errors=True,
             ),
             StructuredTool.from_function(
-                name="examination_regulations",
+                name=ToolNames.EXAMINATION_REGULATIONS_TOOL,
                 func=_get_relevant_documents,
                 description=translate_prompt()["examination_regulations"],
                 args_schema=RetrieverInput,
                 handle_tool_errors=True,
             ),
             StructuredTool.from_function(
-                name="custom_university_web_search",
+                name=ToolNames.SEARCH_WEB_TOOL,
                 func=search_uni_web,
                 description=translate_prompt()["description_university_web_search"],
                 args_schema=SearchInputWeb,
@@ -407,7 +408,7 @@ class GraphNodesMixin:
             try:
 
                 # TODO Write test for this
-                if tool_call["name"] == "custom_university_web_search":
+                if tool_call["name"] == ToolNames.SEARCH_WEB_TOOL:
                     about_application = tool_call["args"].get(
                         "about_application", False
                     )
@@ -426,7 +427,7 @@ class GraphNodesMixin:
                     tool_result = tool_result[0]
 
                 # TODO: Unify all vector db based tools. They all should return the same format (text,(source, page))
-                elif tool_call["name"] == "examination_regulations":
+                elif tool_call["name"] == ToolNames.EXAMINATION_REGULATIONS_TOOL:
 
                     tool_result = self._tools_by_name[tool_call["name"]].invoke(
                         tool_call["args"]
@@ -436,10 +437,14 @@ class GraphNodesMixin:
                     ]  # each element of the form (content, reference)
                     tool_result = tool_result[0]  # the text of the document
 
-                else:
+                elif tool_call["name"] == ToolNames.TROUBLESHOOTING_TOOL:
                     tool_result = self._tools_by_name[tool_call["name"]].invoke(
                         tool_call["args"]
                     )
+                    self._visited_docs.docs_references = [
+                        *tool_result[1]
+                    ]  # each element of the form (content, reference)
+                    tool_result = tool_result[0]  # the text of the document
                 logger.debug(
                     f'[LANGGRAPH][TOOL NODE] Successfully executed tool call:{tool_call["name"]}. Length of tool_resul: {len(tool_call)}'
                 )

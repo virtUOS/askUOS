@@ -218,10 +218,11 @@ class ChatApp:
 
         def display_references():
             """Display references if they exist."""
+            if st.session_state.get("visited_docs", None):
+                self.display_visited_docs()
+
             if st.session_state.get("visited_links", None):
                 self.display_visited_links()
-            elif st.session_state.get("visited_docs", None):
-                self.display_visited_docs()
 
         for idx, m in enumerate(messages):
             role = m.type

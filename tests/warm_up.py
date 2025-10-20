@@ -15,6 +15,7 @@ warm_up_queries = [
     "who are you",
     "According to the examination regulations, can I write my Master's thesis in English?, Mathematics",
     "How do I apply for on-campus housing?",
+    "Warum bekomme ich nach der Registrierung keine Bestätigungsmail?",
     "Für welche Studiengänge brauche ich ein Latinum?",
     "Wie viele ECTS-Punkte habe ich in meinem Bachelor (Mathematik)?",
     "Wie viele ECTS-Punkte habe ich in meinem Bachelor (Biologie)?",

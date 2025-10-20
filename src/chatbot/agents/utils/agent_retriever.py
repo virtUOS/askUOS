@@ -130,23 +130,30 @@ def _get_relevant_documents(
 # used by the hisinone tool
 def retriever_his_in_one(query: str) -> str:
 
-    try:
+    if VECTOR_DB_TYPE == VectorDBTypes.MILVUS:
+        try:
 
-        doc_search_params = {
-            "output_fields": ["pk", "text"],
-        }
+            doc_search_params = {
+                "output_fields": ["pk", "text"],
+            }
 
-        results = []
+            results = []
 
-        docs = retrieve_from_milvus(
-            CollectionNames.TROUBLESHOOTING, query, doc_search_params
-        )
+            docs = retrieve_from_milvus(
+                CollectionNames.TROUBLESHOOTING, query, doc_search_params
+            )
 
-        for doc in docs[0]:
+            for doc in docs[0]:
 
-            results.append(doc["entity"]["text"])
+                results.append(doc["entity"]["text"])
 
-        return DOCUMENT_SEPARATOR.join(results)
+            return DOCUMENT_SEPARATOR.join(results)
 
-    except Exception as e:
+        except Exception as e:
+            return NOT_FOUND_MESSAGE
+    elif VECTOR_DB_TYPE == VectorDBTypes.INFINITY_RAGFLOW:
+
+        return retrieve_from_infinity_ragflow(CollectionNames.TROUBLESHOOTING, query)
+    else:
+        logger.error(f"[VECTOR DB]Unsupported vector DB type: {VECTOR_DB_TYPE}")
         return NOT_FOUND_MESSAGE
