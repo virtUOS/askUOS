@@ -30,18 +30,6 @@
 
 
         {
-            "name": "agent_openai_tools",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "./src/chatbot/agents/agent_openai_tools.py",
-            "cwd": "${workspaceFolder}",
-            "env":{ "PYTHONPATH": "/app"},
-            "console": "integratedTerminal",
-   
-        },
-
-
-        {
             "name": "agent_eval",
             "type": "debugpy",
             "request": "launch",
