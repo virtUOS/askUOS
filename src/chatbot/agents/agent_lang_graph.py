@@ -40,6 +40,7 @@ from src.chatbot.tools.utils.tool_schema import (
 )
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
+from src.config.models import VectorDBTypes
 
 OPEN_AI_MODEL = settings.model.model_name
 DEBUG = settings.application.debug
@@ -388,12 +389,36 @@ class GraphNodesMixin:
 
         outputs = []
         outputs_txt = ""
+        faq_content = ""
         about_application = False
         teaching_degree = False
         search_query = []
         self._visited_docs.clear()
 
+        try:
+            # TODO this can be async in parallel with the prevrious tool calls
+            # TODO: FAQ support only available in RAGFLOW. Needs to be done with Milvus
+            if (
+                state.get("rewrite_query", False)
+                and settings.vector_db_settings.type
+                == VectorDBTypes.INFINITY_RAGFLOW  # Infinity RAGFlow
+            ):
+                # if the agent is in the rewrite state, try to find answer in FAQs
+                tool_result_faq = retrieve_from_infinity_ragflow(
+                    FAQ_DB_NAME, message.tool_calls[0]["args"].get("query")
+                )
+                faq_content = tool_result_faq[0]  # the text of the document
+                # extract references
+                unique_refs = {item.url_reference_askuos for item in tool_result_faq[1]}
+                self._visited_links += list(unique_refs)
+        except Exception as e:
+            logger.exception(
+                f"[LANGGRAPH]Error retrieving FAQ content: with args: tool_call['args']: {e}"
+            )
+            raise e
+
         for tool_call in message.tool_calls:
+
             try:
 
                 # TODO Write test for this
@@ -433,22 +458,6 @@ class GraphNodesMixin:
                 logger.debug(
                     f'[LANGGRAPH][TOOL NODE] Successfully executed tool call:{tool_call["name"]}. Length of tool_resul: {len(tool_call)}'
                 )
-                # TODO this can be async in parallel with the prevrious tool calls
-                # TODO: FAQ support only available in RAGFLOW. Needs to be done with Milvus
-                if (
-                    state.get("rewrite_query", False)
-                    and settings.vector_db_settings.type == "Infinity-RAGFlow"
-                ):
-                    # if the agent is in the rewrite state, try to find answer in FAQs
-                    tool_result_faq = retrieve_from_infinity_ragflow(
-                        FAQ_DB_NAME, tool_call["args"].get("query")
-                    )
-                    tool_result = f"{tool_result_faq[0]} \n {tool_result}"  # the text of the document
-                    # extract references
-                    unique_refs = {
-                        item.url_reference_askuos for item in tool_result_faq[1]
-                    }
-                    self._visited_links += list(unique_refs)
 
             except Exception as e:
                 logger.exception(
@@ -476,7 +485,7 @@ class GraphNodesMixin:
         # TODO IF no results are found, the tool result is empty and the agent should generate a new query and search again
 
         return {
-            "tool_messages": outputs_txt,
+            "tool_messages": outputs_txt + faq_content,
             "last_tool_usage": last_tool_usage,  # last ai message with previous tool usage
             "search_query": search_query,
             "about_application": about_application,

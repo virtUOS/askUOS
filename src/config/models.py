@@ -1,9 +1,14 @@
+from enum import Enum
 from typing import ClassVar, List, Literal, Optional, Tuple, Type, Union
 
 from pydantic import BaseModel
 
 EmbeddingType = Literal["FastEmbed", "Ollama"]
-VectorDBType = Literal["Milvus", "Infinity-RAGFlow"]
+
+
+class VectorDBTypes(str, Enum):
+    MILVUS = "Milvus"
+    INFINITY_RAGFLOW = "Infinity-RAGFlow"
 
 
 class SearchConfig(BaseModel):
@@ -93,7 +98,7 @@ class VectorDBConfig(BaseModel):
     Configuration for the vector database.
     """
 
-    type: VectorDBType = "Milvus"
+    type: VectorDBTypes = VectorDBTypes.MILVUS
     settings: Union[MilvusSettings, RAGFlowSettings]
 
 

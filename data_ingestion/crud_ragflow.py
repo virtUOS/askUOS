@@ -8,9 +8,7 @@ from data_ingestion.utils import get_db_id
 from src.config.core_config import settings
 
 
-def upload_files_ragflow(
-    directory, db_name, base_url=None, api_key=None, save_metadata=False
-):
+def upload_files_ragflow(directory, db_name, base_url=None, api_key=None):
     base_url = base_url or settings.vector_db_settings.settings.base_url
     api_key = api_key or os.getenv("RAGFLOW_API_KEY")
 
@@ -89,13 +87,13 @@ def insert_metadata_ragflow(
 
 
 def main():
-    directory = "/app/data_ingestion/faqs_output_md"
-    # directory = "/app/data/documents"
-    # db_name = "examination_regulations_graph"
-    db_name = "faq_md"
-    # upload_files_ragflow(directory, db_name, save_metadata=True)
+    # directory = "/app/data_ingestion/faqs_output_md"
+    directory = "/app/data/documents"
+    db_name = "examination_regulations"
+    # db_name = "faq_md"
+    upload_files_ragflow(directory, db_name)
     # print(f"Files from {directory} uploaded to RAGFlow database '{db_name}'.")
-    insert_metadata_ragflow(directory, db_name)
+    # insert_metadata_ragflow(directory, db_name)
     print("Files updated")
 
 
