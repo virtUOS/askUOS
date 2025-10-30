@@ -451,24 +451,36 @@ class ChatApp:
 
             except GraphRecursionError as e:
                 # TODO handle recursion limit error
-                logger.exception(f"[LANGGRAPH] Recursion Limit reached: {e}")
-                response = session_state["_"](
-                    "I'm sorry, but I couldn't find enough information to fully answer your question. Could you please try rephrasing your query and ask again?"
+                logger.warning(
+                    f"[NOT-ANSWERED] Recursion Limit reached. Query: {user_input} . Sources used. Documents: {graph._visited_docs()}, Urls: {graph._visited_links}"
                 )
-                st.markdown(f"{response}\n\n{further_help_msg}")
+                response = (
+                    session_state["_"](
+                        "I'm sorry, but I couldn't find enough information to fully answer your question. Could you please try rephrasing your query and ask again?"
+                    )
+                    + f"\n\n{further_help_msg}"
+                )
+
                 # clear the docs references
+                st.markdown(response)
                 graph._visited_docs.clear()
 
             except ProgrammableSearchException as e:
-                response = session_state["_"](
-                    "I'm sorry, something went wrong while connecting to the data provided. If the error persists, please reach out to the administrators for assistance."
+                response = (
+                    session_state["_"](
+                        "I'm sorry, something went wrong while connecting to the data provided. If the error persists, please reach out to the administrators for assistance."
+                    )
+                    + f"\n{further_help_msg}"
                 )
-                st.markdown(f"{response}\n{further_help_msg}")
+
+                st.markdown(response)
                 # clear the docs references
                 graph._visited_docs.clear()
 
             except Exception as e:
-                logger.exception(f"Error while processing the user's query: {e}")
+                logger.exception(
+                    f"[STREAMLIT] Error while processing the user's query: {e}"
+                )
                 response = session_state["_"](
                     "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
                 )
@@ -484,7 +496,15 @@ class ChatApp:
                 start_time = time.time()
                 settings.time_request_sent = start_time
 
-                response, to_stream = stream_graph_updates(prompt)
+                try:
+                    response, to_stream = stream_graph_updates(prompt)
+                except Exception as e:
+                    logger.error(f"[STREAMLIT] Error in streaming graph updates: {e}")
+                    response = session_state["_"](
+                        "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+                    )
+                    to_stream = ""
+                    st.markdown(response)
                 # if there is content left, stream it
                 if to_stream:
                     st.markdown(to_stream)

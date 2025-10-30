@@ -20,6 +20,8 @@
 - VECTOR DB
 - RAGFlow
 - EMBEDDING
+- NOT-ANSWERED e.g., A recursion error occurs because the content needed to answer the question was not found. 
+- STREAMLIT
 
 
 ## Example Usage

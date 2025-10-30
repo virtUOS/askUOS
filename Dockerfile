@@ -7,6 +7,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     sudo \
     wget \
+    vim \
     gettext \
     && rm -rf /var/lib/apt/lists/*
 

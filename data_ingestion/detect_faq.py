@@ -313,6 +313,18 @@ url: "{url}"
             logger.info(f"Failed URLs: {failed_urls}")
 
 
+async def export_single_faq_page_to_md(url: str) -> None:
+    """Utility function to export a single FAQ page to Markdown."""
+    config = FAQDetectorConfig()
+    detector = FAQDetector(config)
+    content = await detector.crawl_url(url)
+    if content and content.markdown:
+        detector.save_faq_content(content, url)
+        logger.info(f"Successfully exported FAQ page to Markdown: {url}")
+    else:
+        logger.error(f"Failed to crawl or export FAQ page: {url}")
+
+
 async def main():
     """Main function to run the FAQ detector."""
     config = FAQDetectorConfig()
@@ -327,4 +339,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    # export_single_faq_page_to_md("url_to_faq_page_here")
     asyncio.run(main())

@@ -46,7 +46,7 @@ def insert_metadata_ragflow(
     base_url=None,
     api_key=None,
 ):
-    # TODO: Onls works with md files for now. Extend to other file types.
+    # TODO: Only works with md files for now. Extend to other file types.
     base_url = base_url or settings.vector_db_settings.settings.base_url
     api_key = api_key or os.getenv("RAGFLOW_API_KEY")
 
