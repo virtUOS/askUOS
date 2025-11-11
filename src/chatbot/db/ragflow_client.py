@@ -46,14 +46,14 @@ class Chunk(BaseModel):
     @property
     def url_reference_web_uos(self):
         """Extract metadata from markdown content."""
-
+        url = ""
         # Decode bytes to string if needed
 
         match = re.search(r'url:\s*"([^"]+)"', self.content)
         if match:
             url = match.group(1)
 
-        return url or None
+        return url
 
     @property
     def page(self) -> int:

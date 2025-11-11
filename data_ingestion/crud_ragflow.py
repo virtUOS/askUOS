@@ -87,14 +87,14 @@ def insert_metadata_ragflow(
 
 
 def main():
-    directory = "/app/data_ingestion/faqs_output_md"
-    db_name = "faq"
-    # directory = "/app/data/documents"
-    # db_name = "examination_regulations"
+    # directory = "/app/data_ingestion/faqs_output_md"
+    # db_name = "faq"
+    directory = "/app/data/documents"
+    db_name = "examination_regulations"
 
     upload_files_ragflow(directory, db_name)
     # print(f"Files from {directory} uploaded to RAGFlow database '{db_name}'.")
-    insert_metadata_ragflow(directory, db_name)
+    # insert_metadata_ragflow(directory, db_name)
     print("Files updated")
 
 
