@@ -6,6 +6,11 @@ from pydantic import BaseModel
 EmbeddingType = Literal["FastEmbed", "Ollama"]
 
 
+class SearchEngineTypes(str, Enum):
+    GOOGLE_CUSTOM_SEARCH = "GoogleSearch"
+    RAGFlow_search = "RAGFlowSearch"
+
+
 class VectorDBTypes(str, Enum):
     MILVUS = "Milvus"
     INFINITY_RAGFLOW = "Infinity-RAGFlow"
@@ -19,6 +24,7 @@ class CollectionNames(str, Enum):
     EXAMINATION_REGULATIONS = "examination_regulations"
     FAQ = "faq"
     TROUBLESHOOTING = "troubleshooting"
+    WEB_UOS = "WEB_UOS"
 
 
 class SearchConfig(BaseModel):
@@ -57,6 +63,7 @@ class ApplicationConfig(BaseModel):
     recursion_limit: int = 12
     tracing: bool = False
     opik_project_name: str = "askUOSTesting"
+    search_engine_type: SearchEngineTypes = SearchEngineTypes.GOOGLE_CUSTOM_SEARCH
 
 
 class EmbeddingConnectionSettings(BaseModel):

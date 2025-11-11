@@ -7,6 +7,7 @@ from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 from src.config.models import CollectionNames, VectorDBTypes
 
+
 DOCUMENT_SEPARATOR = "\n\n"
 NOT_FOUND_MESSAGE = "Result: No documents found"
 
@@ -22,6 +23,7 @@ class Reference(NamedTuple):
     doc_id: str | None = None
     # TODO Delete once metadata is added to RAGFlow API (user to reference FAQ source)
     url_reference_askuos: str | None = None
+    url_reference_web_uos: str | None = None
 
 
 def retrieve_from_infinity_ragflow(collection_name: str, query: str):
@@ -40,6 +42,7 @@ def retrieve_from_infinity_ragflow(collection_name: str, query: str):
                     page,
                     retrieved_item.chunk.document_id,
                     retrieved_item.chunk.url_reference_askuos,
+                    retrieved_item.chunk.url_reference_web_uos,
                 )
             )
             results.append(f"Source: {source} \nText: {retrieved_item.chunk.content}")

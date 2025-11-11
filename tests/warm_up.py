@@ -9,6 +9,7 @@ from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 
 # do not include REPEATED queries or very similar queries (tests will fail)
 warm_up_queries = [
+    "Welche Schnupperangebote bietet die Uni OS?",
     "According to the examination regulations, how are the thesis and oral exam graded?, Mathematics",
     "Wo liegt der NC bei Sport?",
     "hi",
@@ -21,7 +22,6 @@ warm_up_queries = [
     "Wie viele ECTS-Punkte habe ich in meinem Bachelor (Biologie)?",
     "Muss ich im Grundschullehramt Mathe und Deutsch studieren?",
     "I cannot log into HisInOne, what can I do?",
-    "Welche Schnupperangebote bietet die Uni OS?",
     "Kann ich Biologie und Sport auf Lehramt studieren?",
     "What are the application deadlines for the fall and spring semesters for the Computer Science Program?",
     "Was kann ich tun, wenn ich keinen Studienplatz im Master Sport bekommen habe?",

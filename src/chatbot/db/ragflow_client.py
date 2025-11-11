@@ -1,4 +1,5 @@
 import os
+import re
 import threading
 from typing import Any, List, NamedTuple, Optional
 
@@ -41,6 +42,18 @@ class Chunk(BaseModel):
         """Generate URL reference."""
         file_name = os.path.splitext(self.document_keyword.replace("_", "/"))[0]
         return f"{FAQ_BASE_URL}{file_name}"
+
+    @property
+    def url_reference_web_uos(self):
+        """Extract metadata from markdown content."""
+
+        # Decode bytes to string if needed
+
+        match = re.search(r'url:\s*"([^"]+)"', self.content)
+        if match:
+            url = match.group(1)
+
+        return url or None
 
     @property
     def page(self) -> int:

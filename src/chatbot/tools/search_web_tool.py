@@ -28,6 +28,7 @@ from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from src.chatbot.agents.utils.agent_helpers import llm_optional as sumarize_llm
+from src.chatbot.agents.utils.agent_retriever import retrieve_from_infinity_ragflow
 
 # from src.chatbot.db.redis_client import redis_manager
 from src.chatbot.tools.utils.custom_crawl import (
@@ -42,6 +43,7 @@ from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import decode_string
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
+from src.config.models import CollectionNames, SearchEngineTypes, VectorDBTypes
 
 colorama.init(strip=True)
 
@@ -363,16 +365,39 @@ async def async_search(client, **kwargs) -> Tuple[str, List]:
 
         agent_executor = kwargs["agent_executor"]
 
-        visited_urls, contents = await visit_urls_extract(
-            url=url,
-            query=query,
-            agent_executor=agent_executor,
-            about_application=about_application,
-            do_not_visit_links=do_not_visit_links,
-            client=client,
-        )
+        def extract_urls_from_content(refs):
+            visited_urls = []
+            for r in refs:
+                visited_urls.append(r.url_reference_web_uos)
+            return visited_urls
 
-        final_output = "\n".join(contents)
+        SEARCH_TYPE = settings.application.search_engine_type
+        if SEARCH_TYPE == SearchEngineTypes.RAGFlow_search:
+            try:
+                contents, ref = retrieve_from_infinity_ragflow(
+                    CollectionNames.WEB_UOS, query
+                )
+                visited_urls = extract_urls_from_content(ref)
+                final_output = contents
+                print()
+
+            except Exception as e:
+                logger.error(f"[RAGFlow] Error during retrieval: {e}")
+                final_output = ""
+                visited_urls = []
+
+        else:
+
+            visited_urls, contents = await visit_urls_extract(
+                url=url,
+                query=query,
+                agent_executor=agent_executor,
+                about_application=about_application,
+                do_not_visit_links=do_not_visit_links,
+                client=client,
+            )
+
+            final_output = "\n".join(contents)
 
         if final_output:
             # For testing
@@ -383,7 +408,7 @@ async def async_search(client, **kwargs) -> Tuple[str, List]:
             logger.info(
                 f"[SEARCH] Final output (search + prompt): {final_output_tokens}"
             )
-
+            # TODO: change the cache_key if the search engine is ragflow
             # Cache results
             if len(final_output) > 20:
                 cache_value = str((final_output, visited_urls))
