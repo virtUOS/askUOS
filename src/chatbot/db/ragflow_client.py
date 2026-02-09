@@ -91,7 +91,9 @@ class RAGFlowSingleton:
                 self.dbs = {}
                 self._aio_session = aiohttp.ClientSession(
                     headers={"Authorization": f"Bearer {self.api_key}"},
-                    timeout=aiohttp.ClientTimeout(total=30),
+                    timeout=aiohttp.ClientTimeout(
+                        total=None, connect=None, sock_connect=None, sock_read=None
+                    ),
                 )
                 self._initialized = True
                 logger.debug("RAGFlowSingleton initialized")
@@ -113,9 +115,16 @@ class RAGFlowSingleton:
             return self.dbs[db_name]
         try:
             logger.debug(f"Getting id for {db_name}")
-            async with self._aio_session.get(
-                f"{self.base_url}/api/v1/datasets", params={"name": db_name}
-            ) as resp:
+
+            resp = await asyncio.wait_for(
+                self._aio_session.get(
+                    f"{self.base_url}/api/v1/datasets",
+                    params={"name": db_name},
+                ),
+                timeout=30,
+            )
+
+            async with resp:
                 if resp.status == 200:
                     datasets = await resp.json()
                     if datasets and "data" in datasets and datasets["data"]:
@@ -147,17 +156,22 @@ class RAGFlowSingleton:
     ) -> List[Chunk]:
         """Retrieve chunks from the RAGFlow database based on a query."""
         try:
-            async with self._aio_session.post(
-                f"{self.base_url}/api/v1/retrieval",
-                headers={"Content-Type": "application/json"},
-                json={
-                    "question": query,
-                    "dataset_ids": [db_id],
-                    "document_ids": [],
-                    "page_size": page_size,
-                    "cross_languages": ["German", "English"],
-                },
-            ) as resp:
+
+            resp = await asyncio.wait_for(
+                self._aio_session.post(
+                    f"{self.base_url}/api/v1/retrieval",
+                    headers={"Content-Type": "application/json"},
+                    json={
+                        "question": query,
+                        "dataset_ids": [db_id],
+                        "document_ids": [],
+                        "page_size": page_size,
+                        "cross_languages": ["German", "English"],
+                    },
+                ),
+                timeout=30,
+            )
+            async with resp:
                 if resp.status == 200:
                     r = await resp.json()
                     retrieved_content = [
@@ -179,7 +193,7 @@ class RAGFlowSingleton:
                     )
         except aiohttp.ClientError as e:
             logger.error(f"[RAGFlow]Network error while retrieving chunks: {e}")
-            raise ValueError(f"Network error: {e}")
+            raise
 
     async def get_chunks(self, query: str, db_name: str) -> List[Chunk]:
 

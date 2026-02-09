@@ -25,8 +25,6 @@ from src.chatbot.agents.utils.agent_helpers import llm, llm_optional
 from src.chatbot.agents.utils.agent_retriever import (
     _examination_regulations_tool,
     _retriever_his_in_one_tool,
-    examination_regulations_tool,
-    retrieval_his_in_one_tool,
     retrieve_from_infinity_ragflow,
 )
 from src.chatbot.agents.utils.exceptions import MustContainSystemMessageException
@@ -396,7 +394,7 @@ class GraphNodesMixin:
         from src.chatbot.tools.search_web_tool import async_search
 
         # Clear the list of visited links
-        # self._visited_links = []--> done in ask_uos.py
+        # self._visited_links = []--> done in ask_uos_chat.py
         if messages := state.get("messages", []):
             message = messages[-1]
         else:

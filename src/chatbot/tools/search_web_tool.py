@@ -29,8 +29,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from src.chatbot.agents.models import RetrievalResult
 from src.chatbot.agents.utils.agent_helpers import llm_optional as sumarize_llm
-
-# from src.chatbot.db.redis_client import redis_manager
 from src.chatbot.tools.utils.custom_crawl import (
     _check_content_changed,
     arun,
@@ -61,6 +59,8 @@ CrawlerRunConfig.head_request_timeout = 3.0
 CrawlerRunConfig.default_cache_ttl_seconds = 60 * 60 * 72  # 72 hours
 
 dotenv.load_dotenv()
+
+# from src.chatbot.db.redis_pool import RedisPool
 
 # Application context URLs
 APPLICATION_CONTEXT_URLS = [
@@ -128,15 +128,15 @@ async def ensure_initialized():
                 _initialized = True
 
 
-def extract_cached_content(cached_content):
-    """Extract cached content from string representation."""
-    import ast
+# def extract_cached_content(cached_content):
+#     """Extract cached content from string representation."""
+#     import ast
 
-    try:
-        return ast.literal_eval(cached_content)
-    except Exception as e:
-        logger.exception(f"[CACHE] Could not extract cached content: {e}")
-        return None
+#     try:
+#         return ast.literal_eval(cached_content)
+#     except Exception as e:
+#         logger.exception(f"[CACHE] Could not extract cached content: {e}")
+#         return None
 
 
 async def generate_summary(text: str, query: str) -> str:
@@ -345,174 +345,103 @@ async def visit_urls_extract(
 
 async def async_search(**kwargs) -> Tuple[str, List]:
     """Asynchronous search function that encapsulates the search functionality."""
+    # ensure craw4ai is initialized
     await ensure_initialized()
     try:
-        # TODO: use pool connections (redis)
         client = redis.Redis(host="redis", port=6379, decode_responses=True)
-        await initialize_redis(client)
-        # Initialize Redis if needed
-        # await redis_manager.ensure_connection()
-        query = kwargs.get("query", "")
-        query_url = decode_string(query)
-        url = SEARCH_URL + query_url
-        do_not_visit_links = kwargs.get("do_not_visit_links", [])
-        about_application = kwargs.get("about_application", False)
 
-        cache_key = f"{__name__}:async_search:{url}"
-        # Try to get cached content
-        cached_content = await client.get(cache_key)
-        if cached_content:
-            logger.debug("[REDIS] Retrieved cached searched results (urls)")
-            return extract_cached_content(cached_content)
+        # await RedisPool.get_pool()
+        # client = RedisPool.get_client()
+        try:
+            query = kwargs.get("query", "")
+            query_url = decode_string(query)
+            url = SEARCH_URL + query_url
+            do_not_visit_links = kwargs.get("do_not_visit_links", [])
+            about_application = kwargs.get("about_application", False)
 
-        agent_executor = kwargs["agent_executor"]
+            # Try to get cached content
+            cache_key = f"{__name__}:async_search:{url}"
+            cached_content = await client.get(cache_key)
+            if cached_content:
+                logger.debug("[REDIS] Retrieved cached searched results (urls)")
+                return RetrievalResult.from_json(cached_content)
 
-        visited_urls, contents = await visit_urls_extract(
-            url=url,
-            query=query,
-            agent_executor=agent_executor,
-            about_application=about_application,
-            do_not_visit_links=do_not_visit_links,
-            client=client,
-        )
+            agent_executor = kwargs["agent_executor"]
 
-        final_output = "\n".join(contents)
-
-        if final_output:
-            # For testing
-            final_output_tokens, final_search_tokens = compute_tokens(
-                final_output, query, agent_executor
-            )
-            logger.info(f"[SEARCH] Search tokens: {final_search_tokens}")
-            logger.info(
-                f"[SEARCH] Final output (search + prompt): {final_output_tokens}"
+            visited_urls, contents = await visit_urls_extract(
+                url=url,
+                query=query,
+                agent_executor=agent_executor,
+                about_application=about_application,
+                do_not_visit_links=do_not_visit_links,
+                client=client,
             )
 
+            final_output = "\n".join(contents)
+
+            if final_output:
+                # For testing
+                final_output_tokens, final_search_tokens = compute_tokens(
+                    final_output, query, agent_executor
+                )
+                logger.info(f"[SEARCH] Search tokens: {final_search_tokens}")
+                logger.info(
+                    f"[SEARCH] Final output (search + prompt): {final_output_tokens}"
+                )
+
+            retrieved = RetrievalResult(
+                result_text=final_output, reference=visited_urls, search_query=query
+            )
             # Cache results
             if len(final_output) > 20:
-                cache_value = str((final_output, visited_urls))
-                await client.setex(cache_key, TTL, cache_value)
+                await client.setex(cache_key, TTL, retrieved.to_json())
 
-        await client.close()
-        return RetrievalResult(
-            result_text=final_output, reference=visited_urls, search_query=query
-        )
-        # return (final_output, visited_urls) if contents else ([], [])
-
+            return retrieved
+        finally:
+            await client.aclose()
+    except redis.ConnectionError as e:
+        logger.error(f"It was not possible to establish a connection to Redis: {e}")
+        raise redis.ConnectionError("Redis Failed") from e
     except ProgrammableSearchException as e:
         logger.exception(f"[SEARCH] Error: search engine: {e}", exc_info=True)
         raise ProgrammableSearchException(
             f"Failed: Programmable Search Engine. Status: {e}"
         )
-
     except Exception as e:
         logger.exception(f"[SEARCH] Error while searching the web: {e}", exc_info=True)
-        return [], []
+        raise
 
 
-def search_uni_web(**kwargs) -> Tuple[str, List]:
-    """
-    Searches the University of Osnabrück website based on the given query.
-    Handles both threaded and async execution contexts safely.
-    """
+# def search_uni_web(**kwargs) -> Tuple[str, List]:
+#     """
+#     Searches the University of Osnabrück website based on the given query.
+#     Handles both threaded and async execution contexts safely.
+#     """
 
-    try:
-        try:
-            loop = asyncio.get_running_loop()
-            nest_asyncio.apply()
-            logger.debug("[SYSTEM] Running within an existing event loop")
-            client = redis.Redis(host="redis", port=6379, decode_responses=True)
-            return asyncio.run_coroutine_threadsafe(
-                async_search(client, **kwargs), loop
-            ).result()
-        except RuntimeError:
+#     try:
+#         try:
+#             loop = asyncio.get_running_loop()
+#             nest_asyncio.apply()
+#             logger.debug("[SYSTEM] Running within an existing event loop")
+#             client = redis.Redis(host="redis", port=6379, decode_responses=True)
+#             return asyncio.run_coroutine_threadsafe(
+#                 async_search(client, **kwargs), loop
+#             ).result()
+#         except RuntimeError:
 
-            async def complete_search_flow():
-                client = redis.Redis(host="redis", port=6379, decode_responses=True)
-                await initialize_redis(client)
-                result = await async_search(client, **kwargs)
-                await client.close()
-                return result
+#             async def complete_search_flow():
+#                 client = redis.Redis(host="redis", port=6379, decode_responses=True)
+#                 await initialize_redis(client)
+#                 result = await async_search(client, **kwargs)
+#                 await client.close()
+#                 return result
 
-            return asyncio.run(complete_search_flow())
-    except Exception as e:
-        logger.exception(f"[SEARCH] Error in search execution: {str(e)}")
-        return [], []
-
-    # try:
-    #     # Get the current event loop or create a new one
-    #     try:
-    #         loop = asyncio.get_running_loop()
-    #         # If we're inside a running loop, we'll use nest_asyncio to allow nesting
-    #         nest_asyncio.apply()
-    #         logger.debug("Running within an existing event loop")
-    #         return asyncio.run_coroutine_threadsafe(
-    #             async_search(**kwargs), loop
-    #         ).result()
-    #     except RuntimeError:
-
-    #         # No running event loop, create a fresh one and run directly
-
-    #         # Define a complete async function that initializes, executes and cleans up
-    #         async def complete_search_flow():
-    #             global client
-
-    #             # Create new Redis connection for this event loop session
-    #             client = redis.Redis(host="redis", port=6379, decode_responses=True)
-
-    #             try:
-    #                 # Initialize Redis
-    #                 await initialize_redis()
-    #                 # Execute search
-    #                 result = await async_search(**kwargs)
-    #                 return result
-    #             except Exception as e:
-    #                 logger.exception(f"Error during search flow: {str(e)}")
-    #                 return [], []
-
-    #         # Run everything in a single event loop lifecycle
-    #         return asyncio.run(complete_search_flow())
-
-    # No running event loop, create a fresh one and run directly
-
-    # loop = asyncio.new_event_loop()
-    # asyncio.set_event_loop(loop)
-
-    # # Ensure Redis is initialized with this loop
-    # async def setup_and_search():
-    #     await initialize_redis()
-    #     return await async_search(**kwargs)
-
-    # return asyncio.run(setup_and_search())
-
-    # try:
-    #     result = loop.run_until_complete(setup_and_search())
-    # finally:
-    #     try:
-    #         loop.run_until_complete(loop.shutdown_asyncgens())
-    #     finally:
-    #         loop.close()
-    #         return result
-
-    # return asyncio.run_coroutine_threadsafe(
-    #     async_search(**kwargs), loop
-    # ).result()
-    # return asyncio.run(async_search(**kwargs))
-    # except Exception as e:
-    #     logger.exception(f"Error in search execution: {str(e)}")
-    #     return [], []
+#             return asyncio.run(complete_search_flow())
+#     except Exception as e:
+#         logger.exception(f"[SEARCH] Error in search execution: {str(e)}")
+#         return [], []
 
 
 if __name__ == "__main__":
     # Use for testing/debugging
-    try:
-        from search_sample import search_sample
-    except ImportError:
-        sys.path.append("./test")
-        from search_sample import search_sample
-
-    query = "can I study Biology?"
-    search_result = search_uni_web(query=query)
-    search_result_2 = search_uni_web(query=query)
-
-    print(search_result)
+    pass

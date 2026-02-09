@@ -1,4 +1,4 @@
-from typing import NamedTuple
+import json
 
 from pydantic import BaseModel, Field
 
@@ -19,3 +19,10 @@ class RetrievalResult(BaseModel):
         default="",
     )
     search_query: str
+
+    def to_json(self) -> str:
+        return self.model_dump_json()
+
+    @classmethod
+    def from_json(cls, data: str) -> "RetrievalResult":
+        return cls.model_validate_json(data)
