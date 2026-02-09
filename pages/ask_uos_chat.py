@@ -1,8 +1,10 @@
+import asyncio
 import time
 import uuid
 from collections import deque
 from typing import Dict, List, Optional
 
+import nest_asyncio
 import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_redis import RedisChatMessageHistory
@@ -31,6 +33,10 @@ ROLES = ("ai", "human")
 
 from redisvl.query import CountQuery, FilterQuery, TextQuery  # type: ignore
 from redisvl.query.filter import Tag  # type: ignore
+
+# Apply nest_asyncio to allow nested event loops (Streamlit compatibility)
+nest_asyncio.apply()
+
 
 # TODO : Remove all the display references logic once streamlit integrates pull request  Fix st.chat_input collapse after submit #12081
 
@@ -77,6 +83,23 @@ class ChatApp:
             setup_page()
             self.controller = CookieController()
             load_css()
+
+    def _run_async(self, coro):
+        """
+        Safely run an async coroutine in Streamlit's environment.
+        Streamlit may already have a running event loop, so we handle both cases.
+        """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # nest_asyncio allows us to call run_until_complete
+            # even if a loop is already running
+            return loop.run_until_complete(coro)
+        else:
+            return asyncio.run(coro)
 
     def _validate_user_id(self, user_id: str) -> Optional[str]:
         """Validate that the user_id is a valid UUID string."""
@@ -261,7 +284,7 @@ class ChatApp:
                 )
 
     def handle_user_input(self):
-        """Handle user input and generate a response."""
+        """Handle user input and generate a response using async astream."""
 
         user_id = self.get_user_id()
         history = self.get_history(user_id)
@@ -286,7 +309,8 @@ class ChatApp:
                 st.write(prompt)
 
             if history.messages[-1].type != ROLES[0]:  # "ai"
-                self.generate_response(prompt)
+                self._run_async(self.generate_response_async(prompt))
+                # self.generate_response(prompt)
 
             st.session_state.input_key_counter += 1
             st.rerun()  # Rerun to update the chat messages and input field
@@ -304,6 +328,196 @@ class ChatApp:
                 language=session_state["selected_language"]
             )
         return st.session_state["agent"]
+
+    async def generate_response_async(self, prompt):
+        """Generate a response from the assistant based on user prompt, using astream."""
+
+        graph = self.get_agent()
+
+        further_help_msg = session_state["_"](
+            """If you need personal assistance regarding studying at the university, you can visit the [StudiOS]({}) (Studierenden-Information Osnabrück) or [ZSB]({}) (Zentrale Studienberatung Osnabrück) website."""
+        )
+        further_help_msg = further_help_msg.format(
+            "https://www.uni-osnabrueck.de/universitaet/organisation/studierenden-information-osnabrueck-studios/",
+            "https://www.zsb-os.de/",
+        )
+
+        async def astream_graph_updates(user_input):
+            response = ""
+            to_stream = ""
+            # TODO USE THE ID RETRIEVED FROM COOKIE CONTROLLER
+            thread_id = 1
+            config = {
+                "configurable": {"thread_id": thread_id},
+                "recursion_limit": settings.application.recursion_limit,  # This amounts to two laps of the graph # https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
+            }
+            current_date = get_current_date(settings.language.lower())
+
+            conversation_summary = (
+                st.session_state["conversation_summary"][-1]
+                if st.session_state.get("conversation_summary", None)
+                else None
+            )
+            # messages that are not still summarized. remaining_msg = len(messages) - (MAX_MESSAGE_HISTORY * number_of_summaries); IF remaining_msg ==0 return the last two messages
+            history = self._get_conversation_history(st.session_state["messages"])
+
+            system_user_prompt = get_system_prompt(
+                conversation_summary, history, user_input, current_date
+            )
+            table_content = ""
+            is_table_content = False
+
+            async def _get_astream():
+                # if there are links from the previous query, clear them
+                graph._visited_links = []
+                async for msg, metadata in graph._graph.astream(
+                    {
+                        "messages": system_user_prompt,
+                        "message_history": history,
+                        "user_initial_query": user_input,
+                        "current_date": current_date,
+                    },
+                    stream_mode="messages",
+                    config=config,
+                ):
+
+                    if (
+                        msg.content
+                        and not isinstance(msg, HumanMessage)
+                        and not isinstance(msg, ToolMessage)
+                        and (
+                            metadata["langgraph_node"] == "generate"
+                            or metadata["langgraph_node"] == "generate_application"
+                            or metadata["langgraph_node"]
+                            == "generate_teaching_degree_node"
+                        )
+                    ):
+                        # deleteme.append(msg.content)
+                        yield msg.content
+
+            try:
+
+                gen_stream = _get_astream()
+                async for msg in gen_stream:
+                    response += msg
+
+                    # streaming of every line
+                    if msg == "|":
+                        is_table_content = True
+                        table_content += msg
+                        while is_table_content:
+                            try:
+                                msg = await gen_stream.__anext__()
+                                table_content += msg
+                                response += msg
+                                # do not delete the blank space at the beginning of ' |\n\n'
+                                # it is used to identify the end of the table
+                                if msg == " |\n\n":
+                                    # end of table
+
+                                    st.markdown(table_content)
+                                    table_content = ""
+                                    is_table_content = False
+                            except StopAsyncIteration:
+                                if table_content:
+                                    st.markdown(table_content)
+                                    table_content = ""
+                                is_table_content = False
+                                break
+
+                    if "\n" in msg:
+                        to_stream += msg
+                        st.markdown(to_stream)
+                        to_stream = ""
+                    else:
+                        to_stream += msg
+
+                    print(msg, end="|", flush=True)
+
+                # the agent did not use any tools
+                if graph._agent_direct_msg:
+                    response = graph._agent_direct_msg
+                    st.markdown(response)
+                    graph._agent_direct_msg = None
+
+            except GraphRecursionError as e:
+                # TODO handle recursion limit error
+                logger.warning(
+                    f"[NOT-ANSWERED] Recursion Limit reached. Query: {user_input} . Sources used. Documents: {graph._visited_docs()}, Urls: {graph._visited_links}"
+                )
+                response = (
+                    session_state["_"](
+                        "I'm sorry, but I couldn't find enough information to fully answer your question. Could you please try rephrasing your query and ask again?"
+                    )
+                    + f"\n\n{further_help_msg}"
+                )
+
+                # clear the docs references
+                st.markdown(response)
+                graph._visited_docs.clear()
+
+            except ProgrammableSearchException as e:
+                response = (
+                    session_state["_"](
+                        "I'm sorry, something went wrong while connecting to the data provided. If the error persists, please reach out to the administrators for assistance."
+                    )
+                    + f"\n{further_help_msg}"
+                )
+
+                st.markdown(response)
+                # clear the docs references
+                graph._visited_docs.clear()
+
+            except Exception as e:
+                logger.exception(
+                    f"[STREAMLIT] Error while processing the user's query: {e}"
+                )
+                response = session_state["_"](
+                    "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+                )
+                # clear the docs references
+                graph._visited_docs.clear()
+                st.markdown(f"{response}\n{further_help_msg}")
+
+            return response, to_stream
+
+        with st.chat_message(ROLES[0], avatar="./static/Icon-chatbot.svg"):
+            with st.spinner(session_state["_"]("Generating response...")):
+
+                start_time = time.time()
+                settings.time_request_sent = start_time
+
+                try:
+                    response, to_stream = await astream_graph_updates(prompt)
+                except Exception as e:
+                    logger.error(f"[STREAMLIT] Error in streaming graph updates: {e}")
+                    response = session_state["_"](
+                        "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+                    )
+                    to_stream = ""
+                    st.markdown(response)
+                # if there is content left, stream it
+                if to_stream:
+                    st.markdown(to_stream)
+
+                end_time = time.time()
+                time_taken = end_time - start_time
+                session_state["time_taken"] = time_taken
+                logger.info(
+                    f"[METRICS]Time taken to serve whole answer to the user: {time_taken} seconds"
+                )
+
+                self.store_response(response, prompt, graph)
+                if graph._visited_docs():
+                    st.session_state["visited_docs"] = (
+                        graph._visited_docs.format_references()
+                    )
+                    graph._visited_docs.clear()
+                    # self.display_visited_docs()
+
+                if graph._visited_links:
+                    st.session_state["visited_links"] = graph._visited_links
+                    # self.display_visited_links()
 
     def generate_response(self, prompt):
         """Generate a response from the assistant based on user prompt."""
@@ -675,47 +889,6 @@ class ChatApp:
                 #     )
                 # )
             # TODO if a summary is generated, MAKE SURE THAT THE SUMMARY IS NOT GREATER THAT MAX_TOKEN_SUMMARY. IF IT IS, THEN summarize it again
-
-    # TODO: DELETE FUNCTION. Objects are already saved to REDIS using the right type
-    # def _convert_messages(self, messages: List) -> List:
-
-    #     chat_history = []
-    #     for record in messages:
-    #         if record.type == ROLES[0] or record.type == ROLES[1]:
-    #             chat_history.append(record)
-
-    #         elif record.type == ROLES[2]:  # "summary"
-    #             continue  # excludes # "summary"
-    #         else:
-    #             chat_history.append(
-    #                 ToolMessage(content=record["content"], additional_kwargs={})
-    #             )
-
-    #     logger.debug(f"Chat History -------{chat_history}--------")
-    #     return chat_history
-
-    # def _get_chat_history(self, messages: List, k=MAX_MESSAGE_HISTORY):
-    #     """
-    #     Retrieve and store the last k messages from the chat history.
-
-    #     Args:
-    #         messages (List[Dict[str, str]]): A list of message dictionaries, where each dictionary contains
-    #                                          'role', 'content' and 'avatar' keys representing the role of the message
-    #                                          sender and the message content respectively. The 'avatar' key represents the icon used when displaying the message.
-
-    #     """
-
-    #     if not messages:
-    #         return []
-
-    #     # if len(messages) > k:
-    #     #     messages = messages[-k:]  # get the last k messages
-    #     # chat_history = [
-    #     #     {"role": record["role"], "content": record["content"]}
-    #     #     for record in messages
-    #     # ]
-
-    #     return self._convert_messages(messages)
 
     def _get_conversation_history(self, history: List):
         """

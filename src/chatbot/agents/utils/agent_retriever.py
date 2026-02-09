@@ -1,7 +1,11 @@
+import asyncio
 import os
 from typing import List, NamedTuple
 
-from src.chatbot.db.ragflow_client import RAGFlowSingleton
+from pydantic import BaseModel
+
+from src.chatbot.agents.models import Reference, RetrievalResult
+from src.chatbot.db.ragflow_client import ragflow_object
 from src.chatbot.embeddings.main import get_embeddings
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
@@ -10,43 +14,46 @@ from src.config.models import CollectionNames, VectorDBTypes
 DOCUMENT_SEPARATOR = "\n\n"
 NOT_FOUND_MESSAGE = "Result: No documents found"
 
-
 # TODO: Rewrite this module, provide an API to retrieve using Milvus or Infinity
 
 VECTOR_DB_TYPE = settings.vector_db_settings.type
 
 
-class Reference(NamedTuple):
-    source: str
-    page: int | None = None
-    doc_id: str | None = None
-    # TODO Delete once metadata is added to RAGFlow API (user to reference FAQ source)
-    url_reference_askuos: str | None = None
-
-
-def retrieve_from_infinity_ragflow(collection_name: str, query: str):
+async def retrieve_from_infinity_ragflow(
+    collection_name: str, query: str
+) -> RetrievalResult:
     ref: list[Reference] = []
     results = []
     try:
 
-        ragflow_client = RAGFlowSingleton()
-        retrieved = ragflow_client.get_chunks(query, collection_name)
+        retrieved = await ragflow_object.get_chunks(query, collection_name)
         for retrieved_item in retrieved:
             source = retrieved_item.chunk.document_keyword
             page = retrieved_item.chunk.page
             ref.append(
                 Reference(
-                    source,
-                    page,
-                    retrieved_item.chunk.document_id,
-                    retrieved_item.chunk.url_reference_askuos,
+                    source=source,
+                    page=page,
+                    doc_id=retrieved_item.chunk.document_id,
+                    url_reference_askuos=retrieved_item.chunk.url_reference_askuos,
                 )
             )
             results.append(f"Source: {source} \nText: {retrieved_item.chunk.content}")
-        return DOCUMENT_SEPARATOR.join(results), ref
+        return RetrievalResult(
+            result_text=DOCUMENT_SEPARATOR.join(results),
+            reference=ref,
+            source_name=collection_name,
+            search_query=query,
+        )
+
     except Exception as e:
         logger.error(f"[RAGFlow]Error during similarity search: {e}")
-        return NOT_FOUND_MESSAGE, ref
+        return RetrievalResult(
+            result_text=NOT_FOUND_MESSAGE,
+            reference=ref,
+            source_name=collection_name,
+            search_query=query,
+        )
 
 
 def retrieve_from_milvus(collection_name: str, query: str, doc_search_params: dict):
@@ -85,15 +92,17 @@ def retrieve_from_milvus(collection_name: str, query: str, doc_search_params: di
 
 
 # used by the examination regulations tool
-def _get_relevant_documents(
-    query: str,
-    filter_program_name: str,
-) -> tuple[str, list[Reference]]:
-    # TODO: add a filter for the program name WHEN searching
 
+
+async def _examination_regulations_tool(
+    **kwargs,
+) -> RetrievalResult:
+    # TODO: add a filter for the program name WHEN searching
+    query = kwargs.get("query", "")
+    filter_program_name = kwargs.get("filter_program_name", "")
     ref: list[Reference] = []
     results = []
-
+    # TODO: Needs asyn implementation
     if VECTOR_DB_TYPE == VectorDBTypes.MILVUS:
 
         try:
@@ -119,8 +128,8 @@ def _get_relevant_documents(
             return NOT_FOUND_MESSAGE, ref
     elif VECTOR_DB_TYPE == VectorDBTypes.INFINITY_RAGFLOW:
         query = f"{query}  {filter_program_name if filter_program_name else ''}"
-        return retrieve_from_infinity_ragflow(
-            CollectionNames.EXAMINATION_REGULATIONS, query
+        return await retrieve_from_infinity_ragflow(
+            CollectionNames.EXAMINATION_REGULATIONS.value, query
         )
     else:
         logger.error(f"[VECTOR DB]Unsupported vector DB type: {VECTOR_DB_TYPE}")
@@ -128,8 +137,9 @@ def _get_relevant_documents(
 
 
 # used by the hisinone tool
-def retriever_his_in_one(query: str) -> str:
+async def _retriever_his_in_one_tool(**kwargs) -> str:
 
+    query = kwargs.get("query", "")
     if VECTOR_DB_TYPE == VectorDBTypes.MILVUS:
         try:
 
@@ -153,7 +163,9 @@ def retriever_his_in_one(query: str) -> str:
             return NOT_FOUND_MESSAGE
     elif VECTOR_DB_TYPE == VectorDBTypes.INFINITY_RAGFLOW:
 
-        return retrieve_from_infinity_ragflow(CollectionNames.TROUBLESHOOTING, query)
+        return await retrieve_from_infinity_ragflow(
+            CollectionNames.TROUBLESHOOTING.value, query
+        )
     else:
         logger.error(f"[VECTOR DB]Unsupported vector DB type: {VECTOR_DB_TYPE}")
         return NOT_FOUND_MESSAGE

@@ -27,6 +27,7 @@ from langchain.chains.summarize import load_summarize_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
+from src.chatbot.agents.models import RetrievalResult
 from src.chatbot.agents.utils.agent_helpers import llm_optional as sumarize_llm
 
 # from src.chatbot.db.redis_client import redis_manager
@@ -342,10 +343,13 @@ async def visit_urls_extract(
     return urls, contents
 
 
-async def async_search(client, **kwargs) -> Tuple[str, List]:
+async def async_search(**kwargs) -> Tuple[str, List]:
     """Asynchronous search function that encapsulates the search functionality."""
     await ensure_initialized()
     try:
+        # TODO: use pool connections (redis)
+        client = redis.Redis(host="redis", port=6379, decode_responses=True)
+        await initialize_redis(client)
         # Initialize Redis if needed
         # await redis_manager.ensure_connection()
         query = kwargs.get("query", "")
@@ -389,7 +393,11 @@ async def async_search(client, **kwargs) -> Tuple[str, List]:
                 cache_value = str((final_output, visited_urls))
                 await client.setex(cache_key, TTL, cache_value)
 
-        return (final_output, visited_urls) if contents else ([], [])
+        await client.close()
+        return RetrievalResult(
+            result_text=final_output, reference=visited_urls, search_query=query
+        )
+        # return (final_output, visited_urls) if contents else ([], [])
 
     except ProgrammableSearchException as e:
         logger.exception(f"[SEARCH] Error: search engine: {e}", exc_info=True)
