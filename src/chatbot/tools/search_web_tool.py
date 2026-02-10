@@ -128,15 +128,15 @@ async def ensure_initialized():
                 _initialized = True
 
 
-# def extract_cached_content(cached_content):
-#     """Extract cached content from string representation."""
-#     import ast
+def extract_cached_content(cached_content):
+    """Extract cached content from string representation."""
+    import ast
 
-#     try:
-#         return ast.literal_eval(cached_content)
-#     except Exception as e:
-#         logger.exception(f"[CACHE] Could not extract cached content: {e}")
-#         return None
+    try:
+        return ast.literal_eval(cached_content)
+    except Exception as e:
+        logger.exception(f"[CACHE] Could not extract cached content: {e}")
+        return None
 
 
 async def generate_summary(text: str, query: str) -> str:

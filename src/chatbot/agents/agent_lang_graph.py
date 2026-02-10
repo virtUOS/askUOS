@@ -22,6 +22,8 @@ from typing_extensions import TypedDict
 
 from src.chatbot.agents.models import Reference, RetrievalResult
 from src.chatbot.agents.utils.agent_helpers import llm, llm_optional
+
+# from src.chatbot.agents.utils.agent_helpers import reasoning_llm
 from src.chatbot.agents.utils.agent_retriever import (
     _examination_regulations_tool,
     _retriever_his_in_one_tool,
@@ -788,11 +790,13 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
 
             self._llm = llm()
             self._llm_optional = llm_optional()
+            # self._reasoning_llm = reasoning_llm()
 
             tools = GraphNodesMixin.create_tools()
             self._tools_by_name = {tool.name: tool for tool in tools}
             # important: the code uses function calling as opposed to tool calling. (DEPENDS ON THE MODEL and how it was fine tuned)
             self._llm_with_tools = self._llm.bind_tools(tools)
+            # self._llm_with_tools = self._reasoning_llm.bind_tools(tools)
             self._prompt_length = get_prompt_length()
             self._create_graph()
 
