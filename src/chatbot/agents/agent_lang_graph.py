@@ -236,6 +236,7 @@ class GraphNodesMixin:
             ):
                 self._visited_docs.docs_references = [*result.reference]
 
+            # web search
             else:
                 self._visited_links += result.reference
 
@@ -261,7 +262,7 @@ class GraphNodesMixin:
                 name=ToolNames.TROUBLESHOOTING_TOOL,
                 coroutine=_retriever_his_in_one_tool,
                 description=translate_prompt()["HISinOne_troubleshooting_questions"],
-                args_shema=HisInOneInput,
+                args_schema=HisInOneInput,
                 handle_tool_errors=True,
             ),
             StructuredTool.from_function(
@@ -408,7 +409,6 @@ class GraphNodesMixin:
         self._visited_docs.clear()
         tool_tasks = []  # gather later with asyncio
 
-        # try:
         # TODO: FAQ support only available in RAGFLOW. Needs to be done with Milvus
         if (
             state.get("rewrite_query", False)
@@ -419,30 +419,13 @@ class GraphNodesMixin:
 
             tool_tasks.append(
                 retrieve_from_infinity_ragflow(
-                    CollectionNames.FAQ.value,
-                    message.tool_calls[0]["args"].get("query"),
+                    collection_name=CollectionNames.FAQ.value,
+                    query=message.tool_calls[0]["args"].get("query"),
+                    extract_reference_url=True,
                 )
             )
-            # tool_result_faq = retrieve_from_infinity_ragflow(
-            #     CollectionNames.FAQ, message.tool_calls[0]["args"].get("query")
-            # )
-
-            #################### Needs to be reimplemented #################
-            # faq_content = tool_result_faq[0]  # the text of the document
-            # extract references
-            # unique_refs = {item.url_reference_askuos for item in tool_result_faq[1]}
-            # self._visited_links += list(unique_refs)
-        # this execption managed by return_exceptions=True in asyncio.gather
-        # except Exception as e:
-        #     logger.exception(
-        #         f"[LANGGRAPH]Error retrieving FAQ content: with args: tool_call['args']: {e}"
-        #     )
-        #     raise e
-        #################### Needs to be reimplemented #################
 
         for tool_call in message.tool_calls:
-
-            # try:
 
             # TODO Write test for this
             if tool_call["name"] == ToolNames.SEARCH_WEB_TOOL:
@@ -450,79 +433,26 @@ class GraphNodesMixin:
                 teaching_degree = tool_call["args"].get("teaching_degree", False)
                 tool_call["args"]["do_not_visit_links"] = self._visited_links
                 tool_call["args"]["agent_executor"] = self
-                # tool_result = self._tools_by_name[tool_call["name"]].invoke(
-                #     tool_call["args"]
-                # )
-                # tool_tasks.append(async_search(**tool_call["args"]))
+
                 # TODO IF no results are found, the tool result is empty and the agent should generate a new query and search again
                 # TODO even when no results are found, the entire graph executes e.g. grade_documents edge
-                # tool_tasks.append(
-                #     self._tools_by_name[tool_call["name"]].ainvoke(tool_call["args"])
-                # )
+
                 tool_tasks.append(async_search(**tool_call["args"]))
 
-                #################### Needs to be reimplemented #################
-                # tool_result = search_uni_web(**tool_call["args"])
-                # the web search can take place several times while processing the same query, visited links keeps track of the links
-                # that have already been visited across all the searches within the same graph run
-                # self._visited_links += tool_result[1]
-
-                # tool_result = tool_result[0]
-                #################### Needs to be reimplemented #################
             # TODO: Unify all vector db based tools. They all should return the same format (text,(source, page))
             elif tool_call["name"] == ToolNames.EXAMINATION_REGULATIONS_TOOL:
 
                 tool_tasks.append(_examination_regulations_tool(**tool_call["args"]))
 
-                # tool_tasks.append(
-                #     self._tools_by_name[tool_call["name"]].ainvoke(tool_call["args"])
-                # )
-
-                # tool_result = self._tools_by_name[tool_call["name"]].invoke(
-                #     tool_call["args"]
-                # )
-                # self._visited_docs.docs_references = [
-                #     *tool_result[1]
-                # ]  # each element of the form (content, reference)
-                # tool_result = tool_result[0]  # the text of the document
-
             elif tool_call["name"] == ToolNames.TROUBLESHOOTING_TOOL:
 
                 tool_tasks.append(_retriever_his_in_one_tool(**tool_call["args"]))
-                # tool_tasks.append(
-                #     self._tools_by_name[tool_call["name"]].ainvoke(tool_call["args"])
-                # )
-
-                #################### Needs to be reimplemented #################
-            #     tool_result = self._tools_by_name[tool_call["name"]].invoke(
-            #         tool_call["args"]
-            #     )
-            #     self._visited_docs.docs_references = [
-            #         *tool_result[1]
-            #     ]  # each element of the form (content, reference)
-            #     tool_result = tool_result[0]  # the text of the document
-            # logger.debug(
-            #     f'[LANGGRAPH][TOOL NODE] Successfully executed tool call:{tool_call["name"]}. Length of tool_resul: {len(tool_call)}'
-            # )
-            #################### Needs to be reimplemented #################
-
-            # except Exception as e:
-            #     logger.exception(
-            #         f"[LANGGRAPH]Error invoking tool: {tool_call['name']} with args: tool_call['args']: {e}"
-            #     )
-            #     raise e
 
             # tool_m = ToolMessage(
             #     content=json.dumps(tool_result),
             #     name=tool_call["name"],
             #     tool_call_id=tool_call["id"],
             # )
-
-            # outputs_txt += tool_m.content + "\n\n"
-            # TODO tool message is a dictionary, needs further processing
-            # TODO add the retrieved documents name and page to the visited links object
-            # outputs.append(tool_m)
-            # search_query.append(tool_call["args"].get("query", ""))
 
         # Call tools
         retrieval_results: RetrievalResult = await asyncio.gather(
@@ -533,8 +463,6 @@ class GraphNodesMixin:
 
         last_tool_usage = state["messages"][-1].additional_kwargs
         state["messages"] = state["messages"][:-1]  # remove the last AI message
-
-        # TODO IF no results are found, the tool result is empty and the agent should generate a new query and search again
 
         return {
             # "tool_messages": outputs_txt + faq_content,

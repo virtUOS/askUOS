@@ -20,7 +20,9 @@ VECTOR_DB_TYPE = settings.vector_db_settings.type
 
 
 async def retrieve_from_infinity_ragflow(
-    collection_name: str, query: str
+    collection_name: str,
+    query: str,
+    extract_reference_url: bool = False,  # creates a url based on the documents name
 ) -> RetrievalResult:
     ref: list[Reference] = []
     results = []
@@ -35,7 +37,11 @@ async def retrieve_from_infinity_ragflow(
                     source=source,
                     page=page,
                     doc_id=retrieved_item.chunk.document_id,
-                    url_reference_askuos=retrieved_item.chunk.url_reference_askuos,
+                    url_reference_askuos=(
+                        retrieved_item.chunk.url_reference_askuos
+                        if extract_reference_url
+                        else None
+                    ),
                 )
             )
             results.append(f"Source: {source} \nText: {retrieved_item.chunk.content}")
@@ -47,13 +53,8 @@ async def retrieve_from_infinity_ragflow(
         )
 
     except Exception as e:
-        logger.error(f"[RAGFlow]Error during similarity search: {e}")
-        return RetrievalResult(
-            result_text=NOT_FOUND_MESSAGE,
-            reference=ref,
-            source_name=collection_name,
-            search_query=query,
-        )
+        logger.error(f"[RAGFlow]Error during retrieval: {e}")
+        raise
 
 
 def retrieve_from_milvus(collection_name: str, query: str, doc_search_params: dict):
@@ -91,14 +92,14 @@ def retrieve_from_milvus(collection_name: str, query: str, doc_search_params: di
         raise e
 
 
-# used by the examination regulations tool
-
-
 async def _examination_regulations_tool(
     **kwargs,
 ) -> RetrievalResult:
     # TODO: add a filter for the program name WHEN searching
     query = kwargs.get("query", "")
+    if not query:
+        logger.error(f"Agent Failed to provide query")
+        raise ValueError(f"A query must be provided")
     filter_program_name = kwargs.get("filter_program_name", "")
     ref: list[Reference] = []
     results = []
@@ -133,13 +134,18 @@ async def _examination_regulations_tool(
         )
     else:
         logger.error(f"[VECTOR DB]Unsupported vector DB type: {VECTOR_DB_TYPE}")
-        return NOT_FOUND_MESSAGE, ref
+        raise ValueError(f"[VECTOR DB]Unsupported vector DB type: {VECTOR_DB_TYPE}")
 
 
 # used by the hisinone tool
-async def _retriever_his_in_one_tool(**kwargs) -> str:
+async def _retriever_his_in_one_tool(
+    **kwargs,
+) -> RetrievalResult:
 
     query = kwargs.get("query", "")
+    if not query:
+        logger.error(f"Agent Failed to provide query")
+        raise ValueError(f"A query must be provided")
     if VECTOR_DB_TYPE == VectorDBTypes.MILVUS:
         try:
 
@@ -168,4 +174,4 @@ async def _retriever_his_in_one_tool(**kwargs) -> str:
         )
     else:
         logger.error(f"[VECTOR DB]Unsupported vector DB type: {VECTOR_DB_TYPE}")
-        return NOT_FOUND_MESSAGE
+        raise ValueError(f"[VECTOR DB]Unsupported vector DB type: {VECTOR_DB_TYPE}")
