@@ -19,6 +19,9 @@
 	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
 	"customizations": {
 		"vscode": {
+			"settings": {
+				"python.defaultInterpreterPath": "/opt/venv/bin/python"
+			},
 			"extensions": [
 				"ms-azuretools.vscode-docker",
 				"ms-python.debugpy",
@@ -29,7 +32,8 @@
 				"RooVeterinaryInc.roo-cline",
 				"Redis.redis-for-vscode"
 			]
-		}
+		},
+		"postCreateCommand": "uv sync --frozen"
 	}
 
 	// Features to add to the dev container. More info: https://containers.dev/features.

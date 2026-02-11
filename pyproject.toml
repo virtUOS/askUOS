@@ -1,0 +1,28 @@
+[project]
+name = "askUOS"
+version = "0.1.0"
+description = "AI chatbot for applicants and students – get instant answers about studies, teaching, and campus life"
+requires-python = ">=3.11"
+dependencies = [
+    "crawl4ai===0.6.3",
+    "fastembed===0.2.1",
+    "ipython>=9.10.0",
+    "langchain===0.3.26",
+    "langchain-community===0.3.27",
+    "langchain-experimental===0.3.4",
+    "langchain-milvus===0.2.1",
+    "langchain-ollama===0.3.5",
+    "langchain-openai===0.3.28",
+    "langchain-redis===0.2.3",
+    "langgraph===0.5.3",
+    "nest-asyncio>=1.6.0",
+    "pydantic-settings===2.10.1",
+    "pymilvus===2.5.12",
+    "pypdf===4.0.1",
+    "pypdf2===3.0.1",
+    "python-frontmatter>=1.1.0",
+    "redis>=7.1.1",
+    "streamlit===1.47.0",
+    "streamlit-cookies-controller===0.0.4",
+    "tqdm>=4.67.3",
+]
