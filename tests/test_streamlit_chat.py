@@ -8,7 +8,6 @@ import uuid
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import redis.asyncio as redis
-from langchain.evaluation import load_evaluator
 from langchain_redis import RedisChatMessageHistory
 from streamlit.testing.v1 import AppTest
 

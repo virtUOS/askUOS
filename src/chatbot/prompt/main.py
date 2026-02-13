@@ -1,10 +1,5 @@
-from typing import Dict, List, Optional, Union
+from typing import Dict, List
 
-from langchain.prompts.chat import (
-    ChatPromptTemplate,
-    HumanMessagePromptTemplate,
-    MessagesPlaceholder,
-)
 from langchain_core.messages import SystemMessage
 
 import src.chatbot.prompt.prompt_text as text

@@ -3,9 +3,7 @@ import sys
 
 sys.path.append("/app")
 import asyncio
-import types
-from functools import wraps
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import aiohttp
 
@@ -13,30 +11,14 @@ import aiohttp
 import colorama
 import dotenv
 import nest_asyncio
+import redis.asyncio as aioredis
 import redis.asyncio as redis
-from crawl4ai import (
-    AsyncWebCrawler,
-    BrowserConfig,
-    CacheMode,
-    CrawlerMonitor,
-    CrawlerRunConfig,
-)
-from crawl4ai.async_database import DB_PATH, async_db_manager
-from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher
-from langchain.chains.summarize import load_summarize_chain
-from langchain.prompts import PromptTemplate
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_classic.chains.summarize import load_summarize_chain
+from langchain_classic.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.prompts import PromptTemplate
 
-from src.chatbot.agents.models import RetrievalResult
+from src.chatbot.agents.models import RetrievalResult, ScrapeResult
 from src.chatbot.agents.utils.agent_helpers import llm_optional as sumarize_llm
-from src.chatbot.tools.utils.custom_crawl import (
-    _check_content_changed,
-    arun,
-    custom_acache_url,
-    custom_aget_cached_url,
-    custom_ainit_db,
-    delete_cached_result,
-)
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import decode_string
 from src.chatbot_log.chatbot_logger import logger
@@ -44,24 +26,12 @@ from src.config.core_config import settings
 
 colorama.init(strip=True)
 
-AsyncWebCrawler.arun = arun
-AsyncWebCrawler.delete_cached_result = delete_cached_result
-AsyncWebCrawler._check_content_changed = _check_content_changed
-
-async_db_manager.ainit_db = types.MethodType(custom_ainit_db, async_db_manager)
-async_db_manager.acache_url = types.MethodType(custom_acache_url, async_db_manager)
-async_db_manager.aget_cached_url = types.MethodType(
-    custom_aget_cached_url, async_db_manager
-)
-
-CrawlerRunConfig.check_content_changed = True
-CrawlerRunConfig.head_request_timeout = 3.0
-CrawlerRunConfig.default_cache_ttl_seconds = 60 * 60 * 72  # 72 hours
 
 dotenv.load_dotenv()
 
 # from src.chatbot.db.redis_pool import RedisPool
-
+# service running on docker compose
+CRAWL_API_URL = "http://crawl4ai:11235/crawl"
 # Application context URLs
 APPLICATION_CONTEXT_URLS = [
     # "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/zulassungsbeschraenkungen",
@@ -71,17 +41,24 @@ APPLICATION_CONTEXT_URLS = [
 SEARCH_URL = os.getenv("SEARCH_URL")
 MAX_NUM_LINKS = 4
 
+# TODO Change cache mechanism
+CRAWL_PAYLOAD = {
+    "browser_config": {"type": "BrowserConfig", "params": {"headless": True}},
+    "crawler_config": {
+        "type": "CrawlerRunConfig",
+        "params": {
+            "stream": False,
+            "cache_mode": {"type": "CacheMode", "params": "bypass"},
+            "word_count_threshold": 100,
+            "target_elements": ["main", "div#content"],
+            "scan_full_page": True,
+        },
+    },
+}
 
-TTL = 30 * 60 * 60  # 30h default TTL
+TTL = 48 * 60 * 60  # 48h default TTL
 
-# Module-level state variables
-_initialized = False
-_init_lock = asyncio.Lock()
 no_content_found_message = "Content not found"
-target_elements = ["main", "div#content"]
-browser_config = None
-run_config = None
-dispatcher = None
 
 
 async def initialize_redis(client: redis.Redis):
@@ -98,45 +75,6 @@ async def initialize_redis(client: redis.Redis):
     except redis.ConnectionError as e:
         logger.error(f"[REDIS] Redis connection error: {e}")
         raise
-
-
-async def ensure_initialized():
-    """Ensure that the module is initialized only once."""
-    global _initialized, browser_config, run_config, dispatcher
-
-    if not _initialized:
-        async with _init_lock:
-            if not _initialized:
-                browser_config = BrowserConfig(
-                    headless=True,
-                    verbose=True,
-                )
-                run_config = CrawlerRunConfig(
-                    cache_mode=CacheMode.ENABLED,
-                    target_elements=target_elements,
-                    scan_full_page=True,
-                    verbose=settings.application.debug,
-                    stream=False,
-                )
-                dispatcher = MemoryAdaptiveDispatcher(
-                    memory_threshold_percent=70.0,
-                    check_interval=1.0,
-                    max_session_permit=10,
-                    monitor=CrawlerMonitor(),
-                )
-
-                _initialized = True
-
-
-def extract_cached_content(cached_content):
-    """Extract cached content from string representation."""
-    import ast
-
-    try:
-        return ast.literal_eval(cached_content)
-    except Exception as e:
-        logger.exception(f"[CACHE] Could not extract cached content: {e}")
-        return None
 
 
 async def generate_summary(text: str, query: str) -> str:
@@ -194,55 +132,72 @@ def compute_tokens(
     return total_tokens, current_search_num_tokens
 
 
-async def get_web_content(
-    url: str, client: redis.Redis
-) -> Tuple[Optional[str], Optional[str]]:
-    """Get web content from URL with caching."""
-    await ensure_initialized()
-    cache_key = f"{__name__}:get_web_content:{url}"
-
-    result_content = None
-    result_url = None
-    try:
-        # Try to get from cache
-        cached_content = await client.get(cache_key)
-        if cached_content:
-            logger.debug("[REDIS] Retrieved (crawled) page content from cache")
-            return extract_cached_content(cached_content)
-
-        logger.debug("[REDIS] No (crawled) page content cached in Redis")
-
-    except Exception as e:
-        logger.error(f"[REDIS] Error accessing (crawled) cache: {e}")
+async def crawl_urls_via_api(
+    urls: List[str], crawl_payload: Optional[dict] = CRAWL_PAYLOAD
+) -> List[ScrapeResult]:
+    """
+    Crawl multiple URLs using the API endpoint.
+    Returns a list of crawl results.
+    """
 
     try:
-        async with AsyncWebCrawler(
-            config=browser_config,
-            thread_safe=True,
-        ) as crawler:
-            result = await crawler.arun(
-                url=url,
-                config=run_config,
-            )
-            if result and result[0].success:
-                result_url = result[0].url
-                result_content = result[0].markdown
+        scraped_results = []
+        payload = crawl_payload
+        payload["urls"] = urls
+        payload["crawler_config"]["params"][
+            "stream"
+        ] = False  # ensure non-streaming mode
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                CRAWL_API_URL,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            ) as response:
+                if response.status == 200:
+                    # Wait for the complete response
+                    response_data = await response.json()
 
-            return result_url, result_content
+                    # Extract results from the response
+                    if response_data.get("success") is False:
+                        logger.error("Crawl API reported failure: ")
+                        return []
 
+                    results_data: List[dict] = response_data.get("results", [])
+
+                    for result_data in results_data:
+                        scraped_results.append(
+                            ScrapeResult(
+                                url=result_data["url"],
+                                html=result_data["html"],
+                                cleaned_html=result_data["cleaned_html"],
+                                markdown=result_data["markdown"]["raw_markdown"],
+                                title=result_data["metadata"]["title"],
+                                description=result_data["metadata"]["description"],
+                                keywords=result_data["metadata"]["keywords"],
+                                author=result_data["metadata"]["author"],
+                                # links=result_data["links"],
+                            )
+                        )
+                    return scraped_results
     except Exception as e:
-        logger.exception(f"[CRAWL] Error while crawling the URL: {url}", exc_info=True)
-        return result_url, result_content
-    finally:
-        # Cache the result
-        if result_content and len(result_content) > 20:
-            cache_value = str((result_url, result_content))
-            try:
-                await client.setex(cache_key, TTL, cache_value)
-            except Exception as e:
-                logger.exception(
-                    f"[REDIS] Error while caching content for URL: {url}", exc_info=True
-                )
+        logger.error(f"[SCRAPING]Exception while crawling via API: {e}")
+        return []
+
+
+async def extract_url_redis(
+    url: str, cache_key: str, client: redis.Redis
+) -> ScrapeResult | str:
+
+    # Try to get from cache
+    cached_content = await client.get(cache_key)
+    print(f"----------------searching key: {cache_key}------------")
+    if cached_content:
+        logger.debug("[REDIS] Retrieved (crawled) page content from cache")
+        return ScrapeResult.from_json(cached_content)
+        # return extract_cached_content(cached_content)
+
+    logger.debug("[REDIS] No (crawled) page content cached in Redis")
+    return url
 
 
 async def visit_urls_extract(
@@ -255,9 +210,13 @@ async def visit_urls_extract(
     client: redis.Redis = None,
 ) -> Tuple[List, List]:
     """Visit URLs and extract content."""
+
     contents = []
     links_search = []
-
+    scraping_result = []
+    filtered_urls = []
+    cache_key_prefix = f"{__name__}:visit_urls_extract:"
+    cache_tasks = []
     async with aiohttp.ClientSession() as session:
         # Query Google search API
         async with session.get(url) as response:
@@ -306,50 +265,74 @@ async def visit_urls_extract(
 
         urls.append(href)
 
-    if urls:
-        for url in urls:
-            result_url, result_content = await get_web_content(url, client)
+    # Check if url is in cache
+    print(await client.keys("*"))
+    task_url_cache = [
+        extract_url_redis(url=u, cache_key=f"{cache_key_prefix}{u}", client=client)
+        for u in urls
+    ]
+    task_url_cache_result = await asyncio.gather(
+        *task_url_cache, return_exceptions=True
+    )
+    for c in task_url_cache_result:
+        if isinstance(c, str):
+            filtered_urls.append(c)
+        elif isinstance(c, ScrapeResult):
+            contents.append(c.formatted_markdown)  # ← use cached content immediately
+        elif isinstance(c, Exception):
+            logger.error(f"[REDIS] Error accessing (crawled) cache: {c}")
 
-            if result_content:
-                if len(result_content) < 20:
-                    logger.warning(
-                        f"[CRAWL] The URL content could not be extracted. Make sure the content is contained in current target elements: {target_elements}. URL: {url}"
-                    )
-                    continue
-                contents.append(
-                    f"Information taken from: {result_url}\n{result_content}"
-                )
+    if filtered_urls:
+        scraping_result = await crawl_urls_via_api(filtered_urls)
+        # scraping_result.extend(freshly_scraped)
+    for scraped in scraping_result:
+        # result_url, result_content = await get_web_content(url, client)
+
+        if scraped.formatted_markdown and len(scraped.formatted_markdown) >= 70:
+            cache_key = f"{cache_key_prefix}{scraped.url}"
+            print(f"----------------saving key {cache_key}----------------")
+            # await client.setex(cache_key, TTL, scraped.to_json())
+            cache_tasks.append(
+                asyncio.create_task(client.setex(cache_key, TTL, scraped.to_json()))
+            )
+            contents.append(scraped.formatted_markdown)
 
     # Summarize content if total tokens exceed the limit
-    if contents:
-        # Order the contents by the index
-        contents = (
-            sorted(contents, key=lambda x: x[1])
-            if isinstance(contents[0], tuple)
-            else contents
-        )
-        total_tokens, _ = compute_tokens("".join(contents), query, agent_executor)
+    try:
+        if contents:
+            # Order the contents by the index
+            contents = (
+                sorted(contents, key=lambda x: x[1])
+                if isinstance(contents[0], tuple)
+                else contents
+            )
+            total_tokens, _ = compute_tokens("".join(contents), query, agent_executor)
 
-        if total_tokens > settings.model.context_window:
-            for i, text in enumerate(reversed(contents)):
-                contents[i] = await generate_summary(text, query)
-                # Update the total tokens
-                total_tokens, _ = compute_tokens(
-                    "".join(contents), query, agent_executor
+            if total_tokens > settings.model.context_window:
+                for i, text in enumerate(reversed(contents)):
+                    contents[i] = await generate_summary(text, query)
+                    # Update the total tokens
+                    total_tokens, _ = compute_tokens(
+                        "".join(contents), query, agent_executor
+                    )
+                    if total_tokens <= settings.model.context_window:
+                        break
+    finally:
+        c_result = await asyncio.gather(*cache_tasks, return_exceptions=True)
+        for cr in c_result:
+            if isinstance(cr, Exception):
+                logger.exception(
+                    f"[REDIS] Error while caching content for URL: {cr}",
                 )
-                if total_tokens <= settings.model.context_window:
-                    break
-
+    # print(await client.keys("*"))
     return urls, contents
 
 
 async def async_search(**kwargs) -> Tuple[str, List]:
     """Asynchronous search function that encapsulates the search functionality."""
-    # ensure craw4ai is initialized
-    await ensure_initialized()
     try:
-        client = redis.Redis(host="redis", port=6379, decode_responses=True)
-
+        # client = redis.Redis(host="redis", port=6379, decode_responses=True)
+        client = aioredis.Redis(host="redis", port=6379, decode_responses=True)
         # await RedisPool.get_pool()
         # client = RedisPool.get_client()
         try:
@@ -444,4 +427,66 @@ async def async_search(**kwargs) -> Tuple[str, List]:
 
 if __name__ == "__main__":
     # Use for testing/debugging
-    pass
+    import asyncio
+
+    import redis.asyncio as aioredis
+
+    async def test():
+        client = aioredis.Redis(host="redis", port=6379, decode_responses=True)
+        await client.setex("test_key", 300, "hello")
+        val = await client.get("test_key")
+        print(f"Stored and retrieved: {val}")  # Should print "hello"
+        await client.aclose()
+
+    asyncio.run(test())
+
+
+# async def get_web_content(url: str, client: redis.Redis) -> ScrapeResult:
+#     """Get web content from URL with caching."""
+#     # esure crawl is initialized
+#     await ensure_initialized()
+#     cache_key = f"{__name__}:get_web_content:{url}"
+
+#     result_content = None
+#     result_url = None
+#     try:
+#         # Try to get from cache
+#         cached_content = await client.get(cache_key)
+#         if cached_content:
+#             logger.debug("[REDIS] Retrieved (crawled) page content from cache")
+#             return extract_cached_content(cached_content)
+
+#         logger.debug("[REDIS] No (crawled) page content cached in Redis")
+
+#     except Exception as e:
+#         logger.error(f"[REDIS] Error accessing (crawled) cache: {e}")
+
+#     results = crawl_urls_via_api()
+#     try:
+#         async with AsyncWebCrawler(
+#             config=browser_config,
+#             thread_safe=True,
+#         ) as crawler:
+#             result = await crawler.arun(
+#                 url=url,
+#                 config=run_config,
+#             )
+#             if result and result[0].success:
+#                 result_url = result[0].url
+#                 result_content = result[0].markdown
+
+#             return ScrapeResult(result_url=result_url, result_content=result_content)
+
+#     except Exception as e:
+#         logger.exception(f"[CRAWL] Error while crawling the URL: {url}", exc_info=True)
+#         return ScrapeResult(result_url=result_url, result_content=result_content)
+#     finally:
+#         # Cache the result
+#         if result_content and len(result_content) > 20:
+#             # cache_value = str((result_url, result_content))
+#             try:
+#                 await client.setex(cache_key, TTL, cache_value.to_json())
+#             except Exception as e:
+#                 logger.exception(
+#                     f"[REDIS] Error while caching content for URL: {url}", exc_info=True
+#                 )

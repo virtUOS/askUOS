@@ -252,7 +252,7 @@ class GraphNodesMixin:
         Returns:
             List[BaseTool]: Configured tools for the agent
         """
-        from langchain.tools.base import StructuredTool
+        from langchain_classic.tools import StructuredTool
 
         # from src.chatbot.tools.search_web_tool import search_uni_web
         from src.chatbot.tools.search_web_tool import async_search

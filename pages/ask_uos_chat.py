@@ -2,7 +2,7 @@ import asyncio
 import time
 import uuid
 from collections import deque
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import nest_asyncio
 import streamlit as st
@@ -125,6 +125,7 @@ class ChatApp:
             history = LimitedRedisChatMessageHistory(
                 redis_url="redis://redis:6379",
                 session_id=validated_user_id,
+                overwrite_index=False,
                 ttl=60 * 60 * 2,  # 2 hours
             )
             return history
