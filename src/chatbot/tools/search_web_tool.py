@@ -6,8 +6,6 @@ import asyncio
 from typing import List, Optional, Tuple
 
 import aiohttp
-
-# At the beginning of your script
 import colorama
 import dotenv
 import nest_asyncio
@@ -25,13 +23,8 @@ from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
 colorama.init(strip=True)
-
-
 dotenv.load_dotenv()
 
-# from src.chatbot.db.redis_pool import RedisPool
-# service running on docker compose
-CRAWL_API_URL = "http://crawl4ai:11235/crawl"
 # Application context URLs
 APPLICATION_CONTEXT_URLS = [
     # "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung/zulassungsbeschraenkungen",
@@ -41,22 +34,10 @@ APPLICATION_CONTEXT_URLS = [
 SEARCH_URL = os.getenv("SEARCH_URL")
 MAX_NUM_LINKS = 4
 
-# TODO Change cache mechanism
-CRAWL_PAYLOAD = {
-    "browser_config": {"type": "BrowserConfig", "params": {"headless": True}},
-    "crawler_config": {
-        "type": "CrawlerRunConfig",
-        "params": {
-            "stream": False,
-            "cache_mode": {"type": "CacheMode", "params": "bypass"},
-            "word_count_threshold": 100,
-            "target_elements": ["main", "div#content"],
-            "scan_full_page": True,
-        },
-    },
-}
-
-TTL = 48 * 60 * 60  # 48h default TTL
+# TODO Change cache mechanism to enabled (in config.yml)
+CRAWL_API_URL = settings.crawl_settings.base_url
+CRAWL_PAYLOAD = settings.crawl_settings.crawl_payload
+TTL = settings.crawl_settings.ttl_redis
 
 no_content_found_message = "Content not found"
 
@@ -190,11 +171,9 @@ async def extract_url_redis(
 
     # Try to get from cache
     cached_content = await client.get(cache_key)
-    print(f"----------------searching key: {cache_key}------------")
     if cached_content:
         logger.debug("[REDIS] Retrieved (crawled) page content from cache")
         return ScrapeResult.from_json(cached_content)
-        # return extract_cached_content(cached_content)
 
     logger.debug("[REDIS] No (crawled) page content cached in Redis")
     return url
@@ -290,8 +269,6 @@ async def visit_urls_extract(
 
         if scraped.formatted_markdown and len(scraped.formatted_markdown) >= 70:
             cache_key = f"{cache_key_prefix}{scraped.url}"
-            print(f"----------------saving key {cache_key}----------------")
-            # await client.setex(cache_key, TTL, scraped.to_json())
             cache_tasks.append(
                 asyncio.create_task(client.setex(cache_key, TTL, scraped.to_json()))
             )

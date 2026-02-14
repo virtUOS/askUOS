@@ -128,3 +128,11 @@ class ChatPageConfig(BaseModel):
 
     delete_message_dialog_box_english: str
     delete_message_dialog_box_german: str
+
+
+class CrawlSettings(BaseModel):
+    """Settings for web crawler behavior"""
+
+    base_url: str
+    crawl_payload: dict  # TODO : requires special validation, use the crawl4ai schema
+    ttl_redis: int

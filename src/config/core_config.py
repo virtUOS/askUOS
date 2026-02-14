@@ -12,6 +12,7 @@ from src.chatbot_log.chatbot_logger import logger
 from .models import (
     ApplicationConfig,
     ChatPageConfig,
+    CrawlSettings,
     EmbeddingSettings,
     Legal,
     LogSettings,
@@ -43,6 +44,7 @@ class Settings(BaseSettings):
     language: Literal["Deutsch", "English"]
     start_page: StartPageConfig
     chat_page: ChatPageConfig
+    crawl_settings: CrawlSettings
     legal: Optional[Legal] = (
         None  # Optional legal information (e.g., data protection, imprint)
     )

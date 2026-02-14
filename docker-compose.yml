@@ -29,7 +29,7 @@ services:
 
 
   crawl4ai:
-    image: unclecode/crawl4ai:latest
+    image: unclecode/crawl4ai:0.7.6
     container_name: crawl4ai-askUOS
     networks:
       - default
@@ -63,8 +63,8 @@ services:
       --maxmemory-samples 5
     networks:
       - default
-    restart:
-      - always
+    restart: always
+  
   etcd:
     container_name: milvus-etcd
     image: quay.io/coreos/etcd:v3.5.16
