@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "AI chatbot for applicants and students – get instant answers about studies, teaching, and campus life"
 requires-python = ">=3.11"
 dependencies = [
-    "crawl4ai===0.6.3",
     "fastembed",
     "ipython",
     "langchain",

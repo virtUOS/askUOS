@@ -1,3 +1,4 @@
+import copy
 import os
 import sys
 
@@ -6,7 +7,8 @@ import asyncio
 from typing import List, Optional, Tuple
 
 import aiohttp
-import colorama
+
+# import colorama
 import dotenv
 import nest_asyncio
 import redis.asyncio as aioredis
@@ -22,7 +24,7 @@ from src.chatbot.tools.utils.tool_helpers import decode_string
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
-colorama.init(strip=True)
+# colorama.init(strip=True)
 dotenv.load_dotenv()
 
 # Application context URLs
@@ -40,22 +42,6 @@ CRAWL_PAYLOAD = settings.crawl_settings.crawl_payload
 TTL = settings.crawl_settings.ttl_redis
 
 no_content_found_message = "Content not found"
-
-
-async def initialize_redis(client: redis.Redis):
-    """Initialize Redis connection and settings."""
-
-    try:
-        await client.ping()
-        logger.info("[REDIS] Redis connection established successfully.")
-        info = await client.info("memory")
-        used_memory_mb = int(info["used_memory"]) / 1024 / 1024
-        logger.info(
-            f"[REDIS] Redis configured successfully. Memory usage: {used_memory_mb:.2f}MB"
-        )
-    except redis.ConnectionError as e:
-        logger.error(f"[REDIS] Redis connection error: {e}")
-        raise
 
 
 async def generate_summary(text: str, query: str) -> str:
@@ -94,10 +80,12 @@ async def generate_summary(text: str, query: str) -> str:
         combine_prompt=reduce_template,
         verbose=True,
     )
-
+    # TODO :BUG CANNOT CHANGE GLOBAL VARIABLE, MY RAISE A RACE CONDITION
     settings.llm_summarization_mode = True
-    summary = await chain.arun(input_documents=docs, question=query)
-    settings.llm_summarization_mode = False
+    try:
+        summary = await chain.arun(input_documents=docs, question=query)
+    finally:
+        settings.llm_summarization_mode = False
     return summary
 
 
@@ -114,7 +102,9 @@ def compute_tokens(
 
 
 async def crawl_urls_via_api(
-    urls: List[str], crawl_payload: Optional[dict] = CRAWL_PAYLOAD
+    urls: List[str],
+    session: aiohttp.ClientSession,
+    crawl_payload: Optional[dict] = None,
 ) -> List[ScrapeResult]:
     """
     Crawl multiple URLs using the API endpoint.
@@ -123,45 +113,52 @@ async def crawl_urls_via_api(
 
     try:
         scraped_results = []
-        payload = crawl_payload
+        payload = copy.deepcopy(crawl_payload or CRAWL_PAYLOAD)
         payload["urls"] = urls
         payload["crawler_config"]["params"][
             "stream"
         ] = False  # ensure non-streaming mode
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                CRAWL_API_URL,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-            ) as response:
-                if response.status == 200:
-                    # Wait for the complete response
-                    response_data = await response.json()
 
-                    # Extract results from the response
-                    if response_data.get("success") is False:
-                        logger.error("Crawl API reported failure: ")
-                        return []
+        async with session.post(
+            CRAWL_API_URL,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+        ) as response:
+            if response.status != 200:
+                logger.error(
+                    "[CRAWL] API returned non-200 status: %d, body: %s",
+                    response.status,
+                    await response.text(),
+                )
+                return []
 
-                    results_data: List[dict] = response_data.get("results", [])
+                # Wait for the complete response
+            response_data = await response.json()
 
-                    for result_data in results_data:
-                        scraped_results.append(
-                            ScrapeResult(
-                                url=result_data["url"],
-                                html=result_data["html"],
-                                cleaned_html=result_data["cleaned_html"],
-                                markdown=result_data["markdown"]["raw_markdown"],
-                                title=result_data["metadata"]["title"],
-                                description=result_data["metadata"]["description"],
-                                keywords=result_data["metadata"]["keywords"],
-                                author=result_data["metadata"]["author"],
-                                # links=result_data["links"],
-                            )
-                        )
-                    return scraped_results
+            # Extract results from the response
+            if response_data.get("success") is False:
+                logger.error("[CRAWL] Crawl API reported failure")
+                return []
+
+            results_data: List[dict] = response_data.get("results", [])
+
+            for result_data in results_data:
+                scraped_results.append(
+                    ScrapeResult(
+                        url=result_data["url"],
+                        html=result_data["html"],
+                        cleaned_html=result_data["cleaned_html"],
+                        markdown=result_data["markdown"]["raw_markdown"],
+                        title=result_data["metadata"]["title"],
+                        description=result_data["metadata"]["description"],
+                        keywords=result_data["metadata"]["keywords"],
+                        author=result_data["metadata"]["author"],
+                        # links=result_data["links"],
+                    )
+                )
+            return scraped_results
     except Exception as e:
-        logger.error(f"[SCRAPING]Exception while crawling via API: {e}")
+        logger.error(f"[CRAWL]Exception while crawling via API: {e}")
         return []
 
 
@@ -172,15 +169,35 @@ async def extract_url_redis(
     # Try to get from cache
     cached_content = await client.get(cache_key)
     if cached_content:
-        logger.debug("[REDIS] Retrieved (crawled) page content from cache")
+        logger.debug("[REDIS] CACHE HIT – key=%s (url=%s)", cache_key, url)
         return ScrapeResult.from_json(cached_content)
 
-    logger.debug("[REDIS] No (crawled) page content cached in Redis")
+    logger.debug("[REDIS] CACHE MISS – key=%s (url=%s)", cache_key, url)
     return url
 
 
+async def _google_search(session: aiohttp.ClientSession, url: str):
+    """
+    Coroutine that runs a Google Programmable Search
+    """
+    async with session.get(url) as response:
+        if response.status != 200:
+            raise RuntimeError(f"Search failed, status={response.status}")
+
+        data = await response.json()
+        total = int(data.get("searchInformation", {}).get("totalResults", 0))
+
+        if total > 0:
+            links = [item["link"] for item in data["items"]]
+            logger.debug("Search returned %d links", len(links))
+            return links
+        else:
+            logger.warning("No search results for %s", url)
+            return []
+
+
 async def visit_urls_extract(
-    url: str,
+    url: str,  # search url
     query: str,
     agent_executor,
     about_application: bool = False,
@@ -198,83 +215,93 @@ async def visit_urls_extract(
     cache_tasks = []
     async with aiohttp.ClientSession() as session:
         # Query Google search API
-        async with session.get(url) as response:
-            response.raise_for_status()
+        # async with session.get(url) as response:
+        #     if response.status != 200:
+        #         raise ProgrammableSearchException(
+        #             f"Failed: Programmable Search Engine. Status: {response.status}"
+        #         )
 
-            if response.status != 200:
-                raise ProgrammableSearchException(
-                    f"Failed: Programmable Search Engine. Status: {response.status}"
+        #     # Parse JSON response
+        #     dict_response = await response.json()
+
+        #     # Check if there are results
+        #     total_results = dict_response.get("searchInformation", {}).get(
+        #         "totalResults", 0
+        #     )
+        #     if int(total_results) > 0:
+        #         links_search = [item["link"] for item in dict_response["items"]]
+        #         logger.debug(
+        #             f"[SEARCH] Search Engine returned {len(links_search)} results (links)"
+        #         )
+        #     else:
+        #         logger.warning(
+        #             f"[SEARCH] No results found by the search engine while requesting this URL: {url}"
+        #         )
+        #         return [], []
+
+        links_search = await _google_search(session, url)
+        if not links_search:
+            return [], []
+
+        urls = []
+        for href in links_search:
+            # Skip PDF files
+            if href.endswith(".pdf"):
+                continue
+
+            if len(urls) >= max_num_links:
+                if about_application:
+                    for url_ in APPLICATION_CONTEXT_URLS:
+                        if url_ in urls or url_ in do_not_visit_links:
+                            continue
+                        urls.append(url_)
+                break
+
+            # Skip already visited links
+            if href in urls or href in do_not_visit_links:
+                continue
+
+            urls.append(href)
+
+        # ------------------------------------------------------------------
+        # Cache lookup
+        # ------------------------------------------------------------------
+        task_url_cache = [
+            extract_url_redis(url=u, cache_key=f"{cache_key_prefix}{u}", client=client)
+            for u in urls
+        ]
+        task_url_cache_result = await asyncio.gather(
+            *task_url_cache, return_exceptions=True
+        )
+        # ------------------------------------------------------------------
+        # Process cache results
+        # ------------------------------------------------------------------
+        for c in task_url_cache_result:
+            if isinstance(c, str):
+                filtered_urls.append(c)
+            elif isinstance(c, ScrapeResult):
+                contents.append(
+                    c.formatted_markdown
+                )  # ← use cached content immediately
+            elif isinstance(c, Exception):
+                logger.error(f"[REDIS] Error accessing cache: {c}")
+
+        if filtered_urls:
+            scraping_result = await crawl_urls_via_api(filtered_urls, session=session)
+            # scraping_result.extend(freshly_scraped)
+        for scraped in scraping_result:
+            # result_url, result_content = await get_web_content(url, client)
+
+            if scraped.formatted_markdown and len(scraped.formatted_markdown) >= 70:
+                cache_key = f"{cache_key_prefix}{scraped.url}"
+                cache_tasks.append(
+                    asyncio.create_task(client.setex(cache_key, TTL, scraped.to_json()))
                 )
+                contents.append(scraped.formatted_markdown)
 
-            # Parse JSON response
-            dict_response = await response.json()
-
-            # Check if there are results
-            total_results = dict_response.get("searchInformation", {}).get(
-                "totalResults", 0
-            )
-            if int(total_results) > 0:
-                links_search = [item["link"] for item in dict_response["items"]]
-                logger.debug(
-                    f"[SEARCH] Search Engine returned {len(links_search)} results (links)"
-                )
-            else:
-                logger.warning(
-                    f"[SEARCH] No results found by the search engine while requesting this URL: {url}"
-                )
-                return [], []
-
-    urls = []
-    for href in links_search:
-        # Skip PDF files
-        if href.endswith(".pdf"):
-            continue
-
-        if len(urls) >= max_num_links:
-            if about_application:
-                for url_ in APPLICATION_CONTEXT_URLS:
-                    if url_ in urls or url_ in do_not_visit_links:
-                        continue
-                    urls.append(url_)
-            break
-
-        # Skip already visited links
-        if href in urls or href in do_not_visit_links:
-            continue
-
-        urls.append(href)
-
-    # Check if url is in cache
-    print(await client.keys("*"))
-    task_url_cache = [
-        extract_url_redis(url=u, cache_key=f"{cache_key_prefix}{u}", client=client)
-        for u in urls
-    ]
-    task_url_cache_result = await asyncio.gather(
-        *task_url_cache, return_exceptions=True
-    )
-    for c in task_url_cache_result:
-        if isinstance(c, str):
-            filtered_urls.append(c)
-        elif isinstance(c, ScrapeResult):
-            contents.append(c.formatted_markdown)  # ← use cached content immediately
-        elif isinstance(c, Exception):
-            logger.error(f"[REDIS] Error accessing (crawled) cache: {c}")
-
-    if filtered_urls:
-        scraping_result = await crawl_urls_via_api(filtered_urls)
-        # scraping_result.extend(freshly_scraped)
-    for scraped in scraping_result:
-        # result_url, result_content = await get_web_content(url, client)
-
-        if scraped.formatted_markdown and len(scraped.formatted_markdown) >= 70:
-            cache_key = f"{cache_key_prefix}{scraped.url}"
-            cache_tasks.append(
-                asyncio.create_task(client.setex(cache_key, TTL, scraped.to_json()))
-            )
-            contents.append(scraped.formatted_markdown)
-
-    # Summarize content if total tokens exceed the limit
+    # ------------------------------------------------------------------
+    # Summarisation / token‑count handling
+    # ------------------------------------------------------------------
     try:
         if contents:
             # Order the contents by the index
@@ -309,23 +336,29 @@ async def async_search(**kwargs) -> Tuple[str, List]:
     """Asynchronous search function that encapsulates the search functionality."""
     try:
         # client = redis.Redis(host="redis", port=6379, decode_responses=True)
-        client = aioredis.Redis(host="redis", port=6379, decode_responses=True)
+        # client = aioredis.Redis(host="redis", port=6379, decode_responses=True)
+        # logger.debug("[REDIS] Async client created: %s", client)
         # await RedisPool.get_pool()
         # client = RedisPool.get_client()
-        try:
+
+        async with aioredis.Redis(
+            host="redis", port=6379, decode_responses=True
+        ) as client:
+            logger.debug("[REDIS] Async client created: %s", client)
             query = kwargs.get("query", "")
             query_url = decode_string(query)
             url = SEARCH_URL + query_url
             do_not_visit_links = kwargs.get("do_not_visit_links", [])
             about_application = kwargs.get("about_application", False)
 
-            # Try to get cached content
+            # -------------------------- cache lookup --------------------------
             cache_key = f"{__name__}:async_search:{url}"
             cached_content = await client.get(cache_key)
             if cached_content:
                 logger.debug("[REDIS] Retrieved cached searched results (urls)")
                 return RetrievalResult.from_json(cached_content)
 
+            logger.debug("[SEARCH] Cache miss – proceeding with live search")
             agent_executor = kwargs["agent_executor"]
 
             visited_urls, contents = await visit_urls_extract(
@@ -352,24 +385,97 @@ async def async_search(**kwargs) -> Tuple[str, List]:
             retrieved = RetrievalResult(
                 result_text=final_output, reference=visited_urls, search_query=query
             )
-            # Cache results
+            # -------------------------- cache store ---------------------------
             if len(final_output) > 20:
                 await client.setex(cache_key, TTL, retrieved.to_json())
 
             return retrieved
-        finally:
-            await client.aclose()
+
     except redis.ConnectionError as e:
-        logger.error(f"It was not possible to establish a connection to Redis: {e}")
+        logger.error(
+            f"[REDIS] Connection error. It was not possible to establish a connection: {e}"
+        )
         raise redis.ConnectionError("Redis Failed") from e
     except ProgrammableSearchException as e:
-        logger.exception(f"[SEARCH] Error: search engine: {e}", exc_info=True)
         raise ProgrammableSearchException(
             f"Failed: Programmable Search Engine. Status: {e}"
         )
     except Exception as e:
         logger.exception(f"[SEARCH] Error while searching the web: {e}", exc_info=True)
         raise
+
+
+# async def async_search(**kwargs) -> Tuple[str, List]:
+#     """Asynchronous search function that encapsulates the search functionality."""
+#     try:
+#         # client = redis.Redis(host="redis", port=6379, decode_responses=True)
+#         client = aioredis.Redis(host="redis", port=6379, decode_responses=True)
+#         logger.debug("[REDIS] Async client created: %s", client)
+#         # await RedisPool.get_pool()
+#         # client = RedisPool.get_client()
+#         try:
+#             query = kwargs.get("query", "")
+#             query_url = decode_string(query)
+#             url = SEARCH_URL + query_url
+#             do_not_visit_links = kwargs.get("do_not_visit_links", [])
+#             about_application = kwargs.get("about_application", False)
+
+#             # -------------------------- cache lookup --------------------------
+#             cache_key = f"{__name__}:async_search:{url}"
+#             cached_content = await client.get(cache_key)
+#             if cached_content:
+#                 logger.debug("[REDIS] Retrieved cached searched results (urls)")
+#                 return RetrievalResult.from_json(cached_content)
+
+#             logger.debug(
+#                 "[SEARCH] Cache miss – proceeding with live search (url=%s)", url
+#             )
+#             agent_executor = kwargs["agent_executor"]
+
+#             visited_urls, contents = await visit_urls_extract(
+#                 url=url,
+#                 query=query,
+#                 agent_executor=agent_executor,
+#                 about_application=about_application,
+#                 do_not_visit_links=do_not_visit_links,
+#                 client=client,
+#             )
+
+#             final_output = "\n".join(contents)
+
+#             if final_output:
+#                 # For testing
+#                 final_output_tokens, final_search_tokens = compute_tokens(
+#                     final_output, query, agent_executor
+#                 )
+#                 logger.info(f"[SEARCH] Search tokens: {final_search_tokens}")
+#                 logger.info(
+#                     f"[SEARCH] Final output (search + prompt): {final_output_tokens}"
+#                 )
+
+#             retrieved = RetrievalResult(
+#                 result_text=final_output, reference=visited_urls, search_query=query
+#             )
+#             # -------------------------- cache store ---------------------------
+#             if len(final_output) > 20:
+#                 await client.setex(cache_key, TTL, retrieved.to_json())
+
+#             return retrieved
+#         finally:
+#             await client.aclose()
+#     except redis.ConnectionError as e:
+#         logger.error(
+#             f"[REDIS] Connection error. It was not possible to establish a connection: {e}"
+#         )
+#         raise redis.ConnectionError("Redis Failed") from e
+#     except ProgrammableSearchException as e:
+#         logger.exception(f"[SEARCH] Error: search engine: {e}", exc_info=True)
+#         raise ProgrammableSearchException(
+#             f"Failed: Programmable Search Engine. Status: {e}"
+#         )
+#     except Exception as e:
+#         logger.exception(f"[SEARCH] Error while searching the web: {e}", exc_info=True)
+#         raise
 
 
 # def search_uni_web(**kwargs) -> Tuple[str, List]:

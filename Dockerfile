@@ -82,9 +82,6 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/app/.venv/bin:$PATH"
 COPY --from=builder /app /app
 
-# Playwright / crawl4ai setup
-RUN playwright install
-RUN crawl4ai-setup
 
 # Dev-in-container git config
 RUN git config --global --add safe.directory /app

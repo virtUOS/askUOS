@@ -9,12 +9,13 @@ from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
 
 # do not include REPEATED queries or very similar queries (tests will fail)
 warm_up_queries = [
+    "How do I apply for on-campus housing?",
+    "How do I apply for on-campus housing?",
     "According to the examination regulations, how are the thesis and oral exam graded?, Mathematics",
     "Wo liegt der NC bei Sport?",
     "hi",
     "who are you",
     "According to the examination regulations, can I write my Master's thesis in English?, Mathematics",
-    "How do I apply for on-campus housing?",
     "Warum bekomme ich nach der Registrierung keine Bestätigungsmail?",
     "Für welche Studiengänge brauche ich ein Latinum?",
     "Wie viele ECTS-Punkte habe ich in meinem Bachelor (Mathematik)?",
@@ -57,3 +58,18 @@ def warm_up_agent(warm_up_queries: List[str]) -> None:
 if __name__ == "__main__":
 
     warm_up_agent(warm_up_queries)
+
+"""
+looking for
+
+src.chatbot.tools.search_web_tool:visit_urls_extract:https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/studiengaenge-von-a-z/informatik-bachelor-of-science
+src.chatbot.tools.search_web_tool:visit_urls_extract:https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/studiengaenge-von-a-z/informatik-master-of-science
+src.chatbot.tools.search_web_tool:visit_urls_extract:https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/studiengaenge-von-a-z/informatik-2-faecher-bachelor
+src.chatbot.tools.search_web_tool:visit_urls_extract:https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/studiengaenge-von-a-z/informatik-lehramt-an-berufsbildenden-schulen
+
+saving
+src.chatbot.tools.search_web_tool:visit_urls_extract:https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/studiengaenge-von-a-z/informatik-2-faecher-bachelor
+src.chatbot.tools.search_web_tool:visit_urls_extract:https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/studiengaenge-von-a-z/informatik-lehramt-an-berufsbildenden-schulen
+src.chatbot.tools.search_web_tool:visit_urls_extract:https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/studiengaenge-von-a-z/informatik-master-of-science
+src.chatbot.tools.search_web_tool:visit_urls_extract:https://www.uni-osnabrueck.de/studieren/unsere-studienangebote/studiengaenge-von-a-z/informatik-bachelor-of-science
+"""

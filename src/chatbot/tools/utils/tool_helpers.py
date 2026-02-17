@@ -1,9 +1,5 @@
-import os
 import re
 import urllib.parse
-
-from crawl4ai.content_filter_strategy import PruningContentFilter
-from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 from src.chatbot.agents.utils.agent_retriever import Reference
 from src.chatbot.utils.pdf_reader import read_pdf_from_url
