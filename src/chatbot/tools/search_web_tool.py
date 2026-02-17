@@ -311,10 +311,9 @@ async def visit_urls_extract(
                 else contents
             )
             total_tokens, _ = compute_tokens("".join(contents), query, agent_executor)
-
             if total_tokens > settings.model.context_window:
-                for i, text in enumerate(reversed(contents)):
-                    contents[i] = await generate_summary(text, query)
+                for i in range(len(contents) - 1, -1, -1):
+                    contents[i] = await generate_summary(contents[i], query)
                     # Update the total tokens
                     total_tokens, _ = compute_tokens(
                         "".join(contents), query, agent_executor
@@ -405,79 +404,6 @@ async def async_search(**kwargs) -> Tuple[str, List]:
         raise
 
 
-# async def async_search(**kwargs) -> Tuple[str, List]:
-#     """Asynchronous search function that encapsulates the search functionality."""
-#     try:
-#         # client = redis.Redis(host="redis", port=6379, decode_responses=True)
-#         client = aioredis.Redis(host="redis", port=6379, decode_responses=True)
-#         logger.debug("[REDIS] Async client created: %s", client)
-#         # await RedisPool.get_pool()
-#         # client = RedisPool.get_client()
-#         try:
-#             query = kwargs.get("query", "")
-#             query_url = decode_string(query)
-#             url = SEARCH_URL + query_url
-#             do_not_visit_links = kwargs.get("do_not_visit_links", [])
-#             about_application = kwargs.get("about_application", False)
-
-#             # -------------------------- cache lookup --------------------------
-#             cache_key = f"{__name__}:async_search:{url}"
-#             cached_content = await client.get(cache_key)
-#             if cached_content:
-#                 logger.debug("[REDIS] Retrieved cached searched results (urls)")
-#                 return RetrievalResult.from_json(cached_content)
-
-#             logger.debug(
-#                 "[SEARCH] Cache miss – proceeding with live search (url=%s)", url
-#             )
-#             agent_executor = kwargs["agent_executor"]
-
-#             visited_urls, contents = await visit_urls_extract(
-#                 url=url,
-#                 query=query,
-#                 agent_executor=agent_executor,
-#                 about_application=about_application,
-#                 do_not_visit_links=do_not_visit_links,
-#                 client=client,
-#             )
-
-#             final_output = "\n".join(contents)
-
-#             if final_output:
-#                 # For testing
-#                 final_output_tokens, final_search_tokens = compute_tokens(
-#                     final_output, query, agent_executor
-#                 )
-#                 logger.info(f"[SEARCH] Search tokens: {final_search_tokens}")
-#                 logger.info(
-#                     f"[SEARCH] Final output (search + prompt): {final_output_tokens}"
-#                 )
-
-#             retrieved = RetrievalResult(
-#                 result_text=final_output, reference=visited_urls, search_query=query
-#             )
-#             # -------------------------- cache store ---------------------------
-#             if len(final_output) > 20:
-#                 await client.setex(cache_key, TTL, retrieved.to_json())
-
-#             return retrieved
-#         finally:
-#             await client.aclose()
-#     except redis.ConnectionError as e:
-#         logger.error(
-#             f"[REDIS] Connection error. It was not possible to establish a connection: {e}"
-#         )
-#         raise redis.ConnectionError("Redis Failed") from e
-#     except ProgrammableSearchException as e:
-#         logger.exception(f"[SEARCH] Error: search engine: {e}", exc_info=True)
-#         raise ProgrammableSearchException(
-#             f"Failed: Programmable Search Engine. Status: {e}"
-#         )
-#     except Exception as e:
-#         logger.exception(f"[SEARCH] Error while searching the web: {e}", exc_info=True)
-#         raise
-
-
 # def search_uni_web(**kwargs) -> Tuple[str, List]:
 #     """
 #     Searches the University of Osnabrück website based on the given query.
@@ -522,54 +448,3 @@ if __name__ == "__main__":
         await client.aclose()
 
     asyncio.run(test())
-
-
-# async def get_web_content(url: str, client: redis.Redis) -> ScrapeResult:
-#     """Get web content from URL with caching."""
-#     # esure crawl is initialized
-#     await ensure_initialized()
-#     cache_key = f"{__name__}:get_web_content:{url}"
-
-#     result_content = None
-#     result_url = None
-#     try:
-#         # Try to get from cache
-#         cached_content = await client.get(cache_key)
-#         if cached_content:
-#             logger.debug("[REDIS] Retrieved (crawled) page content from cache")
-#             return extract_cached_content(cached_content)
-
-#         logger.debug("[REDIS] No (crawled) page content cached in Redis")
-
-#     except Exception as e:
-#         logger.error(f"[REDIS] Error accessing (crawled) cache: {e}")
-
-#     results = crawl_urls_via_api()
-#     try:
-#         async with AsyncWebCrawler(
-#             config=browser_config,
-#             thread_safe=True,
-#         ) as crawler:
-#             result = await crawler.arun(
-#                 url=url,
-#                 config=run_config,
-#             )
-#             if result and result[0].success:
-#                 result_url = result[0].url
-#                 result_content = result[0].markdown
-
-#             return ScrapeResult(result_url=result_url, result_content=result_content)
-
-#     except Exception as e:
-#         logger.exception(f"[CRAWL] Error while crawling the URL: {url}", exc_info=True)
-#         return ScrapeResult(result_url=result_url, result_content=result_content)
-#     finally:
-#         # Cache the result
-#         if result_content and len(result_content) > 20:
-#             # cache_value = str((result_url, result_content))
-#             try:
-#                 await client.setex(cache_key, TTL, cache_value.to_json())
-#             except Exception as e:
-#                 logger.exception(
-#                     f"[REDIS] Error while caching content for URL: {url}", exc_info=True
-#                 )
