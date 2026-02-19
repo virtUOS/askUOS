@@ -1,9 +1,13 @@
+import os
+import sys
 from typing import Any
 
+sys.path.append("/app")
 from langchain_community.cache import SQLiteCache
 from langchain_core.caches import InMemoryCache
 from langchain_core.callbacks import StdOutCallbackHandler
 from langchain_core.globals import set_llm_cache
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 
 from src.chatbot_log.chatbot_logger import logger
@@ -36,6 +40,28 @@ class CustomMemoryCache(InMemoryCache):
 # set_llm_cache(SQLiteCache(database_path=".langchain.db"))
 
 OPEN_AI_MODEL = settings.model.model_name
+
+
+class ChatLlmGemini:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(ChatLlmGemini, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        if not self.__dict__:
+            self.llm_chat_gemini = ChatGoogleGenerativeAI(
+                model="gemini-3-flash-preview",
+                temperature=1.0,
+                max_retries=2,
+                streaming=True,
+                callbacks=[StdOutCallbackHandler()],
+            )
+
+    def __call__(self, *args, **kwargs) -> Any:
+        return self.llm_chat_gemini
 
 
 class ChatLlm:
@@ -104,8 +130,16 @@ class ReasoningLlm:
         return self.llm_chat_open_ai
 
 
-llm = ChatLlm()
-# currenlty being used for summarization and grading documents (edge grade_documents (graph))
+######--------- Google ---------#####
+# used for grading documents (edge grade_documents (graph)), genaration and reasoning
+llm_gemini = ChatLlmGemini()
+
+
+######--------- Google ---------#####
+######--------- OpenAI ---------#####
+# llm = ChatLlm()
+# currenlty being used for summarization
 llm_optional = ChatLlmOptional()
 
 # reasoning_llm = ReasoningLlm()
+######--------- OpenAI ---------#####

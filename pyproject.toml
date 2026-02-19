@@ -5,10 +5,12 @@ description = "AI chatbot for applicants and students – get instant answers ab
 requires-python = ">=3.11"
 dependencies = [
     "fastembed",
+    "google-genai>=1.63.0",
     "ipython",
     "langchain",
     "langchain-community",
     "langchain-experimental",
+    "langchain-google-genai>=4.2.0",
     "langchain-milvus",
     "langchain-ollama",
     "langchain-openai",

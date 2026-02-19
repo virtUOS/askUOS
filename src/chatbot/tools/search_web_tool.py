@@ -34,7 +34,8 @@ APPLICATION_CONTEXT_URLS = [
 ]
 
 SEARCH_URL = os.getenv("SEARCH_URL")
-MAX_NUM_LINKS = 4
+# TODO Increase the number of websites to visit
+MAX_NUM_LINKS = 7
 
 # TODO Change cache mechanism to enabled (in config.yml)
 CRAWL_API_URL = settings.crawl_settings.base_url
@@ -192,7 +193,7 @@ async def _google_search(session: aiohttp.ClientSession, url: str):
             logger.debug("Search returned %d links", len(links))
             return links
         else:
-            logger.warning("No search results for %s", url)
+            logger.warning("[GOOGLE] No search results.")
             return []
 
 

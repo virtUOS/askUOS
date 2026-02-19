@@ -3,7 +3,9 @@ from typing import Dict, List
 from langchain_core.messages import SystemMessage
 
 import src.chatbot.prompt.prompt_text as text
-from src.chatbot.agents.utils.agent_helpers import llm
+
+# from src.chatbot.agents.utils.agent_helpers import llm
+from src.chatbot.agents.utils.agent_helpers import llm_gemini
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
@@ -60,6 +62,6 @@ def get_prompt_length() -> int:
 
     # formula to roughly compute the number of tokens: https://stackoverflow.com/questions/70060847/how-to-work-with-openai-maximum-context-length-is-2049-tokens
 
-    num_prompt_tokens = llm().get_num_tokens(prompt_text["system_message"])
+    num_prompt_tokens = llm_gemini().get_num_tokens(prompt_text["system_message"])
 
     return num_prompt_tokens

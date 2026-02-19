@@ -394,7 +394,11 @@ class ChatApp:
                         )
                     ):
                         # deleteme.append(msg.content)
-                        yield msg.content
+                        # openai
+                        # yield msg.content
+                        # google
+                        yield msg.text
+                    print()
 
             try:
 
@@ -435,7 +439,7 @@ class ChatApp:
 
                     print(msg, end="|", flush=True)
 
-                # the agent did not use any tools
+                ##### ---- Direct Agent Answer: the agent did not use any tools --- ####
                 if graph._agent_direct_msg:
                     response = graph._agent_direct_msg
                     st.markdown(response)

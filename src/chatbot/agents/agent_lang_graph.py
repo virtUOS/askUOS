@@ -15,13 +15,16 @@ from langchain_core.prompts import PromptTemplate
 
 # from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
 from langchain_core.tools import BaseTool
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field, PrivateAttr
 from typing_extensions import TypedDict
 
 from src.chatbot.agents.models import Reference, RetrievalResult
-from src.chatbot.agents.utils.agent_helpers import llm, llm_optional
+
+# from src.chatbot.agents.utils.agent_helpers import llm, llm_gemini, llm_optional
+from src.chatbot.agents.utils.agent_helpers import llm_gemini, llm_optional
 
 # from src.chatbot.agents.utils.agent_helpers import reasoning_llm
 from src.chatbot.agents.utils.agent_retriever import (
@@ -158,7 +161,7 @@ class GraphEdgesMixin:
             #     description="From the retrieved documents, which paragraphs are relevant to answer the user query? Extract all relevant paragraphs from the retrieved documents."
             # )
 
-        llm_with_str_output = self._llm_optional.with_structured_output(GradeResult)
+        llm_with_str_output = self._llm.with_structured_output(GradeResult)
         prompt = PromptTemplate(
             template=translate_prompt()["grading_llm"],
             input_variables=["context", "question"],
@@ -212,7 +215,10 @@ class GraphEdgesMixin:
         """
         score = state.get("score_judgement_binary", "")
         if score == "yes":
-            self._agent_direct_msg = state["messages"][-1].content
+            # google
+            self._agent_direct_msg = state["messages"][-1].content[0]["text"]
+            # openai
+            # self._agent_direct_msg = state["messages"][-1].content
             return END
         return "agent_node"
 
@@ -670,13 +676,18 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
 
     _tools_by_name: List[BaseTool] = PrivateAttr(default=None)
 
-    # TODO have a global llm object, that can be used throgout the application
-    _llm: ChatOpenAI = PrivateAttr(default=None)
+    # --------------OpenaAI---------------###
+    # _llm: ChatOpenAI = PrivateAttr(default=None)
     # faster llm used for e.g., summarization
     _llm_optional: ChatOpenAI = PrivateAttr(default=None)
     # important: the code uses function calling as opposed to tool calling. (DEPENDS ON THE MODEL and how it was fine tuned)
-    _llm_with_tools: ChatOpenAI = PrivateAttr(default=None)
+    # _llm_with_tools: ChatOpenAI = PrivateAttr(default=None)
     # _llm_answer_grader: ChatOpenAI = PrivateAttr(default=None)
+    # ----------------Google--------------###
+    _llm: ChatGoogleGenerativeAI = PrivateAttr(default=None)
+    _llm_with_tools: ChatGoogleGenerativeAI = PrivateAttr(default=None)
+    # _llm_optional: ChatGoogleGenerativeAI = PrivateAttr(default=None)
+
     language: str = Field(default=settings.language)
     # TODO should not be a private attribute
     _graph: StateGraph = PrivateAttr(default=None)
@@ -686,43 +697,22 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
     _visited_links: List[str] = PrivateAttr(default=[])
     _visited_docs: ReferenceRetriever = PrivateAttr(default=ReferenceRetriever())
 
-    # _clean_tool_message: str = PrivateAttr(default=None)
-    # _curated_answer: str = PrivateAttr(default=None)
-
-    # def __new__(cls, *args, **kwargs):
-    #     """Create or retrieve singleton instance.
-
-    #     Creates a new instance if none exists or if language changes.
-    #     """
-    #     if cls._instance is None:
-    #         cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
-    #         logger.debug("Creating a new instance of CampusManagementOpenAIToolsAgent")
-
-    #     elif hasattr(
-    #         cls._instance, "language"
-    #     ) and cls._instance.language != kwargs.get("language", settings.language):
-    #         # TODO preserve the memory of the previous agent (when the language changes and a previous conversation is still ongoing)
-    #         # TODO provicional solution: chat history is being kept in the session state
-    #         cls._instance = super(CampusManagementOpenAIToolsAgent, cls).__new__(cls)
-    #         logger.debug(
-    #             "Language changed: creating a new instance of CampusManagementOpenAIToolsAgent"
-    #         )
-
-    #     return cls._instance
-
     def __init__(self, **data):
         # data: key-value pairs passed through the run method, e.g., CampusManagementOpenAIToolsAgent.run(language='Deutsch')
         if not self.__dict__:
             super().__init__(**data)
             logger.debug(f"Language set to: {self.language}")
 
-            self._llm = llm()
+            # self._llm = llm()
+            self._llm = llm_gemini()
             self._llm_optional = llm_optional()
+            # self._llm_optional = llm_gemini()
             # self._reasoning_llm = reasoning_llm()
 
             tools = GraphNodesMixin.create_tools()
             self._tools_by_name = {tool.name: tool for tool in tools}
             # important: the code uses function calling as opposed to tool calling. (DEPENDS ON THE MODEL and how it was fine tuned)
+            # self._llm_with_tools = self._llm.bind_tools(tools)
             self._llm_with_tools = self._llm.bind_tools(tools)
             # self._llm_with_tools = self._reasoning_llm.bind_tools(tools)
             self._prompt_length = get_prompt_length()
@@ -764,17 +754,20 @@ class CampusManagementOpenAIToolsAgent(BaseModel, GraphNodesMixin, GraphEdgesMix
             invoke_args["previous_summary"] = previous_summary
 
         response = chain.invoke(invoke_args)
-
-        tokens_response = self._llm_optional.get_num_tokens(response.content)
+        # google models
+        response_text = response.text
+        # openai
+        # response_text = response.content
+        tokens_response = self._llm_optional.get_num_tokens(response_text)
         # To prevent the conversation summary from being too long, we can shorten it
         if tokens_response > MAX_TOKEN_SUMMARY:
 
             logger.warning(
                 f"Conversation Summary is too long ({tokens_response} tokens)"
             )
-            response = self.shorten_conversation_summary(response.content)
+            response = self.shorten_conversation_summary(response_text)
 
-        return f"**Summary of conversation earlier:** {response.content}"
+        return f"**Summary of conversation earlier:** {response_text}"
 
     def _create_graph(self):
         graph_builder = StateGraph(State)
