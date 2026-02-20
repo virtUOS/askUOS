@@ -402,43 +402,50 @@ class ChatApp:
 
             try:
 
+                #debug_stream = []
+                message_placeholder = st.empty()
                 gen_stream = _get_astream()
                 async for msg in gen_stream:
                     response += msg
-
+                    # re-parse the entire string every time a new character is added. Ensures md is rendered correctly
+                    message_placeholder.markdown(response)
+                    #######---- Markdown rendering requiered while using openai models -----#######
                     # streaming of every line
-                    if msg == "|":
-                        is_table_content = True
-                        table_content += msg
-                        while is_table_content:
-                            try:
-                                msg = await gen_stream.__anext__()
-                                table_content += msg
-                                response += msg
-                                # do not delete the blank space at the beginning of ' |\n\n'
-                                # it is used to identify the end of the table
-                                if msg == " |\n\n":
-                                    # end of table
+                    # if msg == "|":
+                    #     is_table_content = True
+                    #     table_content += msg
+                    #     while is_table_content:
+                    #         try:
+                    #             msg = await gen_stream.__anext__()
+                    #             table_content += msg
+                    #             response += msg
+                    #             # do not delete the blank space at the beginning of ' |\n\n'
+                    #             # it is used to identify the end of the table
+                    #             if msg == " |\n\n":
+                    #                 # end of table
 
-                                    st.markdown(table_content)
-                                    table_content = ""
-                                    is_table_content = False
-                            except StopAsyncIteration:
-                                if table_content:
-                                    st.markdown(table_content)
-                                    table_content = ""
-                                is_table_content = False
-                                break
-
-                    if "\n" in msg:
-                        to_stream += msg
-                        st.markdown(to_stream)
-                        to_stream = ""
-                    else:
-                        to_stream += msg
-
+                    #                 st.markdown(table_content)
+                    #                 table_content = ""
+                    #                 is_table_content = False
+                    #         except StopAsyncIteration:
+                    #             if table_content:
+                    #                 st.markdown(table_content)
+                    #                 table_content = ""
+                    #             is_table_content = False
+                    #             break
+                    # # indicates a new line (we do not stream per character, rather per line)
+                    # if "\n" in msg:
+                    #     to_stream += msg
+                    #     st.markdown(to_stream)
+                    #     to_stream = ""
+                    # else:
+                    #     to_stream += msg
+                    #######---- Markdown rendering requiered while using openai models -----#######
                     print(msg, end="|", flush=True)
 
+                if response:
+                    # Final update to remove the cursor once finished
+                    message_placeholder.markdown(response)
                 ##### ---- Direct Agent Answer: the agent did not use any tools --- ####
                 if graph._agent_direct_msg:
                     response = graph._agent_direct_msg

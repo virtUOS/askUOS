@@ -12,7 +12,7 @@ from langchain_redis import RedisChatMessageHistory
 from streamlit.testing.v1 import AppTest
 
 from pages.ask_uos_chat import MAX_MESSAGE_HISTORY
-from src.chatbot.agents.utils.agent_helpers import llm
+from src.chatbot.agents.utils.agent_helpers import llm_gemini  # llm
 from tests.warm_up import warm_up_queries
 
 
@@ -275,7 +275,7 @@ class BaseTestStreamlitApp(unittest.TestCase):
                     and msg.additional_kwargs.get("is_summary", False)
                 ]
                 summary_length = [
-                    llm().get_num_tokens(msg.content) for msg in summary_messages
+                    llm_gemini().get_num_tokens(msg.content) for msg in summary_messages
                 ]
                 print(f"Summary length (tokens) for user {at[3]}: {summary_length}")
 

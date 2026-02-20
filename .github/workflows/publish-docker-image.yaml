@@ -11,7 +11,8 @@ on:
       - 'pages/**'
       - 'Dockerfile.prod'
       - 'locale/**'
-      - 'requirements.prod.txt'
+      - 'uv.lock'
+      - 'pyproject.toml'
 
 jobs:
   push_to_registries:
