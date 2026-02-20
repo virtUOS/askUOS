@@ -12,6 +12,7 @@ services:
     #   dockerfile: .devcontainer/Dockerfile
 
     volumes:
+      # Make sure the env is created somewher else ex. /opt/venv. Otherwise this volume will override the venv files
       # Update this to wherever you want VS Code to mount the folder of your project
       - .:/app
 

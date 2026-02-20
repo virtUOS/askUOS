@@ -200,12 +200,6 @@ dependencies = [
     { name = "tqdm" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "google-genai" },
-    { name = "langchain-google-genai" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "fastembed" },
@@ -230,12 +224,6 @@ requires-dist = [
     { name = "streamlit", specifier = "===1.47.0" },
     { name = "streamlit-cookies-controller", specifier = "===0.0.4" },
     { name = "tqdm" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "google-genai", specifier = ">=1.63.0" },
-    { name = "langchain-google-genai", specifier = ">=4.2.0" },
 ]
 
 [[package]]
