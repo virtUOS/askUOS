@@ -257,10 +257,10 @@
         },
 
         {
-            "name": "agent_lang_graph",
+            "name": "graph",
             "type": "debugpy",
             "request": "launch",
-            "program": "./src/chatbot/agents/agent_lang_graph.py",
+            "program": "./src/chatbot/agents/graph.py",
             "cwd": "${workspaceFolder}",
             "env":{ "PYTHONPATH": "/app"},
             "console": "integratedTerminal",
