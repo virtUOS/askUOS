@@ -15,7 +15,7 @@ from streamlit_cookies_controller import CookieController, RemoveEmptyElementCon
 from pages.utils import initialize_session_sate, load_css, setup_page
 
 # from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
-from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.agents.utils.exceptions import MaxMessageHistoryException
 from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.prompt.prompt_date import get_current_date
@@ -402,7 +402,7 @@ class ChatApp:
 
             try:
 
-                #debug_stream = []
+                # debug_stream = []
                 message_placeholder = st.empty()
                 gen_stream = _get_astream()
                 async for msg in gen_stream:
@@ -859,7 +859,7 @@ class ChatApp:
             and (number_of_summaries * MAX_MESSAGE_HISTORY + MAX_MESSAGE_HISTORY)
             <= len(history_redis.messages)
         ):
-
+            # TODO call summary enpoint
             if number_of_summaries == 0:
 
                 summary_msg = AIMessage(

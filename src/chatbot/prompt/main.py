@@ -32,11 +32,10 @@ def translate_prompt() -> Dict[str, str]:
 
 
 def get_system_prompt(
-    conversation_summary: str, messages: List[dict], user_input: str, current_date: str
+    user_input: str, current_date: str
 ) -> List:
     """
     Generates a chat prompt template based on the provided prompt text.
-
 
     """
 
@@ -44,9 +43,8 @@ def get_system_prompt(
     system_message_text = prompt_text["system_message"].format(
         current_date,
         user_input,
-        conversation_summary,
     )
-    return [SystemMessage(content=system_message_text)] + messages
+    return [SystemMessage(content=system_message_text)]
 
 
 def get_prompt_length() -> int:

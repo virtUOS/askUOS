@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from streamlit.testing.v1 import AppTest
 
 DeprecationWarning
-from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.prompt.prompt_date import get_current_date
 from src.config.core_config import settings

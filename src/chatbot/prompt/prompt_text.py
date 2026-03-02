@@ -39,10 +39,6 @@ If a user is interested in applying to the University but does not specify a par
 --------------------------------------    
 User query: 
 {}
--------------------------------------
-Chat history (summary of previous conversation):
-{}
---------------------------------------
 
 """,
     "system_message_generate": """# AI Assistant of Osnabrück University.
@@ -398,12 +394,6 @@ Wenn ein Benutzer an einer Bewerbung interessiert ist, aber keinen spezifischen 
 ----------------------------------
 Benutzerabfrage: 
 {}
-
----------------------------------
-Chatverlauf (Zusammenfassung des vorherigen Gesprächs):
-{}
----------------------------------
-
 
 """,
     "system_message_generate": """# KI-Assistent der Universität Osnabrück.

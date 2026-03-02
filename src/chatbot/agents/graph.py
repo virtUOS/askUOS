@@ -25,7 +25,7 @@ from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 from dataclasses import dataclass
 from src.chatbot.agents.graph_node_edges import GraphEdgesMixin, GraphNodesMixin, State
-
+import redis.asyncio as aioredis
 OPEN_AI_MODEL = settings.model.model_name
 DEBUG = settings.application.debug
 # message history limit within the graph
@@ -47,6 +47,7 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
                 if not cls._instance:
                     cls._instance = super().__new__(cls)
                     cls._instance._initialized = False
+                    cls._instance._async_initialized = False
         return cls._instance
 
     def __init__(self, **data):
@@ -57,7 +58,6 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
             self._llm = llm_gemini()
             
             self.language: str = Field(default=settings.language)
-            # TODO should not be a private attribute
             self._graph: StateGraph = None
             self._chat_history: List[Dict] = []
             self._prompt_length: int = None
@@ -67,10 +67,8 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
 
             ###----Redis -----######
             # Create the checkpointer (keeps connection alive)
-            self._checkpointer = None
-            self._checkpointer_context = AsyncRedisSaver.from_conn_string(
-                "redis://redis:6379"
-            )  # The context manager (for cleanup)
+            self._checkpointer: AsyncRedisSaver = None  # initialized later in async context
+
             ###----Redis -----######
 
             tools = GraphNodesMixin.create_tools()
@@ -81,13 +79,38 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
             self._prompt_length = get_prompt_length()
             self._initialized = True
 
+    async def _ensure_async_initialized(self):
+        """
+        Lazily initialize async resources (Redis checkpointer + graph).
+        Safe to call multiple times — only runs once.
+        """
+        if self._async_initialized:
+            return
+
+        self._checkpointer = AsyncRedisSaver(
+        redis_url=REDIS_DB_URI,
+        ttl = {
+            "default_ttl":120, # 2 hours/ 120 minutes
+            "refresh_on_read": True
+        }
+        )
+        await self._checkpointer.asetup()
+
+        # Now build the graph once
+        await self._create_graph()
+
+        self._async_initialized = True
+    
     async def cleanup(self):
-        if self._checkpointer_context and self._initialized:
-            await self._checkpointer_context.__aexit__(None, None, None)
+        """Call this on application shutdown."""
+        if self._checkpointer is not None:
+            # AsyncRedisSaver manages its own internal Redis connection
+            if hasattr(self._checkpointer, "_redis") and self._checkpointer._redis:
+                await self._checkpointer._redis.aclose()
             self._checkpointer = None
-            self._checkpointer_context = None
-            self._initialized = False
-            print("✅ Agent cleanup complete")
+        self._async_initialized = False
+        self._graph = None
+
 
     def shorten_conversation_summary(self, summary: str) -> str:
         """Shorten the conversation summary if it exceeds the maximum token limit."""
@@ -194,7 +217,6 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
         graph_builder.add_edge("generate_application", END)
         graph_builder.add_edge("generate_teaching_degree_node", END)
 
-        self._checkpointer = await self._checkpointer_context.__aenter__()
         self._graph = graph_builder.compile(
             debug=DEBUG, checkpointer=self._checkpointer
         )
@@ -224,11 +246,7 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
         )
         return internal_tokens
 
-    async def _generate_graph(self):
-        # TODO check for race conditions
-        if self._graph is None:
-            await self._create_graph()
-
+   
     # @classmethod
     # def run(cls, *args, **kwargs) -> "CampusManagementOpenAIToolsAgent":
     #     """Create and return an instance of the agent.
@@ -262,30 +280,54 @@ if __name__ == "__main__":
             display(Image(filename))
         except Exception as e:
             print(f"An error occurred: {e}")
-
+    # clear cash for testing purposes
+    async def clear_cache():
+        redis_client = aioredis.Redis(host="redis", port=6379, decode_responses=True)
+        try:
+            await redis_client.flushall()
+            await redis_client.aclose()
+        except Exception as e:
+            print(f"Failed to clear Redis cache: {e}")
     # print_graph(graph._graph)
     async def _execute_graph():
-        await graph._generate_graph()
-        thread_id = uuid.uuid4()
+        # make sure redis connection is not close before creating the graph
+        #await clear_cache()
+        await graph._ensure_async_initialized()
+        #thread_id = uuid.uuid4()
+        thread_id = 1
         config = {
             "configurable": {"thread_id": thread_id},
             "recursion_limit": settings.application.recursion_limit,  # This amounts to two laps of the graph # https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
         }
         current_date = get_current_date(settings.language.lower())
-        conversation_summary = ""
-        # history = [HumanMessage(content="Wo liegt der NC bei Sport?")]
-        # user_input = "Wo liegt der NC bei Sport?",
-        history = [HumanMessage(content="hi")]
-        user_input = "hi",
-        # list of system, ai and human messages
-        system_user_prompt = get_system_prompt(
-            conversation_summary, history, user_input, current_date
-        )
+        user_input = "hi, Im bob",
+     
         response = await graph._graph.ainvoke(
             {
-            "messages": system_user_prompt,
-            "message_history": history,
-            "user_initial_query": user_input,
+            "messages": [HumanMessage(content=user_input)], # Only the HumanMessage goes into state (and gets checkpointed)
+            "user_initial_query": user_input, # used by agent node only and added to the system prompt
+            "current_date": current_date,
+            },
+            config=config,
+        )
+        print()
+        user_input = "who am i?"
+        response = await graph._graph.ainvoke(
+            {
+            "messages": [HumanMessage(content=user_input)],
+            #"message_history": history, # used by agent node only
+            "user_initial_query": user_input, # used by agent node only and added to the system prompt
+            "current_date": current_date,
+            },
+            config=config,
+        )
+        print()
+        user_input = "who are you?",
+        response = await graph._graph.ainvoke(
+            {
+            "messages": [HumanMessage(content=user_input)], # used by agent node only
+            #"message_history": history, # used by agent node only
+            "user_initial_query": user_input, # used by agent node only and added to the system prompt
             "current_date": current_date,
             },
             config=config,
