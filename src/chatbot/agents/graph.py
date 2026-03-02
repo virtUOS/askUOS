@@ -59,11 +59,12 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
             
             self.language: str = Field(default=settings.language)
             self._graph: StateGraph = None
-            self._chat_history: List[Dict] = []
             self._prompt_length: int = None
             self._agent_direct_msg: str = None
-            self._visited_links: List[str] = None
-            self._visited_docs: ReferenceRetriever = ReferenceRetriever()
+            
+            #self._chat_history: List[Dict] = []
+            #self._visited_links: List[str] = None
+            #self._visited_docs: ReferenceRetriever = ReferenceRetriever()
 
             ###----Redis -----######
             # Create the checkpointer (keeps connection alive)
@@ -223,39 +224,30 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
 
     def compute_search_num_tokens(self, search_result_text: str) -> int:
 
-        search_result_text_tokens = self._llm.get_num_tokens(search_result_text)
+        #search_result_text_tokens = self._llm.get_num_tokens(search_result_text)
+        #return search_result_text_tokens
+        # 1 token ≈ 4 characters 
+        return len(search_result_text) // 4
 
-        return search_result_text_tokens
+    # def compute_internal_tokens(self, query: str) -> int:
+    #     # extract the chat history from the memory
+    #     # TODO BUG: Agent's scratchpad tokens are not being counted (fix sum(count_tokens_history) * 2)
+    #     # history = self._agent_executor.memory.dict()["chat_memory"][
+    #     #     "messages"
+    #     # ]  # this is a list [{'content':'', 'additional_kwargs':{},...}, {}...]
+    #     # history = self._get_chat_history()
 
-    def compute_internal_tokens(self, query: str) -> int:
-        # extract the chat history from the memory
-        # TODO BUG: Agent's scratchpad tokens are not being counted (fix sum(count_tokens_history) * 2)
-        # history = self._agent_executor.memory.dict()["chat_memory"][
-        #     "messages"
-        # ]  # this is a list [{'content':'', 'additional_kwargs':{},...}, {}...]
-        # history = self._get_chat_history()
+    #     count_tokens_history = [
+    #         self._llm.get_num_tokens(c["content"]) for c in self._chat_history
+    #     ]
+    #     # TODO multiply by 2 to account for agent's scratchpad (Improvement: use tokenization algorithm to count tokens)
+    #     internal_tokens = (
+    #         sum(count_tokens_history) * 2
+    #         + self._prompt_length
+    #         + self._llm.get_num_tokens(query)
+    #     )
+    #     return internal_tokens
 
-        count_tokens_history = [
-            self._llm.get_num_tokens(c["content"]) for c in self._chat_history
-        ]
-        # TODO multiply by 2 to account for agent's scratchpad (Improvement: use tokenization algorithm to count tokens)
-        internal_tokens = (
-            sum(count_tokens_history) * 2
-            + self._prompt_length
-            + self._llm.get_num_tokens(query)
-        )
-        return internal_tokens
-
-   
-    # @classmethod
-    # def run(cls, *args, **kwargs) -> "CampusManagementOpenAIToolsAgent":
-    #     """Create and return an instance of the agent.
-
-    #     Returns:
-    #         CampusManagementOpenAIToolsAgent: Configured agent instance
-    #     """
-    #     instance = cls(*args, **kwargs)
-    #     return instance
 
 
 if __name__ == "__main__":
@@ -291,7 +283,7 @@ if __name__ == "__main__":
     # print_graph(graph._graph)
     async def _execute_graph():
         # make sure redis connection is not close before creating the graph
-        #await clear_cache()
+        await clear_cache()
         await graph._ensure_async_initialized()
         #thread_id = uuid.uuid4()
         thread_id = 1
@@ -300,35 +292,44 @@ if __name__ == "__main__":
             "recursion_limit": settings.application.recursion_limit,  # This amounts to two laps of the graph # https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
         }
         current_date = get_current_date(settings.language.lower())
-        user_input = "hi, Im bob",
+        user_input = "Answer shortly, can i study cognitive science"
      
         response = await graph._graph.ainvoke(
             {
-            "messages": [HumanMessage(content=user_input)], # Only the HumanMessage goes into state (and gets checkpointed)
+            "messages": [{"role": "user", "content": user_input}], # Only the HumanMessage goes into state (and gets checkpointed)
             "user_initial_query": user_input, # used by agent node only and added to the system prompt
             "current_date": current_date,
+            # Initialize empty — the reducers accumulate from here
+            "visited_links": [],
+            "doc_references": [],
             },
             config=config,
         )
         print()
-        user_input = "who am i?"
+        user_input = "According to the examination regulations, can I write my Master's thesis in English?, Mathematics"
         response = await graph._graph.ainvoke(
             {
             "messages": [HumanMessage(content=user_input)],
             #"message_history": history, # used by agent node only
             "user_initial_query": user_input, # used by agent node only and added to the system prompt
             "current_date": current_date,
+            # Initialize empty — the reducers accumulate from here
+            "visited_links": [],
+            "doc_references": [],
             },
             config=config,
         )
         print()
-        user_input = "who are you?",
+        user_input = "who are you?"
         response = await graph._graph.ainvoke(
             {
             "messages": [HumanMessage(content=user_input)], # used by agent node only
             #"message_history": history, # used by agent node only
             "user_initial_query": user_input, # used by agent node only and added to the system prompt
             "current_date": current_date,
+            # Initialize empty — the reducers accumulate from here
+            "visited_links": [],
+            "doc_references": [],
             },
             config=config,
         )

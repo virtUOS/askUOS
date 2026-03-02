@@ -94,11 +94,12 @@ def compute_tokens(
     search_result_text: str, query: str, agent_executor
 ) -> Tuple[int, int]:
     """Compute tokens for the search result text."""
-    internal_num_tokens = agent_executor.compute_internal_tokens(query)
+    # internal_num_tokens = agent_executor.compute_internal_tokens(query)
     current_search_num_tokens = agent_executor.compute_search_num_tokens(
-        search_result_text
+        search_result_text + query
     )
-    total_tokens = internal_num_tokens + current_search_num_tokens
+    # total_tokens = internal_num_tokens + current_search_num_tokens
+    total_tokens = current_search_num_tokens
     return total_tokens, current_search_num_tokens
 
 
