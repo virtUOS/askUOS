@@ -1,17 +1,18 @@
 import asyncio
 import json
-
+import uuid
+import time
 from fastapi import FastAPI, HTTPException, WebSocket
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from contextlib import asynccontextmanager
 
 from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.prompt.prompt_date import get_current_date
 from src.config.core_config import settings
-from src.api.models import ChatRequest
-from langchain_core.messages import HumanMessage, ToolMessage
+from src.api.models import ChatRequest, Message, ChatCompletionRequest
+from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 from src.chatbot.agents.graph import CampusManagementOpenAIToolsAgent
-from src.api.helpers import _extract_text_content
+from src.api.helpers import _extract_text_content, _format_references, _completion_id, _make_chunk, _make_completion
 from src.chatbot_log.chatbot_logger import logger
 
 
@@ -27,6 +28,153 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan, title="AksUOS API")
+
+GENERATE_NODES = frozenset({
+    "generate",
+    "generate_application",
+    "generate_teaching_degree_node",
+})
+
+
+@app.post("/v1/chat/completions")
+async def chat_completions(request: ChatCompletionRequest):
+    """
+    curl -X POST http://localhost:8000/v1/chat/completions   -H "Content-Type: application/json"   -d '{
+    "model": "campus-agent",
+    "messages": [{"role": "user", "content": "Can I study math? (answer shortly)"}],
+    "stream": true,
+    "thread_id": "test-123",
+    "language": "Deutsch"
+  }'   --no-buffer
+
+  curl -X POST http://localhost:8000/v1/chat/completions   -H "Content-Type: application/json"   -d '{
+    "model": "campus-agent",
+    "messages": [{"role": "user", "content": "Can I study math? (answer shortly)"}],
+    "stream": true
+  }'   --no-buffer
+    """
+
+    agent = CampusManagementOpenAIToolsAgent()
+
+    # Fresh thread_id if non provided (this means that the client sends all chat history e.g., Librechat)
+    thread_id = request.thread_id if request.thread_id else str(uuid.uuid4())
+
+    config = {
+        "configurable": {"thread_id": thread_id},
+        "recursion_limit": settings.application.recursion_limit,
+    }
+
+    # Convert LibreChat's full history into LangChain messages
+    langchain_messages = []
+    for msg in request.messages:
+        if msg.role == "user":
+            langchain_messages.append(HumanMessage(content=msg.content))
+        elif msg.role == "assistant":
+            langchain_messages.append(AIMessage(content=msg.content))
+        # system messages are built in agent_node, skip them
+
+    # Only the last user message drives the agent
+    user_message = next(
+        (m.content for m in reversed(request.messages) if m.role == "user"), ""
+    )
+
+    input_data = {
+        # Pass full history — gives the LLM conversation context (if provided by the client)
+        "messages": langchain_messages,
+        "user_initial_query": user_message,
+        "current_date": get_current_date("deutsch"),
+        "language": "Deutsch",
+        "visited_links": [],
+        "doc_references": [],
+        "about_application": False,
+        "teaching_degree": False,
+        "rewrite_query": False,
+    }
+
+    completion_id = _completion_id()
+    created = int(time.time())
+    model = request.model
+
+    # Snapshot previous references
+    prev_state = await agent._graph.aget_state(config)
+    if prev_state.values:
+        prev_links_count = len(prev_state.values.get("visited_links", []))
+        prev_refs_count = len(prev_state.values.get("doc_references", []))
+    else:
+        prev_links_count = 0
+        prev_refs_count = 0
+
+    # ─── Streaming ─────────────────────────────────────
+
+    if request.stream:
+
+        async def stream_generator():
+            streamed = False
+
+            # Role chunk (first chunk announces the role)
+            yield _make_chunk(completion_id, created, model, role="assistant")
+
+            async for msg, metadata in agent._graph.astream(
+                input_data, config=config, stream_mode="messages",
+            ):
+                if (
+                    msg.content
+                    and not isinstance(msg, HumanMessage)
+                    and not isinstance(msg, ToolMessage)
+                    and (
+                        metadata["langgraph_node"] == "generate"
+                        or metadata["langgraph_node"] == "generate_application"
+                        or metadata["langgraph_node"]
+                        == "generate_teaching_degree_node"
+                    )
+                ):
+                    text = _extract_text_content(msg.content)
+                    if text:
+                        streamed = True
+                        yield _make_chunk(completion_id, created, model, content=text)
+
+            # Direct response (no tools used)
+            if not streamed:
+                state = await agent._graph.aget_state(config)
+                content = _extract_text_content(state.values["messages"][-1].content)
+                yield _make_chunk(completion_id, created, model, content=content)
+
+            # Stream references
+            final_state = await agent._graph.aget_state(config)
+            values = final_state.values
+            new_links = list(set(values.get("visited_links", [])[prev_links_count:]))
+            new_refs = values.get("doc_references", [])[prev_refs_count:]
+            refs_text = _format_references(new_links, new_refs)
+            if refs_text:
+                yield _make_chunk(completion_id, created, model, content=refs_text)
+
+            # Final chunk with finish_reason
+            yield _make_chunk(completion_id, created, model, finish_reason="stop")
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            stream_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    # ─── Non-streaming ─────────────────────────────────
+
+    result = await agent._graph.ainvoke(input_data, config=config)
+    content = _extract_text_content(result["messages"][-1].content)
+
+    new_links = list(set(result.get("visited_links", [])[prev_links_count:]))
+    new_refs = result.get("doc_references", [])[prev_refs_count:]
+    refs_text = _format_references(new_links, new_refs)
+
+    return JSONResponse(_make_completion(completion_id, created, model, content, refs_text))
+
+
+
 
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
