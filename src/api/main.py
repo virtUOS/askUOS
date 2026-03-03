@@ -1,19 +1,28 @@
-import asyncio
 import json
-import uuid
+import os
 import time
-from fastapi import FastAPI, HTTPException, WebSocket
-from fastapi.responses import StreamingResponse, JSONResponse
+import uuid
 from contextlib import asynccontextmanager
+from typing import Set
 
+from fastapi import FastAPI, HTTPException, Security, WebSocket, status
+from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+from src.api.helpers import (
+    _completion_id,
+    _extract_text_content,
+    _format_references,
+    _make_chunk,
+    _make_completion,
+)
+from src.api.models import ChatCompletionRequest, ChatRequest, Message
+from src.chatbot.agents.graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.prompt.prompt_date import get_current_date
-from src.config.core_config import settings
-from src.api.models import ChatRequest, Message, ChatCompletionRequest
-from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
-from src.chatbot.agents.graph import CampusManagementOpenAIToolsAgent
-from src.api.helpers import _extract_text_content, _format_references, _completion_id, _make_chunk, _make_completion
 from src.chatbot_log.chatbot_logger import logger
+from src.config.core_config import settings
 
 
 @asynccontextmanager
@@ -27,31 +36,60 @@ async def lifespan(app: FastAPI):
     await agent.cleanup()
 
 
+# Load valid keys
+_valid_api_keys: Set[str] = set(json.loads(os.getenv("API_KEYS", "[]")))
+
+_security = HTTPBearer()
+
+
+async def verify_api_key(
+    credentials: HTTPAuthorizationCredentials = Security(_security),
+) -> str:
+    """Validate the Bearer token against known API keys."""
+    if credentials.credentials not in _valid_api_keys:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
+    return credentials.credentials
+
+
 app = FastAPI(lifespan=lifespan, title="AksUOS API")
 
-GENERATE_NODES = frozenset({
-    "generate",
-    "generate_application",
-    "generate_teaching_degree_node",
-})
+GENERATE_NODES = frozenset(
+    {
+        "generate",
+        "generate_application",
+        "generate_teaching_degree_node",
+    }
+)
 
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest):
+async def chat_completions(
+    request: ChatCompletionRequest,
+    api_key: str = Security(verify_api_key),
+):
     """
-    curl -X POST http://localhost:8000/v1/chat/completions   -H "Content-Type: application/json"   -d '{
-    "model": "campus-agent",
-    "messages": [{"role": "user", "content": "Can I study math? (answer shortly)"}],
-    "stream": true,
-    "thread_id": "test-123",
-    "language": "Deutsch"
-  }'   --no-buffer
+    curl -X POST http://localhost:8000/v1/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer sk-askUOS-abc123" \
+        -d '{
+        "model": "askUOS-agent",
+        "messages": [{"role": "user", "content": "Can I study math? (answer shortly)"}],
+        "stream": true,
+        "thread_id": "test-123",
+        "language": "Deutsch"
+    }'   --no-buffer
 
-  curl -X POST http://localhost:8000/v1/chat/completions   -H "Content-Type: application/json"   -d '{
-    "model": "campus-agent",
-    "messages": [{"role": "user", "content": "Can I study math? (answer shortly)"}],
-    "stream": true
-  }'   --no-buffer
+  curl -X POST http://localhost:8000/v1/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer sk-askUOS-abc123" \
+        -d '{
+            "model": "askUOS-agent",
+            "messages": [{"role": "user", "content": "Can I study math? (answer shortly)"}],
+            "stream": true
+        }'   --no-buffer
     """
 
     agent = CampusManagementOpenAIToolsAgent()
@@ -115,7 +153,9 @@ async def chat_completions(request: ChatCompletionRequest):
             yield _make_chunk(completion_id, created, model, role="assistant")
 
             async for msg, metadata in agent._graph.astream(
-                input_data, config=config, stream_mode="messages",
+                input_data,
+                config=config,
+                stream_mode="messages",
             ):
                 if (
                     msg.content
@@ -124,8 +164,7 @@ async def chat_completions(request: ChatCompletionRequest):
                     and (
                         metadata["langgraph_node"] == "generate"
                         or metadata["langgraph_node"] == "generate_application"
-                        or metadata["langgraph_node"]
-                        == "generate_teaching_degree_node"
+                        or metadata["langgraph_node"] == "generate_teaching_degree_node"
                     )
                 ):
                     text = _extract_text_content(msg.content)
@@ -171,18 +210,22 @@ async def chat_completions(request: ChatCompletionRequest):
     new_refs = result.get("doc_references", [])[prev_refs_count:]
     refs_text = _format_references(new_links, new_refs)
 
-    return JSONResponse(_make_completion(completion_id, created, model, content, refs_text))
-
-
+    return JSONResponse(
+        _make_completion(completion_id, created, model, content, refs_text)
+    )
 
 
 @app.post("/chat/stream")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(
+    request: ChatRequest,
+    api_key: str = Security(verify_api_key),
+):
     """
     Stream endpoint — just raw text
     Example:
     curl -X POST http://localhost:8000/chat/stream \
             -H "Content-Type: application/json"  \
+            -H "Authorization: Bearer sk-askUOS-abc123" \
             -d '{"message": "Welche Fristen gelten für ein Auslandssemester?", "thread_id": "test-123", "language": "English"}' \
             --no-buffer
     """
@@ -203,7 +246,7 @@ async def chat_stream(request: ChatRequest):
             "about_application": False,
             "teaching_degree": False,
             "rewrite_query": False,
-            "language": request.language 
+            "language": request.language,
         }
 
         # Snapshot previous references so we only return NEW ones
@@ -217,27 +260,27 @@ async def chat_stream(request: ChatRequest):
 
         streamed = False
 
-        
         async for msg, metadata in agent._graph.astream(
-            input_data, config, stream_mode="messages",
+            input_data,
+            config,
+            stream_mode="messages",
         ):
             if (
-                    msg.content
-                    and not isinstance(msg, HumanMessage)
-                    and not isinstance(msg, ToolMessage)
-                    and (
-                        metadata["langgraph_node"] == "generate"
-                        or metadata["langgraph_node"] == "generate_application"
-                        or metadata["langgraph_node"]
-                        == "generate_teaching_degree_node"
-                    )
-                ):
-                    
-                    text = msg.text
+                msg.content
+                and not isinstance(msg, HumanMessage)
+                and not isinstance(msg, ToolMessage)
+                and (
+                    metadata["langgraph_node"] == "generate"
+                    or metadata["langgraph_node"] == "generate_application"
+                    or metadata["langgraph_node"] == "generate_teaching_degree_node"
+                )
+            ):
 
-                    if text:
-                        streamed = True
-                        yield text
+                text = msg.text
+
+                if text:
+                    streamed = True
+                    yield text
         # ── Graph finished ──
 
         # Direct response — agent answered without tools
@@ -282,7 +325,8 @@ async def get_references(thread_id: str):
         "doc_references": state.values.get("doc_references", []),
     }
 
-#connected_clients: List[WebSocket] = []
+
+# connected_clients: List[WebSocket] = []
 
 # @app.websocket("/ws/chat/{session_id}")
 # async def websocket_endpoint(websocket: WebSocket, session_id: str):
@@ -320,6 +364,7 @@ async def get_references(thread_id: str):
 # async def conversation_summary():
 #     pass
 
+
 # Health check
 @app.get("/health")
 async def health():
@@ -328,4 +373,5 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
