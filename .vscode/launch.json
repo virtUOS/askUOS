@@ -125,10 +125,10 @@
         },
 
          {
-            "name": "deep_search",
+            "name": "main_api",
             "type": "debugpy",
             "request": "launch",
-            "program": "./deep_search.py",
+            "program": "/app/src/api/main.py",
             "cwd": "${workspaceFolder}",
             "env":{ "PYTHONPATH": "/app"},
             "console": "integratedTerminal",

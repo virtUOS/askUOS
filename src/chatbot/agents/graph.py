@@ -1,8 +1,6 @@
 import asyncio
 import threading
-import uuid
-from collections import deque
-from typing import ClassVar, Dict, List, Literal, Optional, Union
+from typing import ClassVar, Dict, List
 
 from langchain_core.messages import (
     BaseMessage,
@@ -10,22 +8,19 @@ from langchain_core.messages import (
 )
 from langchain_core.prompts import PromptTemplate
 
-# from langchain_core.pydantic_v1 import BaseModel, Field, PrivateAttr
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.graph import END, START, StateGraph
-from pydantic import Field
 from src.chatbot.agents.utils.agent_helpers import llm_gemini, llm_optional
 from src.chatbot.prompt.main import (
     get_prompt_length,
     get_system_prompt,
     translate_prompt,
 )
-from src.chatbot.tools.utils.tool_helpers import ReferenceRetriever
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
-from dataclasses import dataclass
 from src.chatbot.agents.graph_node_edges import GraphEdgesMixin, GraphNodesMixin, State
-import redis.asyncio as aioredis
+
+
 OPEN_AI_MODEL = settings.model.model_name
 DEBUG = settings.application.debug
 # message history limit within the graph
@@ -57,20 +52,13 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
             self._llm_optional = llm_optional()
             self._llm = llm_gemini()
             
-            self.language: str = Field(default=settings.language)
+            #self.language: str = Field(default=settings.language)
             self._graph: StateGraph = None
             self._prompt_length: int = None
             self._agent_direct_msg: str = None
-            
-            #self._chat_history: List[Dict] = []
-            #self._visited_links: List[str] = None
-            #self._visited_docs: ReferenceRetriever = ReferenceRetriever()
-
-            ###----Redis -----######
+      
             # Create the checkpointer (keeps connection alive)
             self._checkpointer: AsyncRedisSaver = None  # initialized later in async context
-
-            ###----Redis -----######
 
             tools = GraphNodesMixin.create_tools()
             self._tools_by_name = {tool.name: tool for tool in tools}
@@ -91,13 +79,12 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
         self._checkpointer = AsyncRedisSaver(
         redis_url=REDIS_DB_URI,
         ttl = {
-            "default_ttl":120, # 2 hours/ 120 minutes
+            "default_ttl":120, #  120 minutes
             "refresh_on_read": True
         }
         )
         await self._checkpointer.asetup()
 
-        # Now build the graph once
         await self._create_graph()
 
         self._async_initialized = True
@@ -180,7 +167,6 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
         graph_builder.add_node(
             "generate_teaching_degree_node", self.generate_teaching_degree_node
         )
-        # graph_builder.add_node("judge_answer", self.juge_answer)
         graph_builder.add_edge(START, "agent_node")
 
         graph_builder.add_conditional_edges(
@@ -222,37 +208,11 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
             debug=DEBUG, checkpointer=self._checkpointer
         )
 
-    def compute_search_num_tokens(self, search_result_text: str) -> int:
-
-        #search_result_text_tokens = self._llm.get_num_tokens(search_result_text)
-        #return search_result_text_tokens
-        # 1 token ≈ 4 characters 
-        return len(search_result_text) // 4
-
-    # def compute_internal_tokens(self, query: str) -> int:
-    #     # extract the chat history from the memory
-    #     # TODO BUG: Agent's scratchpad tokens are not being counted (fix sum(count_tokens_history) * 2)
-    #     # history = self._agent_executor.memory.dict()["chat_memory"][
-    #     #     "messages"
-    #     # ]  # this is a list [{'content':'', 'additional_kwargs':{},...}, {}...]
-    #     # history = self._get_chat_history()
-
-    #     count_tokens_history = [
-    #         self._llm.get_num_tokens(c["content"]) for c in self._chat_history
-    #     ]
-    #     # TODO multiply by 2 to account for agent's scratchpad (Improvement: use tokenization algorithm to count tokens)
-    #     internal_tokens = (
-    #         sum(count_tokens_history) * 2
-    #         + self._prompt_length
-    #         + self._llm.get_num_tokens(query)
-    #     )
-    #     return internal_tokens
-
-
 
 if __name__ == "__main__":
     from src.chatbot.prompt.main import get_system_prompt
     from src.chatbot.prompt.prompt_date import get_current_date
+    import redis.asyncio as aioredis
 
     graph = CampusManagementOpenAIToolsAgent()
 
@@ -302,6 +262,9 @@ if __name__ == "__main__":
             # Initialize empty — the reducers accumulate from here
             "visited_links": [],
             "doc_references": [],
+            "about_application": False,
+            "teaching_degree": False,
+            "rewrite_query": False,
             },
             config=config,
         )
@@ -316,6 +279,9 @@ if __name__ == "__main__":
             # Initialize empty — the reducers accumulate from here
             "visited_links": [],
             "doc_references": [],
+            "about_application": False,
+            "teaching_degree": False,
+            "rewrite_query": False,
             },
             config=config,
         )
@@ -330,6 +296,9 @@ if __name__ == "__main__":
             # Initialize empty — the reducers accumulate from here
             "visited_links": [],
             "doc_references": [],
+            "about_application": False,
+            "teaching_degree": False,
+            "rewrite_query": False,
             },
             config=config,
         )

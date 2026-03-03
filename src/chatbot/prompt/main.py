@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Literal
 
 from langchain_core.messages import SystemMessage
 
@@ -10,7 +10,7 @@ from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
 
-def translate_prompt() -> Dict[str, str]:
+def translate_prompt(language: Literal["Deutsch", "English"]= "Deutsch") -> Dict[str, str]:
     """
     Translates the prompt text based on the configured language.
 
@@ -18,9 +18,11 @@ def translate_prompt() -> Dict[str, str]:
         A dictionary containing the translated prompt text.
     """
 
-    if settings.language == "Deutsch":
+    #if settings.language == "Deutsch":
+    if language == "Deutsch":
         prompt_text = text.prompt_text_deutsch
-    elif settings.language == "English":
+    #elif settings.language == "English":
+    elif language == "English":
         prompt_text = text.prompt_text_english
     else:
         prompt_text = text.prompt_text_deutsch
@@ -32,14 +34,14 @@ def translate_prompt() -> Dict[str, str]:
 
 
 def get_system_prompt(
-    user_input: str, current_date: str
+    user_input: str, current_date: str, language: Literal["Deutsch", "English"]= "Deutsch"
 ) -> List:
     """
     Generates a chat prompt template based on the provided prompt text.
 
     """
 
-    prompt_text = translate_prompt()
+    prompt_text = translate_prompt(language)
     system_message_text = prompt_text["system_message"].format(
         current_date,
         user_input,

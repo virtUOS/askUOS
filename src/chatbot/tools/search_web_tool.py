@@ -5,10 +5,7 @@ import sys
 sys.path.append("/app")
 import asyncio
 from typing import List, Optional, Tuple
-
 import aiohttp
-
-# import colorama
 import dotenv
 import nest_asyncio
 import redis.asyncio as aioredis
@@ -16,7 +13,7 @@ import redis.asyncio as redis
 from langchain_classic.chains.summarize import load_summarize_chain
 from langchain_classic.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.prompts import PromptTemplate
-
+from src.chatbot.utils.helpers import compute_search_num_tokens
 from src.chatbot.agents.models import RetrievalResult, ScrapeResult
 from src.chatbot.agents.utils.agent_helpers import llm_optional as sumarize_llm
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
@@ -91,11 +88,10 @@ async def generate_summary(text: str, query: str) -> str:
 
 
 def compute_tokens(
-    search_result_text: str, query: str, agent_executor
+    search_result_text: str, query: str
 ) -> Tuple[int, int]:
     """Compute tokens for the search result text."""
-    # internal_num_tokens = agent_executor.compute_internal_tokens(query)
-    current_search_num_tokens = agent_executor.compute_search_num_tokens(
+    current_search_num_tokens = compute_search_num_tokens(
         search_result_text + query
     )
     # total_tokens = internal_num_tokens + current_search_num_tokens
@@ -201,7 +197,6 @@ async def _google_search(session: aiohttp.ClientSession, url: str):
 async def visit_urls_extract(
     url: str,  # search url
     query: str,
-    agent_executor,
     about_application: bool = False,
     max_num_links: int = MAX_NUM_LINKS,
     do_not_visit_links: List = [],
@@ -312,13 +307,13 @@ async def visit_urls_extract(
                 if isinstance(contents[0], tuple)
                 else contents
             )
-            total_tokens, _ = compute_tokens("".join(contents), query, agent_executor)
+            total_tokens, _ = compute_tokens("".join(contents), query)
             if total_tokens > settings.model.context_window:
                 for i in range(len(contents) - 1, -1, -1):
                     contents[i] = await generate_summary(contents[i], query)
                     # Update the total tokens
                     total_tokens, _ = compute_tokens(
-                        "".join(contents), query, agent_executor
+                        "".join(contents), query
                     )
                     if total_tokens <= settings.model.context_window:
                         break
@@ -360,12 +355,10 @@ async def async_search(**kwargs) -> Tuple[str, List]:
                 return RetrievalResult.from_json(cached_content)
 
             logger.debug("[SEARCH] Cache miss – proceeding with live search")
-            agent_executor = kwargs["agent_executor"]
-
+          
             visited_urls, contents = await visit_urls_extract(
                 url=url,
                 query=query,
-                agent_executor=agent_executor,
                 about_application=about_application,
                 do_not_visit_links=do_not_visit_links,
                 client=client,
@@ -376,7 +369,7 @@ async def async_search(**kwargs) -> Tuple[str, List]:
             if final_output:
                 # For testing
                 final_output_tokens, final_search_tokens = compute_tokens(
-                    final_output, query, agent_executor
+                    final_output, query
                 )
                 logger.info(f"[SEARCH] Search tokens: {final_search_tokens}")
                 logger.info(
