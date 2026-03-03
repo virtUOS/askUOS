@@ -40,7 +40,7 @@ async def chat_stream(request: ChatRequest):
     """
     agent = CampusManagementOpenAIToolsAgent()
 
-    async def event_generator():
+    async def text_generator():
         config = {
             "configurable": {"thread_id": request.thread_id},
             "recursion_limit": settings.application.recursion_limit,
@@ -69,61 +69,56 @@ async def chat_stream(request: ChatRequest):
 
         streamed = False
 
-        try:
-            async for msg, metadata in agent._graph.astream(
-                input_data, config, stream_mode="messages",
-            ):
-                if (
-                        msg.content
-                        and not isinstance(msg, HumanMessage)
-                        and not isinstance(msg, ToolMessage)
-                        and (
-                            metadata["langgraph_node"] == "generate"
-                            or metadata["langgraph_node"] == "generate_application"
-                            or metadata["langgraph_node"]
-                            == "generate_teaching_degree_node"
-                        )
-                    ):
-                       
-                        text = msg.text
+        
+        async for msg, metadata in agent._graph.astream(
+            input_data, config, stream_mode="messages",
+        ):
+            if (
+                    msg.content
+                    and not isinstance(msg, HumanMessage)
+                    and not isinstance(msg, ToolMessage)
+                    and (
+                        metadata["langgraph_node"] == "generate"
+                        or metadata["langgraph_node"] == "generate_application"
+                        or metadata["langgraph_node"]
+                        == "generate_teaching_degree_node"
+                    )
+                ):
+                    
+                    text = msg.text
 
-                        if text:
-                            streamed = True
-                            yield text
-            # ── Graph finished ──
+                    if text:
+                        streamed = True
+                        yield text
+        # ── Graph finished ──
 
-            final_state = await agent._graph.aget_state(config)
-            values = final_state.values
+        # Direct response — agent answered without tools
+        if not streamed:
+            state = await agent._graph.aget_state(config)
+            content = _extract_text_content(state.values["messages"][-1].content)
+            yield content
 
-            # Direct response (agent answered without tools)
-            if not streamed:
-                content = _extract_text_content(values["messages"][-1].content)
-                yield f"data: {json.dumps({'type': 'full', 'content': content})}\n\n"
+        # Append references at the end of the stream
+        final_state = await agent._graph.aget_state(config)
+        values = final_state.values
+        new_links = list(set(values.get("visited_links", [])[prev_links_count:]))
+        new_refs = values.get("doc_references", [])[prev_refs_count:]
 
-            # Only references from THIS turn
-            all_links = values.get("visited_links", [])
-            all_refs = values.get("doc_references", [])
-            new_links = list(set(all_links[prev_links_count:]))
-            new_refs = all_refs[prev_refs_count:]
+        if new_links or new_refs:
+            yield "\n\n---\n\n"
+            if new_links:
+                yield "**References:**\n"
+                for link in new_links:
+                    yield f"- {link}\n"
+            if new_refs:
+                yield "**Documents:**\n"
+                for ref in new_refs:
+                    if isinstance(ref, dict):
+                        yield f"- {ref.get('source', '')}, p. {ref.get('page', '')}\n"
+                    else:
+                        yield f"- {ref}\n"
 
-            if new_links or new_refs:
-                yield f"data: {json.dumps({'type': 'references', 'links': new_links, 'doc_references': new_refs})}\n\n"
-
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
-
-        except Exception as e:
-            logger.error(f"Streaming error: {e}", exc_info=True)
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # prevents nginx from buffering SSE
-        },
-    )
+    return StreamingResponse(text_generator(), media_type="text/plain")
 
 
 @app.get("/chat/references/{thread_id}")
