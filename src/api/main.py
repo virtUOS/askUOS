@@ -42,8 +42,11 @@ async def lifespan(app: FastAPI):
     await agent.cleanup()
 
 
+# TODO: Refactor key management (should be more robust)
 # Load valid keys
-_valid_api_keys: Set[str] = set(json.loads(os.getenv("API_KEYS", "[]")))
+_valid_api_keys: Set[str] = set(
+    key.strip() for key in os.getenv("API_KEYS", "").split(",") if key.strip()
+)
 
 _security = HTTPBearer()
 
