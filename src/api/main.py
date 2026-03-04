@@ -364,18 +364,38 @@ async def chat_stream(
     return StreamingResponse(text_generator(), media_type="text/plain")
 
 
-@app.get("/chat/references/{thread_id}")
-async def get_references(thread_id: str):
-    """
-    Get references (URLs visited or docs retrieved from vector db) after streaming is done
-    """
+@app.delete("/v1/threads/{thread_id}")
+async def delete_thread(
+    thread_id: str,
+    api_key: str = Security(verify_api_key),
+):
+    """Clear all checkpointer state for a thread."""
+    agent = CampusManagementOpenAIToolsAgent()
+    redis_client = agent._checkpointer._redis
+    # Delete all keys matching this thread
+    async for key in redis_client.scan_iter(f"*{thread_id}*"):
+        await redis_client.delete(key)
+    return {"status": "ok"}
+
+
+@app.get("/v1/threads/{thread_id}/messages")
+async def get_messages(
+    thread_id: str,
+    api_key: str = Security(verify_api_key),
+):
     agent = CampusManagementOpenAIToolsAgent()
     config = {"configurable": {"thread_id": thread_id}}
     state = await agent._graph.aget_state(config)
-    return {
-        "links": state.values.get("visited_links", []),
-        "doc_references": state.values.get("doc_references", []),
-    }
+    if not state.values:
+        return {"messages": []}
+
+    messages = []
+    for msg in state.values.get("messages", []):
+        if isinstance(msg, HumanMessage):
+            messages.append({"role": "user", "content": msg.content})
+        elif isinstance(msg, AIMessage):
+            messages.append({"role": "assistant", "content": msg.content})
+    return {"messages": messages}
 
 
 # connected_clients: List[WebSocket] = []

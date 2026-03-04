@@ -6,6 +6,7 @@ on:
       - main
       - dev
       - ragflow
+      - agent_async
     paths:
       - 'src/**'
       - 'pages/**'

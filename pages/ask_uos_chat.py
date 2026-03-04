@@ -2,35 +2,29 @@ import asyncio
 import os
 import time
 import uuid
-from typing import List, Optional
+from typing import Optional
 
 import nest_asyncio
 import streamlit as st
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage
 from langchain_redis import RedisChatMessageHistory
-from langgraph.errors import GraphRecursionError
 from openai import AsyncOpenAI
 from streamlit import session_state
 from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
 
 from pages.utils import initialize_session_sate, load_css, setup_page
-from src.chatbot.agents.utils.exceptions import MaxMessageHistoryException
-from src.chatbot.prompt.main import get_system_prompt
-from src.chatbot.prompt.prompt_date import get_current_date
-from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
-from src.config.models import VectorDBTypes
 
 # max number of messages after which a summary is generated
-MAX_MESSAGE_HISTORY = 5
 MAX_MESSAGES_PER_USER = 150  # Limit for the number of messages per user (Redis)
 HUMAN_AVATAR = "./static/Icon-User.svg"
 ASSISTANT_AVATAR = "./static/Icon-chatbot.svg"
 ROLES = ("ai", "human")
+API_URL = "http://localhost:8000/v1"
 askUOS_API_KEY = os.getenv("STREAMLIT_API_KEY", "")
 
-from redisvl.query import CountQuery, FilterQuery, TextQuery  # type: ignore
+from redisvl.query import FilterQuery  # type: ignore
 from redisvl.query.filter import Tag  # type: ignore
 
 # Apply nest_asyncio to allow nested event loops (Streamlit compatibility)
@@ -87,7 +81,7 @@ class ChatApp:
         """Returns a reusable OpenAI client pointing at your backend."""
         if "openai_client" not in st.session_state:
             st.session_state["openai_client"] = AsyncOpenAI(
-                base_url="http://localhost:8000/v1",
+                base_url=API_URL,
                 api_key=askUOS_API_KEY,  # your API key
             )
         return st.session_state["openai_client"]
@@ -265,15 +259,11 @@ class ChatApp:
 
             history.add_user_message(prompt)
             st.session_state["messages"].append(HumanMessage(content=prompt))
-            # st.session_state.messages.append(
-            #     {"role": "user", "content": prompt, "avatar": "./static/Icon-User.svg"}
-            # )
+
             with st.chat_message(ROLES[1], avatar="./static/Icon-User.svg"):
                 st.write(prompt)
-
             if history.messages[-1].type != ROLES[0]:  # "ai"
                 self._run_async(self.generate_response_async(prompt))
-                # self.generate_response(prompt)
 
             st.session_state.input_key_counter += 1
             st.rerun()  # Rerun to update the chat messages and input field
@@ -324,61 +314,6 @@ class ChatApp:
 
                 self.store_response(response, prompt)
 
-    # TODO DELETE
-    def display_visited_docs(self):
-        """Display the documents visited for the current user query."""
-
-        # graph = self.get_agent()
-        # references = graph._visited_docs.format_references()
-        references = st.session_state["visited_docs"]
-        reference_examination_regulations = "https://www.uni-osnabrueck.de/studium/im-studium/zugangs-zulassungs-und-pruefungsordnungen/"
-        reference_fagflow = None
-        message = session_state["_"](
-            "The information provided draws on the documents below that can be found in the [University Website]({}). We encourage you to visit the site to explore these resources for additional details and insights!"
-        )
-
-        if settings.vector_db_settings.type == VectorDBTypes.INFINITY_RAGFLOW:
-            reference_fagflow = "{}/document/{}?ext=pdf&prefix=document"
-        else:
-            st.markdown(message.format(reference_examination_regulations))
-
-        for k, value in references.items():
-            # TODO add translation
-            page_label = (
-                session_state["_"]("Pages")
-                if len(value["page"]) > 1
-                else session_state["_"]("Page")
-            )
-            page_list = ", ".join(map(str, value["page"]))
-
-            if value["doc_id"] is not None and reference_fagflow is not None:
-                st.markdown(
-                    f"- [{k}]({reference_fagflow.format(settings.vector_db_settings.settings.base_url,value['doc_id'])}),  **{page_label}**: {page_list}"
-                )
-            else:
-
-                st.markdown(f"- **{k}**,  **{page_label}**: {page_list}")
-
-        st.session_state["visited_docs"] = None
-
-    # TODO DELETE
-    def display_visited_links(self):
-        """Display the links visited for the current user query."""
-
-        with st.expander(session_state["_"]("Sources")):
-            for link in st.session_state["visited_links"]:
-                st.markdown(
-                    f"""
-
-                        <div class="truncate">
-                            <span>&#8226;</span> <a href="{link}" target="_blank" rel="noopener noreferrer">{link}</a>
-                        </div>
-
-                        """,
-                    unsafe_allow_html=True,
-                )
-        st.session_state["visited_links"] = None
-
     def store_response(
         self,
         output: str,
@@ -397,54 +332,6 @@ class ChatApp:
         logger.info(f"[BOTANSWER] Assistant's response: {output}")
 
         st.session_state.user_query = prompt
-
-    def _get_conversation_history(self, history: List):
-        """
-        history: Filtered HumanMessage and AIMessage objects from the chat history.
-        """
-        if st.session_state.get("conversation_summary", None):
-
-            # number of summarized messages
-            k = len(st.session_state["conversation_summary"]) * MAX_MESSAGE_HISTORY
-
-            if len(history) > k:
-                # messages that have not been summarized yet
-                conversation_history = history[k:]  # get the last k messages
-
-                # conversation_history = deque(conversation_history)
-                # # Two ai messages cannot be consecutive
-                # if isinstance(conversation_history[0], AIMessage):
-                #     new_ai_message = AIMessage(
-                #         content=st.session_state["conversation_summary"][-1]
-                #         + "\n\n"
-                #         + conversation_history[0].content
-                #     )
-
-                #     conversation_history[0] = new_ai_message
-                # else:
-                #     conversation_history.appendleft(
-                #         AIMessage(content=st.session_state["conversation_summary"][-1])
-                #     )
-
-            else:
-                # when there is only a summary, append the last two messages
-
-                conversation_history = []
-                # conversation_history.append(
-                #     AIMessage(content=st.session_state["conversation_summary"][-1])
-                # )
-                try:
-                    conversation_history.append(history[-2])
-                    conversation_history.append(history[-1])
-                except IndexError:
-                    raise MaxMessageHistoryException(
-                        "MAX_MESSAGE_HISTORY must be >= 2. Summarizing only allowed when there are 2 or more messages."
-                    )
-
-        else:
-            conversation_history = history
-
-        return conversation_history
 
     def show_feedback_faces(self):
         """Display feedback faces for user interaction."""
@@ -543,7 +430,6 @@ class ChatApp:
             history = self.get_history(user_id)
             history.clear()
             st.session_state["messages"] = []
-            st.session_state["conversation_summary"] = []
             st.rerun()
         if st.button(
             session_state["_"]("Cancel"),
@@ -588,9 +474,6 @@ class ChatApp:
         if st.query_params.get("in_widget", "false") == "false":
             # If not in widget mode, show the delete button
             self.show_delete_button()
-
-        # delete button
-        # self.show_delete_button()
 
 
 if __name__ == "__main__":

@@ -1,15 +1,13 @@
 import asyncio
 import threading
-from typing import ClassVar, Dict, List
+from typing import Dict, List
 
-from langchain_core.messages import (
-    BaseMessage,
-    HumanMessage,
-)
+from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.prompts import PromptTemplate
-
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.graph import END, START, StateGraph
+
+from src.chatbot.agents.graph_node_edges import GraphEdgesMixin, GraphNodesMixin, State
 from src.chatbot.agents.utils.agent_helpers import llm_gemini, llm_optional
 from src.chatbot.prompt.main import (
     get_prompt_length,
@@ -18,8 +16,6 @@ from src.chatbot.prompt.main import (
 )
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
-from src.chatbot.agents.graph_node_edges import GraphEdgesMixin, GraphNodesMixin, State
-
 
 OPEN_AI_MODEL = settings.model.model_name
 DEBUG = settings.application.debug
@@ -29,6 +25,7 @@ MESSAGE_HISTORY_LIMIT = 7
 MAX_TOKEN_SUMMARY = 1000
 
 REDIS_DB_URI = "redis://redis:6379"
+
 
 class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
 
@@ -48,17 +45,19 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
     def __init__(self, **data):
         # data: key-value pairs passed through the run method, e.g., CampusManagementOpenAIToolsAgent.run(language='Deutsch')
         if not self._initialized:
-            
+
             self._llm_optional = llm_optional()
             self._llm = llm_gemini()
-            
-            #self.language: str = Field(default=settings.language)
+
+            # self.language: str = Field(default=settings.language)
             self._graph: StateGraph = None
             self._prompt_length: int = None
             self._agent_direct_msg: str = None
-      
+
             # Create the checkpointer (keeps connection alive)
-            self._checkpointer: AsyncRedisSaver = None  # initialized later in async context
+            self._checkpointer: AsyncRedisSaver = (
+                None  # initialized later in async context
+            )
 
             tools = GraphNodesMixin.create_tools()
             self._tools_by_name = {tool.name: tool for tool in tools}
@@ -77,18 +76,15 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
             return
 
         self._checkpointer = AsyncRedisSaver(
-        redis_url=REDIS_DB_URI,
-        ttl = {
-            "default_ttl":120, #  120 minutes
-            "refresh_on_read": True
-        }
+            redis_url=REDIS_DB_URI,
+            ttl={"default_ttl": 120, "refresh_on_read": True},  #  120 minutes
         )
         await self._checkpointer.asetup()
 
         await self._create_graph()
 
         self._async_initialized = True
-    
+
     async def cleanup(self):
         """Call this on application shutdown."""
         if self._checkpointer is not None:
@@ -99,7 +95,7 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
         self._async_initialized = False
         self._graph = None
 
-
+    # TODO: Delete (these were used by streamlit)
     def shorten_conversation_summary(self, summary: str) -> str:
         """Shorten the conversation summary if it exceeds the maximum token limit."""
 
@@ -115,6 +111,7 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
 
         return response
 
+    # TODO: Delete (these were used by streamlit)
     def summarize_conversation(
         self, messages: List[BaseMessage], previous_summary: str = None
     ) -> str:
@@ -210,9 +207,10 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
 
 
 if __name__ == "__main__":
+    import redis.asyncio as aioredis
+
     from src.chatbot.prompt.main import get_system_prompt
     from src.chatbot.prompt.prompt_date import get_current_date
-    import redis.asyncio as aioredis
 
     graph = CampusManagementOpenAIToolsAgent()
 
@@ -232,6 +230,7 @@ if __name__ == "__main__":
             display(Image(filename))
         except Exception as e:
             print(f"An error occurred: {e}")
+
     # clear cash for testing purposes
     async def clear_cache():
         redis_client = aioredis.Redis(host="redis", port=6379, decode_responses=True)
@@ -240,12 +239,13 @@ if __name__ == "__main__":
             await redis_client.aclose()
         except Exception as e:
             print(f"Failed to clear Redis cache: {e}")
+
     # print_graph(graph._graph)
     async def _execute_graph():
         # make sure redis connection is not close before creating the graph
         await clear_cache()
         await graph._ensure_async_initialized()
-        #thread_id = uuid.uuid4()
+        # thread_id = uuid.uuid4()
         thread_id = 1
         config = {
             "configurable": {"thread_id": thread_id},
@@ -253,18 +253,20 @@ if __name__ == "__main__":
         }
         current_date = get_current_date(settings.language.lower())
         user_input = "Answer shortly, can i study cognitive science"
-     
+
         response = await graph._graph.ainvoke(
             {
-            "messages": [{"role": "user", "content": user_input}], # Only the HumanMessage goes into state (and gets checkpointed)
-            "user_initial_query": user_input, # used by agent node only and added to the system prompt
-            "current_date": current_date,
-            # Initialize empty — the reducers accumulate from here
-            "visited_links": [],
-            "doc_references": [],
-            "about_application": False,
-            "teaching_degree": False,
-            "rewrite_query": False,
+                "messages": [
+                    {"role": "user", "content": user_input}
+                ],  # Only the HumanMessage goes into state (and gets checkpointed)
+                "user_initial_query": user_input,  # used by agent node only and added to the system prompt
+                "current_date": current_date,
+                # Initialize empty — the reducers accumulate from here
+                "visited_links": [],
+                "doc_references": [],
+                "about_application": False,
+                "teaching_degree": False,
+                "rewrite_query": False,
             },
             config=config,
         )
@@ -272,16 +274,16 @@ if __name__ == "__main__":
         user_input = "According to the examination regulations, can I write my Master's thesis in English?, Mathematics"
         response = await graph._graph.ainvoke(
             {
-            "messages": [HumanMessage(content=user_input)],
-            #"message_history": history, # used by agent node only
-            "user_initial_query": user_input, # used by agent node only and added to the system prompt
-            "current_date": current_date,
-            # Initialize empty — the reducers accumulate from here
-            "visited_links": [],
-            "doc_references": [],
-            "about_application": False,
-            "teaching_degree": False,
-            "rewrite_query": False,
+                "messages": [HumanMessage(content=user_input)],
+                # "message_history": history, # used by agent node only
+                "user_initial_query": user_input,  # used by agent node only and added to the system prompt
+                "current_date": current_date,
+                # Initialize empty — the reducers accumulate from here
+                "visited_links": [],
+                "doc_references": [],
+                "about_application": False,
+                "teaching_degree": False,
+                "rewrite_query": False,
             },
             config=config,
         )
@@ -289,16 +291,18 @@ if __name__ == "__main__":
         user_input = "who are you?"
         response = await graph._graph.ainvoke(
             {
-            "messages": [HumanMessage(content=user_input)], # used by agent node only
-            #"message_history": history, # used by agent node only
-            "user_initial_query": user_input, # used by agent node only and added to the system prompt
-            "current_date": current_date,
-            # Initialize empty — the reducers accumulate from here
-            "visited_links": [],
-            "doc_references": [],
-            "about_application": False,
-            "teaching_degree": False,
-            "rewrite_query": False,
+                "messages": [
+                    HumanMessage(content=user_input)
+                ],  # used by agent node only
+                # "message_history": history, # used by agent node only
+                "user_initial_query": user_input,  # used by agent node only and added to the system prompt
+                "current_date": current_date,
+                # Initialize empty — the reducers accumulate from here
+                "visited_links": [],
+                "doc_references": [],
+                "about_application": False,
+                "teaching_degree": False,
+                "rewrite_query": False,
             },
             config=config,
         )
