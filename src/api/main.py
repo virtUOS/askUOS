@@ -190,7 +190,7 @@ async def chat_completions(
                     set(values.get("visited_links", [])[prev_links_count:])
                 )
                 new_refs = values.get("doc_references", [])[prev_refs_count:]
-                refs_text = _format_references(new_links, new_refs)
+                refs_text = _format_references(new_links, new_refs, language)
                 if refs_text:
                     yield _make_chunk(completion_id, created, model, content=refs_text)
 
@@ -247,7 +247,7 @@ async def chat_completions(
 
         new_links = list(set(result.get("visited_links", [])[prev_links_count:]))
         new_refs = result.get("doc_references", [])[prev_refs_count:]
-        refs_text = _format_references(new_links, new_refs)
+        refs_text = _format_references(new_links, new_refs, language)
     except GraphRecursionError:
         logger.warning(f"[NOT-ANSWERED] Recursion limit reached. Query: {user_message}")
         content = error_messages["recursion"]
@@ -350,7 +350,7 @@ async def chat_stream(
         if new_links or new_refs:
             yield "\n\n---\n\n"
             if new_links:
-                yield "**References:**\n"
+                yield "**Quelle:**\n"
                 for link in new_links:
                     yield f"- {link}\n"
             if new_refs:

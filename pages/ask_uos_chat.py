@@ -1,7 +1,7 @@
 import asyncio
+import os
 import time
 import uuid
-from collections import deque
 from typing import List, Optional
 
 import nest_asyncio
@@ -9,13 +9,11 @@ import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_redis import RedisChatMessageHistory
 from langgraph.errors import GraphRecursionError
+from openai import AsyncOpenAI
 from streamlit import session_state
 from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
 
 from pages.utils import initialize_session_sate, load_css, setup_page
-
-# from src.chatbot.agents.agent_openai_tools import CampusManagementOpenAIToolsAgent
-from src.chatbot.agents.graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.agents.utils.exceptions import MaxMessageHistoryException
 from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.prompt.prompt_date import get_current_date
@@ -30,6 +28,7 @@ MAX_MESSAGES_PER_USER = 150  # Limit for the number of messages per user (Redis)
 HUMAN_AVATAR = "./static/Icon-User.svg"
 ASSISTANT_AVATAR = "./static/Icon-chatbot.svg"
 ROLES = ("ai", "human")
+askUOS_API_KEY = os.getenv("STREAMLIT_API_KEY", "")
 
 from redisvl.query import CountQuery, FilterQuery, TextQuery  # type: ignore
 from redisvl.query.filter import Tag  # type: ignore
@@ -83,6 +82,15 @@ class ChatApp:
             setup_page()
             self.controller = CookieController()
             load_css()
+
+    def get_client(self) -> AsyncOpenAI:
+        """Returns a reusable OpenAI client pointing at your backend."""
+        if "openai_client" not in st.session_state:
+            st.session_state["openai_client"] = AsyncOpenAI(
+                base_url="http://localhost:8000/v1",
+                api_key=askUOS_API_KEY,  # your API key
+            )
+        return st.session_state["openai_client"]
 
     def _run_async(self, coro):
         """
@@ -209,44 +217,16 @@ class ChatApp:
             )
             history.add_ai_message(greeting_message)
 
-        # if "messages" not in st.session_state:
-        #     greeting_message = session_state["_"](
-        #         "Hello! I am happy to assist you with questions about the University of Osnabrück, including information about study programs, application processes, and admission requirements. \n How can I help you today?"
-        #     )
-        #     st.session_state["messages"] = [
-        #         {
-        #             "role": "assistant",
-        #             "avatar": "./static/Icon-chatbot.svg",
-        #             "content": greeting_message,
-        #         }
-        #     ]
-        # if "conversation_summary" not in st.session_state:
-        #     st.session_state["conversation_summary"] = []
-
     def display_chat_messages(self):
         """Display chat messages stored in the session state."""
 
         user_id = self.get_user_id()
+        # TODO create endpoint to get the history from langraph, do not save history again in the frontend
         history = self.get_history(user_id)
-        # stores the summary messages
-        st.session_state["conversation_summary"] = []
-        # human and assistant/ai messages (these are used in the system prompt)
+
         st.session_state["messages"] = []
         # all messages from the history, see ROLES
         messages = history.messages
-        num_msgs = len(messages)
-        exist_references = bool(
-            st.session_state.get("visited_docs")
-            or st.session_state.get("visited_links")
-        )
-
-        def display_references():
-            """Display references if they exist."""
-            if st.session_state.get("visited_docs", None):
-                self.display_visited_docs()
-
-            if st.session_state.get("visited_links", None):
-                self.display_visited_links()
 
         for idx, m in enumerate(messages):
             role = m.type
@@ -256,28 +236,10 @@ class ChatApp:
                     st.write(m.content)
 
             elif role == ROLES[0]:  # "ai"
-                # check if the message is a summary
-                if m.additional_kwargs.get("is_summary", False):
-                    st.session_state["conversation_summary"].append(m.content)
 
-                else:
-                    st.session_state["messages"].append(m)
-                    with st.chat_message(role, avatar=ASSISTANT_AVATAR):
-
-                        if exist_references:
-                            if idx == num_msgs - 1:
-                                st.markdown(m.content)
-                                display_references()
-                                # since this is the last message; break the loop
-                                break
-                            # the only way two ai msg are consecutive is if the last message is a summary
-                            if idx == num_msgs - 2:
-                                if messages[idx + 1].type == ROLES[0]:
-                                    st.markdown(m.content)
-                                    display_references()
-                                    continue
-
-                        st.write(m.content)
+                st.session_state["messages"].append(m)
+                with st.chat_message(role, avatar=ASSISTANT_AVATAR):
+                    st.markdown(m.content)
 
             else:
                 logger.error(
@@ -316,444 +278,53 @@ class ChatApp:
             st.session_state.input_key_counter += 1
             st.rerun()  # Rerun to update the chat messages and input field
 
-    def get_agent(self):
-        if st.session_state["agent"] is None:
-            st.session_state["agent"] = CampusManagementOpenAIToolsAgent.run(
-                language=session_state["selected_language"]
-            )
-            st.session_state["agent_language"] = session_state["selected_language"]
-
-        if st.session_state["selected_language"] != st.session_state["agent_language"]:
-            st.session_state["agent_language"] = st.session_state["selected_language"]
-            st.session_state["agent"] = CampusManagementOpenAIToolsAgent.run(
-                language=session_state["selected_language"]
-            )
-        return st.session_state["agent"]
-
-    async def generate_response_async(self, prompt):
+    async def generate_response_async(self, prompt: str):
         """Generate a response from the assistant based on user prompt, using astream."""
 
-        graph = self.get_agent()
+        client = self.get_client()
+        user_id = self.get_user_id()
+        language = session_state.get("selected_language", "Deutsch")
 
-        further_help_msg = session_state["_"](
-            """If you need personal assistance regarding studying at the university, you can visit the [StudiOS]({}) (Studierenden-Information Osnabrück) or [ZSB]({}) (Zentrale Studienberatung Osnabrück) website."""
-        )
-        further_help_msg = further_help_msg.format(
-            "https://www.uni-osnabrueck.de/universitaet/organisation/studierenden-information-osnabrueck-studios/",
-            "https://www.zsb-os.de/",
-        )
-
-        async def astream_graph_updates(user_input):
-            response = ""
-            to_stream = ""
-            # TODO USE THE ID RETRIEVED FROM COOKIE CONTROLLER
-            thread_id = 1
-            config = {
-                "configurable": {"thread_id": thread_id},
-                "recursion_limit": settings.application.recursion_limit,  # This amounts to two laps of the graph # https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
-            }
-            current_date = get_current_date(settings.language.lower())
-
-            conversation_summary = (
-                st.session_state["conversation_summary"][-1]
-                if st.session_state.get("conversation_summary", None)
-                else None
-            )
-            # messages that are not still summarized. remaining_msg = len(messages) - (MAX_MESSAGE_HISTORY * number_of_summaries); IF remaining_msg ==0 return the last two messages
-            history = self._get_conversation_history(st.session_state["messages"])
-
-            system_user_prompt = get_system_prompt(
-                conversation_summary, history, user_input, current_date
-            )
-            table_content = ""
-            is_table_content = False
-
-            async def _get_astream():
-                # if there are links from the previous query, clear them
-                graph._visited_links = []
-                async for msg, metadata in graph._graph.astream(
-                    {
-                        "messages": system_user_prompt,
-                        "message_history": history,
-                        "user_initial_query": user_input,
-                        "current_date": current_date,
-                    },
-                    stream_mode="messages",
-                    config=config,
-                ):
-
-                    if (
-                        msg.content
-                        and not isinstance(msg, HumanMessage)
-                        and not isinstance(msg, ToolMessage)
-                        and (
-                            metadata["langgraph_node"] == "generate"
-                            or metadata["langgraph_node"] == "generate_application"
-                            or metadata["langgraph_node"]
-                            == "generate_teaching_degree_node"
-                        )
-                    ):
-                        # deleteme.append(msg.content)
-                        # openai
-                        # yield msg.content
-                        # google
-                        yield msg.text
-                    print()
-
-            try:
-
-                # debug_stream = []
+        with st.chat_message(ROLES[0], avatar="./static/Icon-chatbot.svg"):
+            with st.spinner(session_state["_"]("Generating response...")):
                 message_placeholder = st.empty()
-                gen_stream = _get_astream()
-                async for msg in gen_stream:
-                    response += msg
-                    # re-parse the entire string every time a new character is added. Ensures md is rendered correctly
-                    message_placeholder.markdown(response)
-                    #######---- Markdown rendering requiered while using openai models -----#######
-                    # streaming of every line
-                    # if msg == "|":
-                    #     is_table_content = True
-                    #     table_content += msg
-                    #     while is_table_content:
-                    #         try:
-                    #             msg = await gen_stream.__anext__()
-                    #             table_content += msg
-                    #             response += msg
-                    #             # do not delete the blank space at the beginning of ' |\n\n'
-                    #             # it is used to identify the end of the table
-                    #             if msg == " |\n\n":
-                    #                 # end of table
-
-                    #                 st.markdown(table_content)
-                    #                 table_content = ""
-                    #                 is_table_content = False
-                    #         except StopAsyncIteration:
-                    #             if table_content:
-                    #                 st.markdown(table_content)
-                    #                 table_content = ""
-                    #             is_table_content = False
-                    #             break
-                    # # indicates a new line (we do not stream per character, rather per line)
-                    # if "\n" in msg:
-                    #     to_stream += msg
-                    #     st.markdown(to_stream)
-                    #     to_stream = ""
-                    # else:
-                    #     to_stream += msg
-                    #######---- Markdown rendering requiered while using openai models -----#######
-                    print(msg, end="|", flush=True)
-
-                if response:
-                    # Final update to remove the cursor once finished
-                    message_placeholder.markdown(response)
-                ##### ---- Direct Agent Answer: the agent did not use any tools --- ####
-                if graph._agent_direct_msg:
-                    response = graph._agent_direct_msg
-                    st.markdown(response)
-                    graph._agent_direct_msg = None
-
-            except GraphRecursionError as e:
-                # TODO handle recursion limit error
-                logger.warning(
-                    f"[NOT-ANSWERED] Recursion Limit reached. Query: {user_input} . Sources used. Documents: {graph._visited_docs()}, Urls: {graph._visited_links}"
-                )
-                response = (
-                    session_state["_"](
-                        "I'm sorry, but I couldn't find enough information to fully answer your question. Could you please try rephrasing your query and ask again?"
-                    )
-                    + f"\n\n{further_help_msg}"
-                )
-
-                # clear the docs references
-                st.markdown(response)
-                graph._visited_docs.clear()
-
-            except ProgrammableSearchException as e:
-                response = (
-                    session_state["_"](
-                        "I'm sorry, something went wrong while connecting to the data provided. If the error persists, please reach out to the administrators for assistance."
-                    )
-                    + f"\n{further_help_msg}"
-                )
-
-                st.markdown(response)
-                # clear the docs references
-                graph._visited_docs.clear()
-
-            except Exception as e:
-                logger.exception(
-                    f"[STREAMLIT] Error while processing the user's query: {e}"
-                )
-                response = session_state["_"](
-                    "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
-                )
-                # clear the docs references
-                graph._visited_docs.clear()
-                st.markdown(f"{response}\n{further_help_msg}")
-
-            return response, to_stream
-
-        with st.chat_message(ROLES[0], avatar="./static/Icon-chatbot.svg"):
-            with st.spinner(session_state["_"]("Generating response...")):
-
+                response = ""
                 start_time = time.time()
                 settings.time_request_sent = start_time
 
                 try:
-                    response, to_stream = await astream_graph_updates(prompt)
+                    stream = await client.chat.completions.create(
+                        model="askUOS-agent",
+                        messages=[{"role": "user", "content": prompt}],
+                        stream=True,
+                        extra_body={
+                            "thread_id": user_id,
+                            "language": language,
+                        },
+                    )
+
+                    async for chunk in stream:
+                        delta = chunk.choices[0].delta
+                        if delta.content:
+                            response += delta.content
+                            message_placeholder.markdown(response)
+
                 except Exception as e:
-                    logger.error(f"[STREAMLIT] Error in streaming graph updates: {e}")
-                    response = session_state["_"](
-                        "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
-                    )
-                    to_stream = ""
-                    st.markdown(response)
-                # if there is content left, stream it
-                if to_stream:
-                    st.markdown(to_stream)
-
-                end_time = time.time()
-                time_taken = end_time - start_time
-                session_state["time_taken"] = time_taken
-                logger.info(
-                    f"[METRICS]Time taken to serve whole answer to the user: {time_taken} seconds"
-                )
-
-                self.store_response(response, prompt, graph)
-                if graph._visited_docs():
-                    st.session_state["visited_docs"] = (
-                        graph._visited_docs.format_references()
-                    )
-                    graph._visited_docs.clear()
-                    # self.display_visited_docs()
-
-                if graph._visited_links:
-                    st.session_state["visited_links"] = graph._visited_links
-                    # self.display_visited_links()
-
-    def generate_response(self, prompt):
-        """Generate a response from the assistant based on user prompt."""
-
-        graph = self.get_agent()
-
-        further_help_msg = session_state["_"](
-            """If you need personal assistance regarding studying at the university, you can visit the [StudiOS]({}) (Studierenden-Information Osnabrück) or [ZSB]({}) (Zentrale Studienberatung Osnabrück) website."""
-        )
-        further_help_msg = further_help_msg.format(
-            "https://www.uni-osnabrueck.de/universitaet/organisation/studierenden-information-osnabrueck-studios/",
-            "https://www.zsb-os.de/",
-        )
-
-        # graph = CampusManagementOpenAIToolsAgent.run(
-        #     language=session_state["selected_language"]
-        # )
-
-        def stream_graph_updates(user_input):
-            response = ""
-            to_stream = ""
-            # TODO USE THE ID RETRIEVED FROM COOKIE CONTROLLER
-            thread_id = 1
-            config = {
-                "configurable": {"thread_id": thread_id},
-                "recursion_limit": settings.application.recursion_limit,  # This amounts to two laps of the graph # https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
-            }
-            # if settings.application.tracing:
-            #     from opik.integrations.langchain import OpikTracer
-
-            #     tracer = OpikTracer(
-            #         graph=graph._graph.get_graph(xray=True),
-            #         project_name=settings.application.opik_project_name,
-            #     )
-
-            #     config["callbacks"] = [tracer]
-            current_date = get_current_date(settings.language.lower())
-
-            conversation_summary = (
-                st.session_state["conversation_summary"][-1]
-                if st.session_state.get("conversation_summary", None)
-                else None
-            )
-            # messages that are not still summarized. remaining_msg = len(messages) - (MAX_MESSAGE_HISTORY * number_of_summaries); IF remaining_msg ==0 return the last two messages
-            history = self._get_conversation_history(st.session_state["messages"])
-            # system_user_prompt = get_prompt(history + [("user", user_input)])
-
-            system_user_prompt = get_system_prompt(
-                conversation_summary, history, user_input, current_date
-            )
-            table_content = ""
-            is_table_content = False
-            # deleteme = []
-
-            def _get_stream():
-                # if there are links from the previous query, clear them
-                graph._visited_links = []
-                for msg, metadata in graph._graph.stream(
-                    {
-                        "messages": system_user_prompt,
-                        "message_history": history,
-                        "user_initial_query": user_input,
-                        "current_date": current_date,
-                    },
-                    stream_mode="messages",
-                    config=config,
-                ):
-
-                    if (
-                        msg.content
-                        and not isinstance(msg, HumanMessage)
-                        and not isinstance(msg, ToolMessage)
-                        and (
-                            metadata["langgraph_node"] == "generate"
-                            or metadata["langgraph_node"] == "generate_application"
-                            or metadata["langgraph_node"]
-                            == "generate_teaching_degree_node"
+                    logger.error(f"[STREAMLIT] Error in streaming: {e}")
+                    if not response:
+                        response = session_state["_"](
+                            "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
                         )
-                    ):
-                        # deleteme.append(msg.content)
-                        yield msg.content
-
-            try:
-
-                gen_stream = _get_stream()
-                for msg in gen_stream:
-                    response += msg
-
-                    # streaming of every line
-                    if msg == "|":
-                        is_table_content = True
-                        table_content += msg
-                        while is_table_content:
-                            try:
-                                msg = next(gen_stream)
-                                table_content += msg
-                                response += msg
-                                # do not delete the blank space at the beginning of ' |\n\n'
-                                # it is used to identify the end of the table
-                                if msg == " |\n\n":
-                                    # end of table
-
-                                    st.markdown(table_content)
-                                    table_content = ""
-                                    is_table_content = False
-                            except StopIteration:
-                                if table_content:
-                                    st.markdown(table_content)
-                                    table_content = ""
-                                is_table_content = False
-                                break
-
-                    if "\n" in msg:
-                        to_stream += msg
-                        st.markdown(to_stream)
-                        to_stream = ""
-                    else:
-                        to_stream += msg
-
-                    print(msg, end="|", flush=True)
-
-                # the agent did not use any tools
-                if graph._agent_direct_msg:
-                    response = graph._agent_direct_msg
-                    st.markdown(response)
-                    graph._agent_direct_msg = None
-
-                # print(
-                #     f"-----------------------------{deleteme}----------------------------"
-                # )
-
-            # try:
-            #     graph._graph.invoke(
-            #         {
-            #             "messages": system_user_prompt,
-            #             "user_initial_query": user_input,
-            #             "current_date": current_date,
-            #         },
-            #         stream_mode="messages",
-            #         config=config,
-            #     )
-            #     response = graph._curated_answer
-            #     st.markdown(response)
-            #     print()
-
-            except GraphRecursionError as e:
-                # TODO handle recursion limit error
-                logger.warning(
-                    f"[NOT-ANSWERED] Recursion Limit reached. Query: {user_input} . Sources used. Documents: {graph._visited_docs()}, Urls: {graph._visited_links}"
-                )
-                response = (
-                    session_state["_"](
-                        "I'm sorry, but I couldn't find enough information to fully answer your question. Could you please try rephrasing your query and ask again?"
-                    )
-                    + f"\n\n{further_help_msg}"
-                )
-
-                # clear the docs references
-                st.markdown(response)
-                graph._visited_docs.clear()
-
-            except ProgrammableSearchException as e:
-                response = (
-                    session_state["_"](
-                        "I'm sorry, something went wrong while connecting to the data provided. If the error persists, please reach out to the administrators for assistance."
-                    )
-                    + f"\n{further_help_msg}"
-                )
-
-                st.markdown(response)
-                # clear the docs references
-                graph._visited_docs.clear()
-
-            except Exception as e:
-                logger.exception(
-                    f"[STREAMLIT] Error while processing the user's query: {e}"
-                )
-                response = session_state["_"](
-                    "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
-                )
-                # clear the docs references
-                graph._visited_docs.clear()
-                st.markdown(f"{response}\n{further_help_msg}")
-
-            return response, to_stream
-
-        with st.chat_message(ROLES[0], avatar="./static/Icon-chatbot.svg"):
-            with st.spinner(session_state["_"]("Generating response...")):
-
-                start_time = time.time()
-                settings.time_request_sent = start_time
-
-                try:
-                    response, to_stream = stream_graph_updates(prompt)
-                except Exception as e:
-                    logger.error(f"[STREAMLIT] Error in streaming graph updates: {e}")
-                    response = session_state["_"](
-                        "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
-                    )
-                    to_stream = ""
-                    st.markdown(response)
-                # if there is content left, stream it
-                if to_stream:
-                    st.markdown(to_stream)
+                        message_placeholder.markdown(response)
 
                 end_time = time.time()
                 time_taken = end_time - start_time
                 session_state["time_taken"] = time_taken
-                logger.info(
-                    f"[METRICS]Time taken to serve whole answer to the user: {time_taken} seconds"
-                )
+                logger.info(f"[METRICS] Response time: {time_taken:.2f}s")
 
-                self.store_response(response, prompt, graph)
-                if graph._visited_docs():
-                    st.session_state["visited_docs"] = (
-                        graph._visited_docs.format_references()
-                    )
-                    graph._visited_docs.clear()
-                    # self.display_visited_docs()
+                self.store_response(response, prompt)
 
-                if graph._visited_links:
-                    st.session_state["visited_links"] = graph._visited_links
-                    # self.display_visited_links()
-
+    # TODO DELETE
     def display_visited_docs(self):
         """Display the documents visited for the current user query."""
 
@@ -787,23 +358,10 @@ class ChatApp:
             else:
 
                 st.markdown(f"- **{k}**,  **{page_label}**: {page_list}")
-                # st.markdown(f"- **{key}**")
 
-        # st.markdown(message.format(reference_examination_regulations))
-        # for key, value in references.items():
-        #     # TODO add translation
-        #     page_label = (
-        #         session_state["_"]("Pages")
-        #         if len(value) > 1
-        #         else session_state["_"]("Page")
-        #     )
-        #     page_list = ", ".join(map(str, value))
-        #     # TODO: Remove page numbers, these are wrong. Temporary
-        #     # st.markdown(f"- **{key}**,  **{page_label}**: {page_list}")
-        #     st.markdown(f"- **{key}**")
-        # graph._visited_docs.clear()
         st.session_state["visited_docs"] = None
 
+    # TODO DELETE
     def display_visited_links(self):
         """Display the links visited for the current user query."""
 
@@ -825,7 +383,6 @@ class ChatApp:
         self,
         output: str,
         prompt: str,
-        graph: CampusManagementOpenAIToolsAgent,
     ):
         """Store the assistant's response and prompt in session state."""
 
@@ -835,72 +392,11 @@ class ChatApp:
         # store the response in the Redis chat history
         history_redis.add_ai_message(output)
 
-        # st.session_state.messages.append(
-        #     {
-        #         "role": "assistant",
-        #         "content": output,
-        #         "avatar": "./static/Icon-chatbot.svg",
-        #     }
-        # )
-
         # Log user query and bot answer
         logger.info(f"[USERQUERY] User's query: {prompt}")
         logger.info(f"[BOTANSWER] Assistant's response: {output}")
 
         st.session_state.user_query = prompt
-
-        # summarize the conversation
-        number_of_summaries = len(
-            st.session_state["conversation_summary"]
-        )  # number of summaries
-        if (
-            len(history_redis.messages) >= MAX_MESSAGE_HISTORY
-            # and len(st.session_state.messages) % MAX_MESSAGE_HISTORY == 0
-            and (number_of_summaries * MAX_MESSAGE_HISTORY + MAX_MESSAGE_HISTORY)
-            <= len(history_redis.messages)
-        ):
-            # TODO call summary enpoint
-            if number_of_summaries == 0:
-
-                summary_msg = AIMessage(
-                    content=graph.summarize_conversation(history_redis.messages),
-                    additional_kwargs={"is_summary": True},
-                )
-                history_redis.add_message(summary_msg)
-
-                # st.session_state["conversation_summary"].append(
-                #     graph.summarize_conversation(
-                #         history,
-                #     )
-                # )
-            else:
-                # if there is a previoius summary, update it
-                summary_msg = AIMessage(
-                    content=graph.summarize_conversation(
-                        history_redis.messages[
-                            -MAX_MESSAGE_HISTORY * number_of_summaries :
-                        ],
-                        st.session_state["conversation_summary"][
-                            -1
-                        ],  # get the last summary
-                    ),
-                    additional_kwargs={"is_summary": True},
-                )
-                history_redis.add_message(summary_msg)
-
-                # st.session_state["conversation_summary"].append(
-                #     graph.summarize_conversation(
-                #         self._get_chat_history(
-                #             history_redis.messages[
-                #                 -MAX_MESSAGE_HISTORY * number_of_summaries :
-                #             ]
-                #         ),
-                #         st.session_state["conversation_summary"][
-                #             -1
-                #         ],  # get the last summary
-                #     )
-                # )
-            # TODO if a summary is generated, MAKE SURE THAT THE SUMMARY IS NOT GREATER THAT MAX_TOKEN_SUMMARY. IF IT IS, THEN summarize it again
 
     def _get_conversation_history(self, history: List):
         """

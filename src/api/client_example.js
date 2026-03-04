@@ -42,3 +42,11 @@ while (true) {
         }
     }
 }
+
+# librechat.yaml
+endpoints:
+  custom:
+    - name: "Campus Agent"
+      apiKey: "dummy"
+      baseURL: "http://your-server:8000/v1"
+      models: "askUOS-agent"

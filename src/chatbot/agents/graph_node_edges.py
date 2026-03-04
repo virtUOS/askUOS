@@ -1,8 +1,8 @@
-
 import asyncio
 from collections import deque
-from typing import ClassVar, Dict, List, Literal, Optional, Union
+from typing import Annotated, ClassVar, Dict, List, Literal, Optional, Union
 
+from langchain.messages import RemoveMessage
 from langchain_core.messages import (
     AIMessage,
     BaseMessage,
@@ -12,7 +12,10 @@ from langchain_core.messages import (
 )
 from langchain_core.prompts import PromptTemplate
 from langgraph.graph import END, START, StateGraph
+from langgraph.graph.message import RemoveMessage, add_messages
+from langgraph.runtime import Runtime
 from pydantic import BaseModel, Field
+from typing_extensions import TypedDict
 
 from src.chatbot.agents.models import Reference, RetrievalResult
 from src.chatbot.agents.utils.agent_retriever import (
@@ -20,30 +23,22 @@ from src.chatbot.agents.utils.agent_retriever import (
     _retriever_his_in_one_tool,
     retrieve_from_infinity_ragflow,
 )
-from src.chatbot.prompt.main import (
-    translate_prompt,
-)
-
-from langchain.messages import RemoveMessage
+from src.chatbot.agents.utils.exceptions import MustContainSystemMessageException
+from src.chatbot.prompt.main import get_system_prompt, translate_prompt
 from src.chatbot.tools.utils.tool_helpers import ReferenceRetriever
 from src.chatbot.tools.utils.tool_schema import (
     HisInOneInput,
     RetrieverInput,
     SearchInputWeb,
 )
-from src.chatbot.prompt.main import get_system_prompt
-from langgraph.graph.message import add_messages
 from src.chatbot.utils.constants import ToolNames
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 from src.config.models import CollectionNames, VectorDBTypes
-from typing_extensions import TypedDict
-from langgraph.runtime import Runtime 
-from typing import Annotated
-from src.chatbot.agents.utils.exceptions import MustContainSystemMessageException
-from langgraph.graph.message import RemoveMessage
+
 # Importat when it comes to models with restricted context window
 MESSAGE_HISTORY_LIMIT = 7
+
 
 # TODO Verify if this step is necessary
 def _sanitize_ai_message(message: AIMessage) -> AIMessage:
@@ -51,13 +46,15 @@ def _sanitize_ai_message(message: AIMessage) -> AIMessage:
     return AIMessage(
         content=message.content,
         tool_calls=message.tool_calls or [],
-        additional_kwargs= message.additional_kwargs or {},
+        additional_kwargs=message.additional_kwargs or {},
         id=message.id,
     )
+
 
 def add_lists(existing: list, new: list) -> list:
     """Reducer that accumulates list items across nodes."""
     return existing + new
+
 
 class State(TypedDict):
     """State management for the graph-based agent.
@@ -74,18 +71,23 @@ class State(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
     search_query: Optional[List[str]]
     user_initial_query: Optional[str]
-    current_date: Optional[str] 
+    current_date: Optional[str]
     answer_rejection: Optional[str]
     score_judgement_binary: Optional[str]
-    about_application: Optional[bool] # To determine which node generates the answer (!!!set to False when invoking graph)
-    teaching_degree: Optional[bool] # To determine which node generates the answer  (!!!set to False when invoking graph)
+    about_application: Optional[
+        bool
+    ]  # To determine which node generates the answer (!!!set to False when invoking graph)
+    teaching_degree: Optional[
+        bool
+    ]  # To determine which node generates the answer  (!!!set to False when invoking graph)
     tool_messages: Optional[str]
     last_tool_usage: Optional[dict]
     rewrite_query: bool  # Flag to indicate if the query should be rewritten (!!!set to False when invoking graph)
     # ---- Per-request references----
     visited_links: Annotated[list[str], add_lists]
     doc_references: Annotated[list, add_lists]  # list of doc reference objects
-    language: Optional[str]  #Literal["Deutsch", "English"]
+    language: Optional[str]  # Literal["Deutsch", "English"]
+
 
 class GraphNodesMixin:
     """Mixin class handling node operations in the graph."""
@@ -126,7 +128,9 @@ class GraphNodesMixin:
             List[BaseTool]: Configured tools for the agent
         """
         from langchain_classic.tools import StructuredTool
+
         from src.chatbot.tools.search_web_tool import async_search
+
         # TODO: Tool descriptions are always in german (Translate to english)
         return [
             StructuredTool.from_function(
@@ -156,7 +160,7 @@ class GraphNodesMixin:
     def filter_messages(messages: List[BaseMessage], k: int) -> List[BaseMessage]:
         """Filter messages to keep only the last k messages.
         During the run of the graph useless messages are gathered as byproduct of e.g., tool calls
-        these messages are filtered out here to keep context clean. 
+        these messages are filtered out here to keep context clean.
         Args:
             messages: List of messages to filter
             k: Number of messages to keep
@@ -166,7 +170,7 @@ class GraphNodesMixin:
         """
         if len(messages) <= k:
             return messages
-        
+
         return messages[-k:]
 
     def agent_node(self, state: State) -> Dict:
@@ -185,10 +189,10 @@ class GraphNodesMixin:
         user_initial_query = state.get("user_initial_query", "")
         language = state.get("language", "Deutsch")
         system_prompt = get_system_prompt(user_initial_query, current_date, language)
-        
+
         # the list of messages grows with each graph iteration e.g., useless toolmessages etc. Here the list is shortened
         filtered_messages = self.filter_messages(messages, MESSAGE_HISTORY_LIMIT)
-       
+
         # Prepend system message ONLY for the LLM call — never persisted to state
         # The first message in the conversation must be a SystemMessage.
         llm_messages = system_prompt + filtered_messages
@@ -259,16 +263,19 @@ class GraphNodesMixin:
             )
             # TODO use reducer to mange messages
             return {
-                "messages": [HumanMessage(content=translate_prompt(language)["use_tool_msg"])],
+                "messages": [
+                    HumanMessage(content=translate_prompt(language)["use_tool_msg"])
+                ],
                 "score_judgement_binary": score.judgement_binary,
             }
 
         return {"score_judgement_binary": score.judgement_binary}
 
     async def tool_node(self, state: Dict) -> Dict:
-        """Process tool calls. """
+        """Process tool calls."""
 
         from src.chatbot.tools.search_web_tool import async_search
+
         if messages := state.get("messages", []):
             message = messages[-1]
         else:
@@ -322,7 +329,9 @@ class GraphNodesMixin:
         retrieval_results: RetrievalResult = await asyncio.gather(
             *tool_tasks, return_exceptions=True
         )
-        outputs_txt, search_query, new_links, new_doc_refs = self._extract_tool_info(retrieval_results)
+        outputs_txt, search_query, new_links, new_doc_refs = self._extract_tool_info(
+            retrieval_results
+        )
         # TODO Sometines the agent calls several tools and the tokens surpass the defined context window. Do summarization here.
 
         last_tool_usage = state["messages"][-1].additional_kwargs
@@ -361,18 +370,22 @@ class GraphNodesMixin:
             )
         ]
         last_msg = state["messages"][-1]
-        return {"messages": [RemoveMessage(id=last_msg.id)] + msg, 
-                "rewrite_query": True}
+        return {
+            "messages": [RemoveMessage(id=last_msg.id)] + msg,
+            "rewrite_query": True,
+        }
 
     def generate_helper(self, state, system_message_generate):
-       
+
         messages_history = state.get("messages", [])
         if not messages_history:
-            logger.warning("[LANGGRAPH] No message history found. Using system message only for generation.")
+            logger.warning(
+                "[LANGGRAPH] No message history found. Using system message only for generation."
+            )
             _query_message = [HumanMessage(content=state.get("search_query", ""))]
             response = self._llm.invoke([system_message_generate] + _query_message)
             return {"messages": [_sanitize_ai_message(response)]}
-        
+
         filtered_messages_history = self.filter_messages(
             messages_history, MESSAGE_HISTORY_LIMIT
         )
@@ -384,7 +397,7 @@ class GraphNodesMixin:
         else:
             message_deque.appendleft(system_message_generate)
 
-        # the last message should be the Human message. 
+        # the last message should be the Human message.
         # At this point the last message is the ai message generated by the agent node
         if isinstance(message_deque[-1], AIMessage):
             message_deque.pop()
@@ -394,11 +407,11 @@ class GraphNodesMixin:
             raise MustContainSystemMessageException(
                 "The first message in the conversation must be a SystemMessage."
             )
-        response:AIMessage = self._llm.invoke(list(message_deque))
-        
+        response: AIMessage = self._llm.invoke(list(message_deque))
+
         return {
             "messages": [_sanitize_ai_message(response)],
-            }
+        }
 
     def generate(self, state: State) -> Dict:
         """Generate final answer based on retrieved documents.
@@ -428,7 +441,9 @@ class GraphNodesMixin:
         language = state.get("language", "Deutsch")
         tool_message = state.get("tool_messages", None)
         system_message_generate = SystemMessage(
-            content=translate_prompt(language)["system_message_generate_application"].format(
+            content=translate_prompt(language)[
+                "system_message_generate_application"
+            ].format(
                 state.get("current_date", ""),
                 state.get("search_query", ""),
                 tool_message,
@@ -586,6 +601,6 @@ class GraphEdgesMixin:
         """
         score = state.get("score_judgement_binary", "")
         if score == "yes":
-            #self._agent_direct_msg = state["messages"][-1].content[0]["text"]
+            # self._agent_direct_msg = state["messages"][-1].content[0]["text"]
             return END
         return "agent_node"
