@@ -1,3 +1,6 @@
+import sys
+
+sys.path.append("/app")
 import json
 import os
 import time
@@ -9,6 +12,7 @@ from fastapi import FastAPI, HTTPException, Security, WebSocket, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langgraph.errors import GraphRecursionError
 
 from src.api.helpers import (
     _completion_id,
@@ -18,9 +22,11 @@ from src.api.helpers import (
     _make_completion,
 )
 from src.api.models import ChatCompletionRequest, ChatRequest, Message
+from src.api.translatations import _get_error_messages
 from src.chatbot.agents.graph import CampusManagementOpenAIToolsAgent
 from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.prompt.prompt_date import get_current_date
+from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
@@ -56,14 +62,6 @@ async def verify_api_key(
 
 app = FastAPI(lifespan=lifespan, title="AksUOS API")
 
-GENERATE_NODES = frozenset(
-    {
-        "generate",
-        "generate_application",
-        "generate_teaching_degree_node",
-    }
-)
-
 
 @app.post("/v1/chat/completions")
 async def chat_completions(
@@ -93,7 +91,8 @@ async def chat_completions(
     """
 
     agent = CampusManagementOpenAIToolsAgent()
-
+    language = request.language or "Deutsch"
+    error_messages = _get_error_messages(language)
     # Fresh thread_id if non provided (this means that the client sends all chat history e.g., Librechat)
     thread_id = request.thread_id if request.thread_id else str(uuid.uuid4())
 
@@ -121,7 +120,7 @@ async def chat_completions(
         "messages": langchain_messages,
         "user_initial_query": user_message,
         "current_date": get_current_date("deutsch"),
-        "language": "Deutsch",
+        "language": language,
         "visited_links": [],
         "doc_references": [],
         "about_application": False,
@@ -152,40 +151,79 @@ async def chat_completions(
             # Role chunk (first chunk announces the role)
             yield _make_chunk(completion_id, created, model, role="assistant")
 
-            async for msg, metadata in agent._graph.astream(
-                input_data,
-                config=config,
-                stream_mode="messages",
-            ):
-                if (
-                    msg.content
-                    and not isinstance(msg, HumanMessage)
-                    and not isinstance(msg, ToolMessage)
-                    and (
-                        metadata["langgraph_node"] == "generate"
-                        or metadata["langgraph_node"] == "generate_application"
-                        or metadata["langgraph_node"] == "generate_teaching_degree_node"
-                    )
+            try:
+                async for msg, metadata in agent._graph.astream(
+                    input_data,
+                    config=config,
+                    stream_mode="messages",
                 ):
-                    text = _extract_text_content(msg.content)
-                    if text:
-                        streamed = True
-                        yield _make_chunk(completion_id, created, model, content=text)
+                    if (
+                        msg.content
+                        and not isinstance(msg, HumanMessage)
+                        and not isinstance(msg, ToolMessage)
+                        and (
+                            metadata["langgraph_node"] == "generate"
+                            or metadata["langgraph_node"] == "generate_application"
+                            or metadata["langgraph_node"]
+                            == "generate_teaching_degree_node"
+                        )
+                    ):
+                        text = _extract_text_content(msg.content)
+                        if text:
+                            streamed = True
+                            yield _make_chunk(
+                                completion_id, created, model, content=text
+                            )
 
-            # Direct response (no tools used)
-            if not streamed:
-                state = await agent._graph.aget_state(config)
-                content = _extract_text_content(state.values["messages"][-1].content)
-                yield _make_chunk(completion_id, created, model, content=content)
+                # Direct response (no tools used)
+                if not streamed:
+                    state = await agent._graph.aget_state(config)
+                    content = _extract_text_content(
+                        state.values["messages"][-1].content
+                    )
+                    yield _make_chunk(completion_id, created, model, content=content)
 
-            # Stream references
-            final_state = await agent._graph.aget_state(config)
-            values = final_state.values
-            new_links = list(set(values.get("visited_links", [])[prev_links_count:]))
-            new_refs = values.get("doc_references", [])[prev_refs_count:]
-            refs_text = _format_references(new_links, new_refs)
-            if refs_text:
-                yield _make_chunk(completion_id, created, model, content=refs_text)
+                # Stream references
+                final_state = await agent._graph.aget_state(config)
+                values = final_state.values
+                new_links = list(
+                    set(values.get("visited_links", [])[prev_links_count:])
+                )
+                new_refs = values.get("doc_references", [])[prev_refs_count:]
+                refs_text = _format_references(new_links, new_refs)
+                if refs_text:
+                    yield _make_chunk(completion_id, created, model, content=refs_text)
+
+            except GraphRecursionError:
+                logger.warning(
+                    f"[NOT-ANSWERED] Recursion limit reached. Query: {user_message}"
+                )
+                yield _make_chunk(
+                    completion_id,
+                    created,
+                    model,
+                    content=error_messages["recursion"],
+                )
+
+            except ProgrammableSearchException:
+                logger.error(
+                    f"[SEARCH-ERROR] Search tool failed. Query: {user_message}"
+                )
+                yield _make_chunk(
+                    completion_id,
+                    created,
+                    model,
+                    content=error_messages["search_error"],
+                )
+
+            except Exception as e:
+                logger.exception(f"[ERROR] Unexpected error processing query: {e}")
+                yield _make_chunk(
+                    completion_id,
+                    created,
+                    model,
+                    content=error_messages["generic"],
+                )
 
             # Final chunk with finish_reason
             yield _make_chunk(completion_id, created, model, finish_reason="stop")
@@ -203,13 +241,27 @@ async def chat_completions(
 
     # ─── Non-streaming ─────────────────────────────────
 
-    result = await agent._graph.ainvoke(input_data, config=config)
-    content = _extract_text_content(result["messages"][-1].content)
+    try:
+        result = await agent._graph.ainvoke(input_data, config=config)
+        content = _extract_text_content(result["messages"][-1].content)
 
-    new_links = list(set(result.get("visited_links", [])[prev_links_count:]))
-    new_refs = result.get("doc_references", [])[prev_refs_count:]
-    refs_text = _format_references(new_links, new_refs)
+        new_links = list(set(result.get("visited_links", [])[prev_links_count:]))
+        new_refs = result.get("doc_references", [])[prev_refs_count:]
+        refs_text = _format_references(new_links, new_refs)
+    except GraphRecursionError:
+        logger.warning(f"[NOT-ANSWERED] Recursion limit reached. Query: {user_message}")
+        content = error_messages["recursion"]
+        refs_text = ""
 
+    except ProgrammableSearchException:
+        logger.error(f"[SEARCH-ERROR] Search tool failed. Query: {user_message}")
+        content = error_messages["search_error"]
+        refs_text = ""
+
+    except Exception as e:
+        logger.exception(f"[ERROR] Unexpected error processing query: {e}")
+        content = error_messages["generic"]
+        refs_text = ""
     return JSONResponse(
         _make_completion(completion_id, created, model, content, refs_text)
     )
