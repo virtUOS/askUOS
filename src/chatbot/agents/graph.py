@@ -183,7 +183,6 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
             },
         )
 
-        # Edges taken after the `action` node is called.
         graph_builder.add_conditional_edges(
             "tool_node",
             # Assess agent decision
