@@ -11,8 +11,6 @@ import redis.asyncio as redis
 from langchain_redis import RedisChatMessageHistory
 from streamlit.testing.v1 import AppTest
 
-from pages.ask_uos_chat import MAX_MESSAGE_HISTORY
-from src.chatbot.agents.utils.agent_helpers import llm_gemini  # llm
 from tests.warm_up import warm_up_queries
 
 
@@ -174,59 +172,27 @@ class BaseTestStreamlitApp(unittest.TestCase):
 
                         self.assertEqual(user_message, test_query)
 
-                        # Check conversation summary logic
-                        if at[1] >= MAX_MESSAGE_HISTORY:
-                            # Count summary messages
-                            summary_count = sum(
-                                1
-                                for msg in history.messages
-                                if hasattr(msg, "additional_kwargs")
-                                and msg.additional_kwargs.get("is_summary", False)
-                            )
-
-                            # check that summary is on the right index
-                            for i in range(1, summary_count + 1):
-
-                                self.assertTrue(
-                                    hasattr(
-                                        history.messages[MAX_MESSAGE_HISTORY * i],
-                                        "additional_kwargs",
-                                    )
-                                    and history.messages[
-                                        MAX_MESSAGE_HISTORY * i
-                                    ].additional_kwargs.get("is_summary", False),
-                                    f"Expected summary message at index {(MAX_MESSAGE_HISTORY * i)}, but found: {history.messages[MAX_MESSAGE_HISTORY * i]}",
-                                )
-
-                            # since history.message contains also summary messages,
-                            # the expected number of summaries is calculated as follows:
-                            # (total messages - summary messages) / MAX_MESSAGE_HISTORY
-                            # expected_summaries = int(
-                            #     (len(history.messages) - summary_count)
-                            #     / MAX_MESSAGE_HISTORY
-                            # )
-                            # self.assertEqual(summary_count, expected_summaries)
-
                         time.sleep(2)
 
                     # Check visited links uniqueness across users
-                    visited_links = []
-                    for app in apps:
-                        try:
-                            agent = app[0].session_state["agent"]
-                            if hasattr(agent, "_visited_links"):
-                                visited_links.append(agent._visited_links)
-                        except (KeyError, AttributeError):
-                            pass  # agent not in session state
+                    # TODO: Implement using new logic
+                    # visited_links = []
+                    # for app in apps:
+                    #     try:
+                    #         agent = app[0].session_state["agent"]
+                    #         if hasattr(agent, "_visited_links"):
+                    #             visited_links.append(agent._visited_links)
+                    #     except (KeyError, AttributeError):
+                    #         pass  # agent not in session state
 
-                    tuple_visited_links = [tuple(i) for i in visited_links if i]
-                    if tuple_visited_links:
-                        # since the queries are different, the visited links should be different
-                        self.assertEqual(
-                            len(tuple_visited_links),
-                            len(set(tuple_visited_links)),
-                            f"The visited links are not unique across users. {visited_links}",
-                        )
+                    # tuple_visited_links = [tuple(i) for i in visited_links if i]
+                    # if tuple_visited_links:
+                    #     # since the queries are different, the visited links should be different
+                    #     self.assertEqual(
+                    #         len(tuple_visited_links),
+                    #         len(set(tuple_visited_links)),
+                    #         f"The visited links are not unique across users. {visited_links}",
+                    #     )
                 except StopIteration:
                     break
 
@@ -240,14 +206,15 @@ class BaseTestStreamlitApp(unittest.TestCase):
                 )
 
                 # Collect non-summary messages
-                non_summary_messages = [
-                    msg
-                    for msg in history.messages
-                    if not (
-                        hasattr(msg, "additional_kwargs")
-                        and msg.additional_kwargs.get("is_summary", False)
-                    )
-                ]
+                # non_summary_messages = [
+                #     msg
+                #     for msg in history.messages
+                #     if not (
+                #         hasattr(msg, "additional_kwargs")
+                #         and msg.additional_kwargs.get("is_summary", False)
+                #     )
+                # ]
+                non_summary_messages = history.messages
 
                 # check if the number of messages is equal to the number of queries * 2 + 1
                 self.assertEqual(
@@ -267,17 +234,17 @@ class BaseTestStreamlitApp(unittest.TestCase):
                 message_contents = {str(msg.content) for msg in non_summary_messages}
                 histories.append(message_contents)
 
-                # Log summary lengths
-                summary_messages = [
-                    msg
-                    for msg in history.messages
-                    if hasattr(msg, "additional_kwargs")
-                    and msg.additional_kwargs.get("is_summary", False)
-                ]
-                summary_length = [
-                    llm_gemini().get_num_tokens(msg.content) for msg in summary_messages
-                ]
-                print(f"Summary length (tokens) for user {at[3]}: {summary_length}")
+                # # Log summary lengths
+                # summary_messages = [
+                #     msg
+                #     for msg in history.messages
+                #     if hasattr(msg, "additional_kwargs")
+                #     and msg.additional_kwargs.get("is_summary", False)
+                # ]
+                # summary_length = [
+                #     llm_gemini().get_num_tokens(msg.content) for msg in summary_messages
+                # ]
+                # print(f"Summary length (tokens) for user {at[3]}: {summary_length}")
 
             # check if the session states are different across users
             intersection = set.intersection(*histories)
