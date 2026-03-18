@@ -5,19 +5,18 @@ import sys
 sys.path.append("/app")
 import asyncio
 from typing import List, Optional, Tuple
+
 import aiohttp
 import dotenv
 import nest_asyncio
 import redis.asyncio as aioredis
 import redis.asyncio as redis
-from langchain_classic.chains.summarize import load_summarize_chain
-from langchain_classic.text_splitter import RecursiveCharacterTextSplitter
-from langchain_core.prompts import PromptTemplate
-from src.chatbot.utils.helpers import compute_search_num_tokens
+
 from src.chatbot.agents.models import RetrievalResult, ScrapeResult
-from src.chatbot.agents.utils.agent_helpers import llm_optional as sumarize_llm
+from src.chatbot.agents.utils.agent_helpers import model_registry
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import decode_string
+from src.chatbot.utils.helpers import compute_search_num_tokens
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
@@ -46,13 +45,7 @@ async def generate_summary(text: str, query: str) -> str:
     """Generate a summary of the provided text."""
     logger.info(f"[LMM-OPERATION] Summarizing content, query: {query}")
 
-    chunk_size = (settings.model.context_window * 4) // 2
-    text_splitter = RecursiveCharacterTextSplitter(
-        separators=["\n\n", "\n"], chunk_size=chunk_size, chunk_overlap=300
-    )
-    docs = text_splitter.create_documents([text])
-
-    reduce_template_string = """Your task it to create a concise summary of the text provided. 
+    reduce_template_string = f"""Your task it to create a concise summary of the text provided. 
 ## Instruction: Your task is to generate a concise and accurate summary of the provided text. The summary should effectively capture the key points and concepts while strictly avoiding any interpretations or subjective additions.
 1. Focus on Relevance: Emphasize information that directly addresses the question/query specified below.
 2. Handling External Sources: Do not condense or modify links/urls or references to external sources; include them as they appear in the original text.
@@ -63,37 +56,27 @@ async def generate_summary(text: str, query: str) -> str:
     Summarize this text:
     {text}
 
-    question/query: {question}
+    question/query: {query}
     
     """
 
-    reduce_template = PromptTemplate(
-        template=reduce_template_string, input_variables=["text", "question"]
-    )
-
-    chain = load_summarize_chain(
-        llm=sumarize_llm(),
-        chain_type="map_reduce",
-        map_prompt=reduce_template,
-        combine_prompt=reduce_template,
-        verbose=True,
-    )
     # TODO :BUG CANNOT CHANGE GLOBAL VARIABLE, MY RAISE A RACE CONDITION
     settings.llm_summarization_mode = True
+
+    messages = [("human", reduce_template_string)]
+    # TODO: Allthough is very unlikely, make sure that the messages length is not greater than llm context window
     try:
-        summary = await chain.arun(input_documents=docs, question=query)
-    finally:
-        settings.llm_summarization_mode = False
+        response = model_registry.llm_optional.llm.invoke(messages)
+        summary = response.content
+    except:
+        logger.error(f"[WEB-SEARCH-SUMMARY] Error while summarizing web content")
+        return "Error while summarizing web content"
     return summary
 
 
-def compute_tokens(
-    search_result_text: str, query: str
-) -> Tuple[int, int]:
+def compute_tokens(search_result_text: str, query: str) -> Tuple[int, int]:
     """Compute tokens for the search result text."""
-    current_search_num_tokens = compute_search_num_tokens(
-        search_result_text + query
-    )
+    current_search_num_tokens = compute_search_num_tokens(search_result_text + query)
     # total_tokens = internal_num_tokens + current_search_num_tokens
     total_tokens = current_search_num_tokens
     return total_tokens, current_search_num_tokens
@@ -308,14 +291,12 @@ async def visit_urls_extract(
                 else contents
             )
             total_tokens, _ = compute_tokens("".join(contents), query)
-            if total_tokens > settings.model.context_window:
+            if total_tokens > settings.graph.summary_threshold:
                 for i in range(len(contents) - 1, -1, -1):
                     contents[i] = await generate_summary(contents[i], query)
                     # Update the total tokens
-                    total_tokens, _ = compute_tokens(
-                        "".join(contents), query
-                    )
-                    if total_tokens <= settings.model.context_window:
+                    total_tokens, _ = compute_tokens("".join(contents), query)
+                    if total_tokens <= settings.graph.summary_threshold:
                         break
     finally:
         c_result = await asyncio.gather(*cache_tasks, return_exceptions=True)
@@ -355,7 +336,7 @@ async def async_search(**kwargs) -> Tuple[str, List]:
                 return RetrievalResult.from_json(cached_content)
 
             logger.debug("[SEARCH] Cache miss – proceeding with live search")
-          
+
             visited_urls, contents = await visit_urls_extract(
                 url=url,
                 query=query,

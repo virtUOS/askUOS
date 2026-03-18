@@ -8,7 +8,7 @@ from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.graph import END, START, StateGraph
 
 from src.chatbot.agents.graph_node_edges import GraphEdgesMixin, GraphNodesMixin, State
-from src.chatbot.agents.utils.agent_helpers import llm_gemini, llm_optional
+from src.chatbot.agents.utils.agent_helpers import model_registry
 from src.chatbot.prompt.main import (
     get_prompt_length,
     get_system_prompt,
@@ -17,7 +17,6 @@ from src.chatbot.prompt.main import (
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
-OPEN_AI_MODEL = settings.model.model_name
 DEBUG = settings.application.debug
 # message history limit within the graph
 MESSAGE_HISTORY_LIMIT = 7
@@ -46,8 +45,8 @@ class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
         # data: key-value pairs passed through the run method, e.g., CampusManagementOpenAIToolsAgent.run(language='Deutsch')
         if not self._initialized:
 
-            self._llm_optional = llm_optional()
-            self._llm = llm_gemini()
+            self._llm_optional = model_registry.llm_optional.llm  # llm_optional()
+            self._llm = model_registry.chat_llm.llm  # llm_gemini()
 
             # self.language: str = Field(default=settings.language)
             self._graph: StateGraph = None

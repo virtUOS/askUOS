@@ -1,5 +1,6 @@
 import os
 import sys
+import threading
 from typing import Any
 
 sys.path.append("/app")
@@ -12,6 +13,7 @@ from langchain_openai import ChatOpenAI
 
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
+from src.config.models import Model, ProviderNames, RoleNames
 
 
 # TODO the cached AI answer should contained the sources of the information.
@@ -39,54 +41,52 @@ class CustomMemoryCache(InMemoryCache):
 
 # set_llm_cache(SQLiteCache(database_path=".langchain.db"))
 
-OPEN_AI_MODEL = settings.model.model_name
 
-
-class ChatLlmGemini:
-    _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super(ChatLlmGemini, cls).__new__(cls)
-        return cls._instance
-
-    def __init__(self):
-        if not self.__dict__:
-            self.llm_chat_gemini = ChatGoogleGenerativeAI(
-                model="gemini-3-flash-preview",
+class LLMMixin:
+    def _build_llm_obj(self, model_conf: Model):
+        if model_conf.provider == ProviderNames.GOOGLE:
+            self.llm = ChatGoogleGenerativeAI(
+                model=model_conf.model_name,
                 temperature=1.0,
                 max_retries=2,
                 streaming=True,
                 callbacks=[StdOutCallbackHandler()],
             )
-
-    def __call__(self, *args, **kwargs) -> Any:
-        return self.llm_chat_gemini
-
-
-class ChatLlm:
-    _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super(ChatLlm, cls).__new__(cls)
-        return cls._instance
-
-    def __init__(self):
-        if not self.__dict__:
-
-            self.llm_chat_open_ai = ChatOpenAI(
-                model=OPEN_AI_MODEL,
+        elif (
+            model_conf.provider == ProviderNames.OPENAI
+            or model_conf.provider
+            == ProviderNames.SELF_HOSTED  # self-hosted model must be openai compatible
+        ):
+            self.llm = ChatOpenAI(
+                model=model_conf.model_name,
                 temperature=0,
                 streaming=True,
                 callbacks=[StdOutCallbackHandler()],
             )
 
-    def __call__(self, *args, **kwargs) -> Any:
-        return self.llm_chat_open_ai
+        else:
+            ValueError("Model provided not supported")
 
 
-class ChatLlmOptional:
+class ChatLlm(LLMMixin):
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(ChatLlm, cls).__new__(cls)
+
+        return cls._instance
+
+    def __init__(self, model_conf: Model):
+        if not self.__dict__:
+            self._build_llm_obj(model_conf)
+
+
+class ChatLlmOptional(LLMMixin):
+    """
+    Model used for law-level complexity tasks (Usualla a small fast LLM)
+    """
+
     _instance = None
 
     def __new__(cls, *args, **kwargs):
@@ -94,18 +94,9 @@ class ChatLlmOptional:
             cls._instance = super(ChatLlmOptional, cls).__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self, model_conf: Model):
         if not self.__dict__:
-
-            self.llm_chat_open_ai = ChatOpenAI(
-                model="gpt-4.1-nano",
-                temperature=0,
-                streaming=True,
-                callbacks=[StdOutCallbackHandler()],
-            )
-
-    def __call__(self, *args, **kwargs) -> Any:
-        return self.llm_chat_open_ai
+            self._build_llm_obj(model_conf)
 
 
 class ReasoningLlm:
@@ -130,16 +121,40 @@ class ReasoningLlm:
         return self.llm_chat_open_ai
 
 
-######--------- Google ---------#####
-# used for grading documents (edge grade_documents (graph)), genaration and reasoning
-llm_gemini = ChatLlmGemini()
+class _ModelRegistry:
+    """Container for lazily-initialized model singletons."""
+
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls, *args, **kwargs):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super(_ModelRegistry, cls).__new__(cls)
+                cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self):
+        if self._initialized:
+            return
+        self.create_models()
+        self._initialized = True
+
+    def create_models(self):
+        models = settings.models
+        self.chat_llm = None
+        self.llm_optional = None
+        for m in models:
+            if m.role == RoleNames.MAIN:
+                self.chat_llm = ChatLlm(m)
+            elif m.role == RoleNames.HELPER:
+                self.llm_optional = ChatLlmOptional(m)
+            else:
+                raise ValueError("Model Role not supported")
+        if not self.chat_llm:
+            raise ValueError("An LLM must be provided")
+        if not self.llm_optional:
+            self.llm_optional = self.chat_llm
 
 
-######--------- Google ---------#####
-######--------- OpenAI ---------#####
-# llm = ChatLlm()
-# currenlty being used for summarization
-llm_optional = ChatLlmOptional()
-
-# reasoning_llm = ReasoningLlm()
-######--------- OpenAI ---------#####
+model_registry = _ModelRegistry()

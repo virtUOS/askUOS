@@ -1,5 +1,6 @@
 from typing import ClassVar, Literal, Optional, Tuple, Type
 
+from pydantic import Field
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -14,10 +15,11 @@ from .models import (
     ChatPageConfig,
     CrawlSettings,
     EmbeddingSettings,
+    GraphConfig,
     Legal,
     LogSettings,
     MilvusSettings,
-    ModelConfig,
+    Model,
     RAGFlowSettings,
     SearchConfig,
     StartPageConfig,
@@ -37,11 +39,12 @@ class Settings(BaseSettings):
     _instance: ClassVar[Optional["Settings"]] = None
 
     # search_config: SearchConfig
-    model: ModelConfig
+    models: list[Model]
     application: ApplicationConfig
     embedding: EmbeddingSettings
     vector_db_settings: VectorDBConfig
     language: Literal["Deutsch", "English"]
+    graph: GraphConfig
     start_page: StartPageConfig
     chat_page: ChatPageConfig
     crawl_settings: CrawlSettings
