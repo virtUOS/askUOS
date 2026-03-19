@@ -5,9 +5,9 @@ import uuid
 from typing import Optional
 
 import nest_asyncio
+import requests
 import streamlit as st
 from langchain_core.messages import HumanMessage
-from langchain_redis import RedisChatMessageHistory
 from openai import AsyncOpenAI
 from streamlit import session_state
 from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
@@ -20,39 +20,18 @@ from src.config.core_config import settings
 MAX_MESSAGES_PER_USER = 150  # Limit for the number of messages per user (Redis)
 HUMAN_AVATAR = "./static/Icon-User.svg"
 ASSISTANT_AVATAR = "./static/Icon-chatbot.svg"
-ROLES = ("ai", "human")
+ROLES = ("assistant", "user")
+# Note: for security reasons, thread endpoints (fastapi-redis user history) is only accessible from localhost
+# if fastapi runs on different container the history access logic needs to be adapted.
 API_URL = "http://localhost:8000/v1"
 askUOS_API_KEY = os.getenv("STREAMLIT_API_KEY", "")
 
-from redisvl.query import FilterQuery  # type: ignore
-from redisvl.query.filter import Tag  # type: ignore
 
 # Apply nest_asyncio to allow nested event loops (Streamlit compatibility)
 nest_asyncio.apply()
 
 
 # TODO : Remove all the display references logic once streamlit integrates pull request  Fix st.chat_input collapse after submit #12081
-
-
-class LimitedRedisChatMessageHistory(RedisChatMessageHistory):
-
-    def add_message(self, message):
-        super().add_message(message)
-        # After adding, enforce the limit
-        # Query all message IDs for this session, sorted by timestamp
-        session_filter = Tag("session_id") == self.session_id
-        # Get all message IDs and timestamps
-        filter_query = FilterQuery(
-            filter_expression=session_filter,
-            return_fields=["id", "timestamp"],
-            num_results=10000,
-        ).sort_by("timestamp", asc=True)
-        results = self.index.query(filter_query)
-        # If over the limit, delete the oldest
-        if len(results) > MAX_MESSAGES_PER_USER:
-            # Get the IDs of the oldest messages to delete
-            to_delete = [msg["id"] for msg in results[:-MAX_MESSAGES_PER_USER]]
-            self.index.drop_keys(to_delete)
 
 
 class ChatApp:
@@ -86,6 +65,18 @@ class ChatApp:
             )
         return st.session_state["openai_client"]
 
+    def get_api_session(self) -> requests.Session:
+        """Return a shared session per user, creating it once."""
+        if "api_session" not in st.session_state:
+            session = requests.Session()
+            session.headers.update(
+                {
+                    "Authorization": f"Bearer {askUOS_API_KEY}",
+                }
+            )
+            st.session_state.api_session = session
+        return st.session_state.api_session
+
     def _run_async(self, coro):
         """
         Safely run an async coroutine in Streamlit's environment.
@@ -115,7 +106,7 @@ class ChatApp:
         except (ValueError, TypeError):
             return None
 
-    def get_history(self, user_id: str) -> LimitedRedisChatMessageHistory:
+    def get_history(self, user_id: str) -> list:
         validated_user_id = self._validate_user_id(user_id)
         if not validated_user_id:
             logger.warning(f"[AUTH] Invalid user_id attempted: {user_id!r}")
@@ -124,15 +115,13 @@ class ChatApp:
             )
             st.stop()
         try:
-            history = LimitedRedisChatMessageHistory(
-                redis_url="redis://redis:6379",
-                session_id=validated_user_id,
-                overwrite_index=False,
-                ttl=60 * 60 * 2,  # 2 hours
-            )
-            return history
+            session = self.get_api_session()
+            response = session.get(API_URL + f"/threads/{user_id}/messages")
+            if response.status_code == 200:
+                data = response.json()
+                return data["messages"]
         except Exception as e:
-            logger.error(f"[REDIS] Error retrieving chat history for user: {e}")
+            logger.error(f"[API-REDIS] Error retrieving chat history for user: {e}")
             st.warning(
                 "There was an error while loading previous messages. If this issue persists, try using a different browser or contact support."
             )
@@ -199,41 +188,39 @@ class ChatApp:
                 session_state["show_warning"] = False
                 st.rerun()
 
-    def initialize_chat(self, ask_uos_user_id: str):
-        """Initialize the chat messages in session state if not present."""
-
-        history = self.get_history(ask_uos_user_id)
-
-        if not history.messages:
-            # If no messages in history, initialize with a greeting message
-            greeting_message = session_state["_"](
-                "Hello! I am happy to assist you with questions about the University of Osnabrück, including information about study programs, application processes, and admission requirements. \n How can I help you today?"
-            )
-            history.add_ai_message(greeting_message)
-
     def display_chat_messages(self):
         """Display chat messages stored in the session state."""
 
         user_id = self.get_user_id()
-        # TODO create endpoint to get the history from langraph, do not save history again in the frontend
-        history = self.get_history(user_id)
+        messages: list = self.get_history(user_id)
 
-        st.session_state["messages"] = []
-        # all messages from the history, see ROLES
-        messages = history.messages
+        # use to save user-assistant message to the logs e.g., when user leaves feedback
+        # st.session_state["messages"] = []
 
-        for idx, m in enumerate(messages):
-            role = m.type
-            if role == ROLES[1]:  # "human"
-                st.session_state["messages"].append(m)
+        greeting_message = session_state["_"](
+            "Hello! I am happy to assist you with questions about the University of Osnabrück, including information about study programs, application processes, and admission requirements. \n How can I help you today?"
+        )
+        # st.session_state["messages"].append(greeting_message)
+        with st.chat_message(ROLES[0], avatar=ASSISTANT_AVATAR):
+            st.markdown(greeting_message)
+
+        for m in messages:
+            role = m["role"]
+            if role == ROLES[1]:  # "user"
+                # st.session_state["messages"].append(m)
                 with st.chat_message(role, avatar=HUMAN_AVATAR):
-                    st.write(m.content)
+                    st.write(m["content"])
 
-            elif role == ROLES[0]:  # "ai"
+            elif role == ROLES[0]:  # "assistant"
 
-                st.session_state["messages"].append(m)
+                if isinstance(m["content"], str):
+                    content = m["content"]
+                else:
+                    content = m["content"][0]["text"]
+
+                # st.session_state["messages"].append(m)
                 with st.chat_message(role, avatar=ASSISTANT_AVATAR):
-                    st.markdown(m.content)
+                    st.write(content)
 
             else:
                 logger.error(
@@ -243,9 +230,8 @@ class ChatApp:
     def handle_user_input(self):
         """Handle user input and generate a response using async astream."""
 
-        user_id = self.get_user_id()
-        history = self.get_history(user_id)
-
+        # user_id = self.get_user_id()
+        # history = self.get_history(user_id)
         if prompt := st.chat_input(
             placeholder=session_state["_"]("Message"),
             key=f"chat_input_{st.session_state.input_key_counter}",
@@ -257,14 +243,15 @@ class ChatApp:
             st.session_state.user_feedback_faces = None
             st.session_state.user_feedback_form = None
 
-            history.add_user_message(prompt)
-            st.session_state["messages"].append(HumanMessage(content=prompt))
+            # history.add_user_message(prompt)
+            # st.session_state["messages"].append(HumanMessage(content=prompt))
 
             with st.chat_message(ROLES[1], avatar="./static/Icon-User.svg"):
                 st.write(prompt)
-            if history.messages[-1].type != ROLES[0]:  # "ai"
-                self._run_async(self.generate_response_async(prompt))
+                # if history.messages[-1].type != ROLES[0]:  # "ai"
+            self._run_async(self.generate_response_async(prompt))
 
+            # TODO: DELETE ?
             st.session_state.input_key_counter += 1
             st.rerun()  # Rerun to update the chat messages and input field
 
@@ -321,17 +308,12 @@ class ChatApp:
     ):
         """Store the assistant's response and prompt in session state."""
 
-        user_id = self.get_user_id()
-        history_redis = self.get_history(user_id)
-
-        # store the response in the Redis chat history
-        history_redis.add_ai_message(output)
-
         # Log user query and bot answer
         logger.info(f"[USERQUERY] User's query: {prompt}")
         logger.info(f"[BOTANSWER] Assistant's response: {output}")
 
         st.session_state.user_query = prompt
+        st.session_state.response = output
 
     def show_feedback_faces(self):
         """Display feedback faces for user interaction."""
@@ -403,7 +385,7 @@ class ChatApp:
             ):
 
                 feedback["user_query"] = session_state.user_query
-                feedback["response"] = st.session_state.messages[-1].content
+                feedback["response"] = st.session_state.response
                 feedback["time_taken"] = session_state.time_taken
 
                 logger.info(f"[FEEDBACK] Feedback= {feedback}")
@@ -427,8 +409,14 @@ class ChatApp:
             use_container_width=True,
         ):
             user_id = self.get_user_id()
-            history = self.get_history(user_id)
-            history.clear()
+            session = self.get_api_session()
+            response = session.delete(
+                f"{API_URL}/threads/{user_id}/messages",
+            )
+            if response.status_code == 200:
+                logger.debug("History deleted")
+            # history = self.get_history(user_id)
+            # history.clear()
             st.session_state["messages"] = []
             st.rerun()
         if st.button(
@@ -456,12 +444,11 @@ class ChatApp:
         initialize_session_sate()
         RemoveEmptyElementContainer()
         # Get or create user ID using our method
-        user_id = self.get_user_id()
+        # user_id = self.get_user_id()
 
         # self.show_warning()
-        # DO NOT CHANGE THE ORDER IN WHICH THESE METHODS ARE CALLED
 
-        self.initialize_chat(user_id)
+        # self.initialize_chat(user_id)
         self.display_chat_messages()
         self.handle_user_input()
         self.show_feedback_faces()

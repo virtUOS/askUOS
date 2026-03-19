@@ -3,12 +3,7 @@ from collections import deque
 from typing import Annotated, ClassVar, Dict, List, Literal, Optional, Union
 
 from langchain.messages import RemoveMessage
-from langchain_core.messages import (
-    AIMessage,
-    BaseMessage,
-    HumanMessage,
-    SystemMessage,
-)
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import PromptTemplate
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import RemoveMessage, add_messages
@@ -66,6 +61,7 @@ class State(TypedDict):
         score_judgement_binary: Optional string for binary judgement scores
     """
 
+    # the ai and human messages contained here are also shown to the user.
     messages: Annotated[list[BaseMessage], add_messages]
     search_query: Optional[List[str]]
     user_initial_query: Optional[str]
@@ -333,7 +329,7 @@ class GraphNodesMixin:
         # TODO Sometines the agent calls several tools and the tokens surpass the defined context window. Do summarization here.
 
         last_tool_usage = state["messages"][-1].additional_kwargs
-        # Remove last ai message (generated in agent node)
+        # Remove last ai message, otherwise it will be shown to the user (generated in agent node)
         last_msg = state["messages"][-1]
         return {
             "messages": [RemoveMessage(id=last_msg.id)],
@@ -364,7 +360,8 @@ class GraphNodesMixin:
                 content=translate_prompt(language)["rewrite_msg_human"].format(
                     user_query,
                     state["last_tool_usage"],
-                )
+                ),
+                name="int",  # messages with int tag are not shown to the user
             )
         ]
         last_msg = state["messages"][-1]

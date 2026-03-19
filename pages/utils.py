@@ -15,9 +15,9 @@ def initialize_session_sate() -> None:
         "show_warning": True,
         "user_feedback_faces": None,
         "user_feedback_form": {},
-        "user_query": None,
+        "user_query": None,  # use to log user query when user leaves feedback
         "feedback_saved": False,
-        "response": None,
+        "response": None,  # use to log user query when user leaves feedback
         "time_taken": None,
         "chat_started": False,
         "selected_language": settings.language,

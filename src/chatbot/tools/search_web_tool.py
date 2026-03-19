@@ -380,36 +380,6 @@ async def async_search(**kwargs) -> Tuple[str, List]:
         raise
 
 
-# def search_uni_web(**kwargs) -> Tuple[str, List]:
-#     """
-#     Searches the University of Osnabrück website based on the given query.
-#     Handles both threaded and async execution contexts safely.
-#     """
-
-#     try:
-#         try:
-#             loop = asyncio.get_running_loop()
-#             nest_asyncio.apply()
-#             logger.debug("[SYSTEM] Running within an existing event loop")
-#             client = redis.Redis(host="redis", port=6379, decode_responses=True)
-#             return asyncio.run_coroutine_threadsafe(
-#                 async_search(client, **kwargs), loop
-#             ).result()
-#         except RuntimeError:
-
-#             async def complete_search_flow():
-#                 client = redis.Redis(host="redis", port=6379, decode_responses=True)
-#                 await initialize_redis(client)
-#                 result = await async_search(client, **kwargs)
-#                 await client.close()
-#                 return result
-
-#             return asyncio.run(complete_search_flow())
-#     except Exception as e:
-#         logger.exception(f"[SEARCH] Error in search execution: {str(e)}")
-#         return [], []
-
-
 if __name__ == "__main__":
     # Use for testing/debugging
     import asyncio
