@@ -9,11 +9,11 @@ from typing import List, Optional, Tuple
 import aiohttp
 import dotenv
 import nest_asyncio
-import redis.asyncio as aioredis
 import redis.asyncio as redis
 
 from src.chatbot.agents.models import RetrievalResult, ScrapeResult
 from src.chatbot.agents.utils.agent_helpers import model_registry
+from src.chatbot.db.redis_pool import redis_client
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import decode_string
 from src.chatbot.utils.helpers import compute_search_num_tokens
@@ -194,30 +194,6 @@ async def visit_urls_extract(
     cache_key_prefix = f"{__name__}:visit_urls_extract:"
     cache_tasks = []
     async with aiohttp.ClientSession() as session:
-        # Query Google search API
-        # async with session.get(url) as response:
-        #     if response.status != 200:
-        #         raise ProgrammableSearchException(
-        #             f"Failed: Programmable Search Engine. Status: {response.status}"
-        #         )
-
-        #     # Parse JSON response
-        #     dict_response = await response.json()
-
-        #     # Check if there are results
-        #     total_results = dict_response.get("searchInformation", {}).get(
-        #         "totalResults", 0
-        #     )
-        #     if int(total_results) > 0:
-        #         links_search = [item["link"] for item in dict_response["items"]]
-        #         logger.debug(
-        #             f"[SEARCH] Search Engine returned {len(links_search)} results (links)"
-        #         )
-        #     else:
-        #         logger.warning(
-        #             f"[SEARCH] No results found by the search engine while requesting this URL: {url}"
-        #         )
-        #         return [], []
 
         links_search = await _google_search(session, url)
         if not links_search:
@@ -311,60 +287,54 @@ async def visit_urls_extract(
 
 async def async_search(**kwargs) -> Tuple[str, List]:
     """Asynchronous search function that encapsulates the search functionality."""
+
     try:
-        # client = redis.Redis(host="redis", port=6379, decode_responses=True)
-        # client = aioredis.Redis(host="redis", port=6379, decode_responses=True)
-        # logger.debug("[REDIS] Async client created: %s", client)
-        # await RedisPool.get_pool()
-        # client = RedisPool.get_client()
 
-        async with aioredis.Redis(
-            host="redis", port=6379, decode_responses=True
-        ) as client:
-            logger.debug("[REDIS] Async client created: %s", client)
-            query = kwargs.get("query", "")
-            query_url = decode_string(query)
-            url = SEARCH_URL + query_url
-            do_not_visit_links = kwargs.get("do_not_visit_links", [])
-            about_application = kwargs.get("about_application", False)
+        client = redis_client.client
+        logger.debug("[REDIS] Async client created: %s", client)
+        query = kwargs.get("query", "")
+        query_url = decode_string(query)
+        url = SEARCH_URL + query_url
+        do_not_visit_links = kwargs.get("do_not_visit_links", [])
+        about_application = kwargs.get("about_application", False)
 
-            # -------------------------- cache lookup --------------------------
-            cache_key = f"{__name__}:async_search:{url}"
-            cached_content = await client.get(cache_key)
-            if cached_content:
-                logger.debug("[REDIS] Retrieved cached searched results (urls)")
-                return RetrievalResult.from_json(cached_content)
+        # -------------------------- cache lookup --------------------------
+        cache_key = f"{__name__}:async_search:{url}"
+        cached_content = await client.get(cache_key)
+        if cached_content:
+            logger.debug("[REDIS] Retrieved cached searched results (urls)")
+            return RetrievalResult.from_json(cached_content)
 
-            logger.debug("[SEARCH] Cache miss – proceeding with live search")
+        logger.debug("[SEARCH] Cache miss – proceeding with live search")
 
-            visited_urls, contents = await visit_urls_extract(
-                url=url,
-                query=query,
-                about_application=about_application,
-                do_not_visit_links=do_not_visit_links,
-                client=client,
+        visited_urls, contents = await visit_urls_extract(
+            url=url,
+            query=query,
+            about_application=about_application,
+            do_not_visit_links=do_not_visit_links,
+            client=client,
+        )
+
+        final_output = "\n".join(contents)
+
+        if final_output:
+            # For testing
+            final_output_tokens, final_search_tokens = compute_tokens(
+                final_output, query
+            )
+            logger.info(f"[SEARCH] Search tokens: {final_search_tokens}")
+            logger.info(
+                f"[SEARCH] Final output (search + prompt): {final_output_tokens}"
             )
 
-            final_output = "\n".join(contents)
+        retrieved = RetrievalResult(
+            result_text=final_output, reference=visited_urls, search_query=query
+        )
+        # -------------------------- cache store ---------------------------
+        if len(final_output) > 20:
+            await client.setex(cache_key, TTL, retrieved.to_json())
 
-            if final_output:
-                # For testing
-                final_output_tokens, final_search_tokens = compute_tokens(
-                    final_output, query
-                )
-                logger.info(f"[SEARCH] Search tokens: {final_search_tokens}")
-                logger.info(
-                    f"[SEARCH] Final output (search + prompt): {final_output_tokens}"
-                )
-
-            retrieved = RetrievalResult(
-                result_text=final_output, reference=visited_urls, search_query=query
-            )
-            # -------------------------- cache store ---------------------------
-            if len(final_output) > 20:
-                await client.setex(cache_key, TTL, retrieved.to_json())
-
-            return retrieved
+        return retrieved
 
     except redis.ConnectionError as e:
         logger.error(

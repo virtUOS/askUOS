@@ -27,6 +27,7 @@ from src.api.helpers import (
 from src.api.models import ChatCompletionRequest, ChatRequest, Message
 from src.api.translatations import _get_error_messages
 from src.chatbot.agents.graph import CampusManagementAgent
+from src.chatbot.db.redis_pool import redis_client
 from src.chatbot.prompt.prompt_date import get_current_date
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot_log.chatbot_logger import logger
@@ -36,6 +37,7 @@ from src.config.core_config import settings
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # TODO: Move intizialization of singletons and settings here
+    await redis_client.initialize()
     # Startup: eagerly initialize the singleton so the first request isn't slow
     agent = CampusManagementAgent()
     await agent._ensure_async_initialized()
@@ -43,6 +45,7 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown: clean up Redis connection
     await agent.cleanup()
+    await redis_client.cleanup()
 
 
 # TODO: Refactor key management (should be more robust)

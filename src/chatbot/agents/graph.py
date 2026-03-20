@@ -210,6 +210,7 @@ if __name__ == "__main__":
     from src.chatbot.prompt.main import get_system_prompt
     from src.chatbot.prompt.prompt_date import get_current_date
 
+    # If graph is run without using fastapi, redis pool must be initialized manually and pool needs to be closed
     graph = CampusManagementAgent()
 
     def print_graph(graph, filename="graph.png"):
