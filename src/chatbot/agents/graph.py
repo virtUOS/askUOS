@@ -26,7 +26,7 @@ MAX_TOKEN_SUMMARY = 1000
 REDIS_DB_URI = "redis://redis:6379"
 
 
-class CampusManagementOpenAIToolsAgent(GraphNodesMixin, GraphEdgesMixin):
+class CampusManagementAgent(GraphNodesMixin, GraphEdgesMixin):
 
     # Singleton instance
     _instance = None
@@ -210,7 +210,7 @@ if __name__ == "__main__":
     from src.chatbot.prompt.main import get_system_prompt
     from src.chatbot.prompt.prompt_date import get_current_date
 
-    graph = CampusManagementOpenAIToolsAgent()
+    graph = CampusManagementAgent()
 
     def print_graph(graph, filename="graph.png"):
         """Print the conversation graph as a PNG image.

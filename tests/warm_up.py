@@ -5,7 +5,7 @@ sys.path.append("/app")
 import sys
 from typing import List
 
-from src.chatbot.agents.graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.graph import CampusManagementAgent
 
 # do not include REPEATED queries or very similar queries (tests will fail)
 warm_up_queries = [
@@ -47,7 +47,7 @@ def warm_up_agent(warm_up_queries: List[str]) -> None:
     Returns:
     None
     """
-    graph = CampusManagementOpenAIToolsAgent.run()
+    graph = CampusManagementAgent.run()
     # Warm-up phase
     for q in warm_up_queries:
         _ = graph(q)  # Execute warm-up queries, timing not recorded

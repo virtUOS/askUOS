@@ -1,14 +1,14 @@
 import sys
 
 sys.path.append("/app")
-import json
 import os
 import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import Set
 
-from fastapi import FastAPI, HTTPException, Request, Security, WebSocket, status
+from fastapi import Request  # WebSocket,
+from fastapi import Depends, FastAPI, HTTPException, Security, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, ToolMessage
@@ -16,6 +16,7 @@ from langgraph.errors import GraphRecursionError
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from langgraph.types import Overwrite
 
+from src.api.dependencies import get_agent
 from src.api.helpers import (
     _completion_id,
     _extract_text_content,
@@ -25,7 +26,7 @@ from src.api.helpers import (
 )
 from src.api.models import ChatCompletionRequest, ChatRequest, Message
 from src.api.translatations import _get_error_messages
-from src.chatbot.agents.graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.graph import CampusManagementAgent
 from src.chatbot.prompt.prompt_date import get_current_date
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot_log.chatbot_logger import logger
@@ -36,8 +37,9 @@ from src.config.core_config import settings
 async def lifespan(app: FastAPI):
     # TODO: Move intizialization of singletons and settings here
     # Startup: eagerly initialize the singleton so the first request isn't slow
-    agent = CampusManagementOpenAIToolsAgent()
+    agent = CampusManagementAgent()
     await agent._ensure_async_initialized()
+    app.state.agent = agent
     yield
     # Shutdown: clean up Redis connection
     await agent.cleanup()
@@ -80,6 +82,7 @@ async def localhost_only(request: Request, call_next):
 async def chat_completions(
     request: ChatCompletionRequest,
     api_key: str = Security(verify_api_key),
+    agent: CampusManagementAgent = Depends(get_agent),  # inject dependencies
 ):
     """
     curl -X POST http://localhost:8000/v1/chat/completions \
@@ -103,7 +106,6 @@ async def chat_completions(
         }'   --no-buffer
     """
 
-    agent = CampusManagementOpenAIToolsAgent()
     language = request.language or "Deutsch"
     keep_user_message_history = request.keep_user_message_history
     error_messages = _get_error_messages(language)
@@ -317,8 +319,8 @@ async def chat_completions(
 async def get_messages(
     thread_id: str,
     api_key: str = Security(verify_api_key),
+    agent: CampusManagementAgent = Depends(get_agent),
 ):
-    agent = CampusManagementOpenAIToolsAgent()
     config = {"configurable": {"thread_id": thread_id}}
     state = await agent._graph.aget_state(config)
     if not state.values:
@@ -335,8 +337,8 @@ async def get_messages(
 async def delete_messages(
     thread_id: str,
     api_key: str = Security(verify_api_key),
+    agent: CampusManagementAgent = Depends(get_agent),
 ):
-    agent = CampusManagementOpenAIToolsAgent()
     config = {"configurable": {"thread_id": thread_id}}
 
     await agent._graph.aupdate_state(
@@ -365,7 +367,7 @@ async def chat_stream(
             -d '{"message": "Welche Fristen gelten für ein Auslandssemester?", "thread_id": "test-123", "language": "English"}' \
             --no-buffer
     """
-    agent = CampusManagementOpenAIToolsAgent()
+    agent = CampusManagementAgent()
 
     async def text_generator():
         config = {
@@ -458,21 +460,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-# @asynccontextmanager
-# async def lifespan(app: FastAPI):
-#     agent = CampusManagementOpenAIToolsAgent()
-#     await agent._ensure_async_initialized()
-#     app.state.agent = agent  # store it
-#     yield
-#     await agent.cleanup()
-
-
-# # dependencies.py
-# from fastapi import Request
-# from your_agent import CampusManagementOpenAIToolsAgent
-
-
-# def get_agent(request: Request) -> CampusManagementOpenAIToolsAgent:
-#     return request.app.state.agent

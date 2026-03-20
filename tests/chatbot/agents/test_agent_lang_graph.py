@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
-from src.chatbot.agents.graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.graph import CampusManagementAgent
 from src.config.core_config import settings
 
 
@@ -11,7 +11,7 @@ class TestCampusManagementOpenAIToolsAgent(unittest.TestCase):
 
     def setUp(self):
         # Initialize the agent with a default language
-        self.agent = CampusManagementOpenAIToolsAgent.run(language="English")
+        self.agent = CampusManagementAgent.run(language="English")
 
     def test_filter_messages_within_limit(self):
         messages = [
