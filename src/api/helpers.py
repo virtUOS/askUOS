@@ -195,7 +195,7 @@ def _format_references(
     if new_links:
         if new_refs:
             parts.append("\n")
-        parts.append(f"**{_('Quelle')}:**\n")
+        parts.append(f"**{_('Quellen')}:**\n")
         for link in new_links:
             parts.append(f"- {_format_link(link)}\n")
 

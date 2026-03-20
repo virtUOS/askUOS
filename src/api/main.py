@@ -14,6 +14,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
+from langgraph.types import Overwrite
 
 from src.api.helpers import (
     _completion_id,
@@ -104,6 +105,7 @@ async def chat_completions(
 
     agent = CampusManagementOpenAIToolsAgent()
     language = request.language or "Deutsch"
+    keep_user_message_history = request.keep_user_message_history
     error_messages = _get_error_messages(language)
     # Fresh thread_id if non provided (this means that the client sends all chat history e.g., Librechat)
     thread_id = request.thread_id if request.thread_id else str(uuid.uuid4())
@@ -153,6 +155,21 @@ async def chat_completions(
         prev_links_count = 0
         prev_refs_count = 0
 
+    async def _save_to_chat_history(_content: str):
+        if keep_user_message_history:
+            await agent._graph.aupdate_state(
+                config,
+                {
+                    "user_message_history": [
+                        {"role": "user", "content": user_message},
+                        {
+                            "role": "assistant",
+                            "content": _content,
+                        },
+                    ]
+                },
+            )
+
     # ─── Streaming ─────────────────────────────────────
 
     if request.stream:
@@ -164,6 +181,7 @@ async def chat_completions(
             yield _make_chunk(completion_id, created, model, role="assistant")
 
             try:
+                ai_answer = ""
                 async for msg, metadata in agent._graph.astream(
                     input_data,
                     config=config,
@@ -181,19 +199,12 @@ async def chat_completions(
                         )
                     ):
                         text = _extract_text_content(msg.content)
+                        ai_answer += text
                         if text:
                             streamed = True
                             yield _make_chunk(
                                 completion_id, created, model, content=text
                             )
-
-                # Direct response (no tools used)
-                if not streamed:
-                    state = await agent._graph.aget_state(config)
-                    content = _extract_text_content(
-                        state.values["messages"][-1].content
-                    )
-                    yield _make_chunk(completion_id, created, model, content=content)
 
                 # Stream references
                 final_state = await agent._graph.aget_state(config)
@@ -206,59 +217,57 @@ async def chat_completions(
                 if refs_text:
                     yield _make_chunk(completion_id, created, model, content=refs_text)
 
-                    messages = values.get("messages", [])
-                    last_ai_msg = next(
-                        (m for m in reversed(messages) if isinstance(m, AIMessage)),
-                        None,
+                    content_ref = ai_answer + refs_text
+                    await _save_to_chat_history(content_ref)
+                else:
+                    if streamed:
+                        await _save_to_chat_history(ai_answer)
+
+                # Direct response (no tools used)
+                if not streamed:
+                    state = await agent._graph.aget_state(config)
+                    content = _extract_text_content(
+                        state.values["messages"][-1].content
                     )
-                    # last_ai_msg.content can be a list [dictionary] or a string
-                    if last_ai_msg:
-                        if isinstance(last_ai_msg.content, list):
-                            content = last_ai_msg.content[0]["text"]
-                        else:
-                            content = last_ai_msg.content
-                        await agent._graph.aupdate_state(
-                            config,
-                            {
-                                "messages": [
-                                    AIMessage(
-                                        id=last_ai_msg.id,
-                                        content=content + refs_text,
-                                    )
-                                ]
-                            },
-                        )
+                    yield _make_chunk(completion_id, created, model, content=content)
+                    await _save_to_chat_history(content)
 
             except GraphRecursionError:
                 logger.warning(
                     f"[NOT-ANSWERED] Recursion limit reached. Query: {user_message}"
                 )
+                content = error_messages["recursion"]
                 yield _make_chunk(
                     completion_id,
                     created,
                     model,
-                    content=error_messages["recursion"],
+                    content=content,
                 )
+                await _save_to_chat_history(content)
 
             except ProgrammableSearchException:
                 logger.error(
                     f"[SEARCH-ERROR] Search tool failed. Query: {user_message}"
                 )
+                content = (error_messages["search_error"],)
                 yield _make_chunk(
                     completion_id,
                     created,
                     model,
-                    content=error_messages["search_error"],
+                    content=content,
                 )
+                await _save_to_chat_history(content)
 
             except Exception as e:
                 logger.exception(f"[ERROR] Unexpected error processing query: {e}")
+                content = error_messages["generic"]
                 yield _make_chunk(
                     completion_id,
                     created,
                     model,
-                    content=error_messages["generic"],
+                    content=content,
                 )
+                await _save_to_chat_history(content)
 
             # Final chunk with finish_reason
             yield _make_chunk(completion_id, created, model, finish_reason="stop")
@@ -300,6 +309,46 @@ async def chat_completions(
     return JSONResponse(
         _make_completion(completion_id, created, model, content, refs_text)
     )
+
+
+# NOTE: These endpoints are restricted to localhost only.
+# Streamlit and FastAPI must run in the same container for this to work.
+@app.get("/v1/threads/{thread_id}/messages")
+async def get_messages(
+    thread_id: str,
+    api_key: str = Security(verify_api_key),
+):
+    agent = CampusManagementOpenAIToolsAgent()
+    config = {"configurable": {"thread_id": thread_id}}
+    state = await agent._graph.aget_state(config)
+    if not state.values:
+        return {"messages": []}
+
+    messages = state.values.get("user_message_history", [])
+
+    return {"messages": messages}
+
+
+# NOTE: These endpoints are restricted to localhost only.
+# Streamlit and FastAPI must run in the same container for this to work.
+@app.delete("/v1/threads/{thread_id}/messages")
+async def delete_messages(
+    thread_id: str,
+    api_key: str = Security(verify_api_key),
+):
+    agent = CampusManagementOpenAIToolsAgent()
+    config = {"configurable": {"thread_id": thread_id}}
+
+    await agent._graph.aupdate_state(
+        config,
+        {
+            "messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES)],
+            # Bypass the reducer and replace the entire messages list
+            "user_message_history": Overwrite([]),
+        },
+    )
+
+    return {"deleted": True}
 
 
 @app.post("/chat/stream")
@@ -399,106 +448,6 @@ async def chat_stream(
     return StreamingResponse(text_generator(), media_type="text/plain")
 
 
-# NOTE: These endpoints are restricted to localhost only.
-# Streamlit and FastAPI must run in the same container for this to work.
-@app.delete("/v1/threads/{thread_id}")
-async def delete_thread(
-    thread_id: str,
-    api_key: str = Security(verify_api_key),
-):
-    """Clear all checkpointer state for a thread."""
-    agent = CampusManagementOpenAIToolsAgent()
-    redis_client = agent._checkpointer._redis
-    # Delete all keys matching this thread
-    async for key in redis_client.scan_iter(f"*{thread_id}*"):
-        await redis_client.delete(key)
-    return {"status": "ok"}
-
-
-# NOTE: These endpoints are restricted to localhost only.
-# Streamlit and FastAPI must run in the same container for this to work.
-@app.get("/v1/threads/{thread_id}/messages")
-async def get_messages(
-    thread_id: str,
-    api_key: str = Security(verify_api_key),
-):
-    agent = CampusManagementOpenAIToolsAgent()
-    config = {"configurable": {"thread_id": thread_id}}
-    state = await agent._graph.aget_state(config)
-    if not state.values:
-        return {"messages": []}
-
-    messages = []
-    # TODO: Filter out the human message generated by the rewrite node
-    for msg in state.values.get("messages", []):
-        # Skip any message tagged as internal
-        if getattr(msg, "name", None) == "int":
-            continue
-        if isinstance(msg, HumanMessage):
-            messages.append({"role": "user", "content": msg.content})
-
-        elif isinstance(msg, AIMessage):
-            messages.append({"role": "assistant", "content": msg.content})
-    return {"messages": messages}
-
-
-# NOTE: These endpoints are restricted to localhost only.
-# Streamlit and FastAPI must run in the same container for this to work.
-@app.delete("/v1/threads/{thread_id}/messages")
-async def delete_messages(
-    thread_id: str,
-    api_key: str = Security(verify_api_key),
-):
-    agent = CampusManagementOpenAIToolsAgent()
-    config = {"configurable": {"thread_id": thread_id}}
-
-    await agent._graph.aupdate_state(
-        config,
-        {"messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES)]},
-    )
-
-    return {"deleted": True}
-
-
-# connected_clients: List[WebSocket] = []
-
-# @app.websocket("/ws/chat/{session_id}")
-# async def websocket_endpoint(websocket: WebSocket, session_id: str):
-#     graph = CampusManagementOpenAIToolsAgent.run()
-#     thread_id = uuid.uuid4()
-#     current_date = get_current_date(settings.language.lower())
-#     conversation_summary = ""
-#     history = []
-#     user_input = ("Wo liegt der NC bei Sport?",)
-#     system_user_prompt = get_system_prompt(
-#         conversation_summary, history, user_input, current_date
-#     )
-#     await websocket.accept()
-#     try:
-#         while True:
-#             data = await websocket.receive_json()
-#             question = data.get("question")
-
-#             config = {
-#                 "configurable": {"thread_id": thread_id},
-#                 "recursion_limit": settings.application.recursion_limit,  # This amounts to two laps of the graph # https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
-#             }
-
-#             async for event in graph._graph.astream(
-#                 {"messages": [("user", question)]}, config=config
-#             ):
-#                 await websocket.send_json({"type": "token", "content": event})
-
-#             await websocket.send_json({"type": "complete"})
-#     except Exception as e:
-#         await websocket.send_json({"type": "error", "content": str(e)})
-
-
-# @app.post("/api/v1/summary")
-# async def conversation_summary():
-#     pass
-
-
 # Health check
 @app.get("/health")
 async def health():
@@ -509,3 +458,21 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     agent = CampusManagementOpenAIToolsAgent()
+#     await agent._ensure_async_initialized()
+#     app.state.agent = agent  # store it
+#     yield
+#     await agent.cleanup()
+
+
+# # dependencies.py
+# from fastapi import Request
+# from your_agent import CampusManagementOpenAIToolsAgent
+
+
+# def get_agent(request: Request) -> CampusManagementOpenAIToolsAgent:
+#     return request.app.state.agent

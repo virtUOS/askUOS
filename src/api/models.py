@@ -23,6 +23,9 @@ class ChatCompletionRequest(BaseModel):
     stream: bool = False
     thread_id: Optional[str] = Field(default_factory=lambda: str(uuid.uuid4()))
     language: Literal["Deutsch", "English"] = "Deutsch"
+    keep_user_message_history: bool = (
+        False  # wather to keep the list of messages shown to the user (sent to the client)
+    )
     # Optional OpenAI-compatible fields (ignored but accepted)
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None

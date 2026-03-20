@@ -277,6 +277,7 @@ class ChatApp:
                         extra_body={
                             "thread_id": user_id,
                             "language": language,
+                            "keep_user_message_history": True,
                         },
                     )
 

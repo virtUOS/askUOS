@@ -49,6 +49,11 @@ def add_lists(existing: list, new: list) -> list:
     return existing + new
 
 
+def add(left, right):
+    """Reducer"""
+    return left + right
+
+
 class State(TypedDict):
     """State management for the graph-based agent.
 
@@ -63,6 +68,7 @@ class State(TypedDict):
 
     # the ai and human messages contained here are also shown to the user.
     messages: Annotated[list[BaseMessage], add_messages]
+    user_message_history: Annotated[List[dict], add]
     search_query: Optional[List[str]]
     user_initial_query: Optional[str]
     current_date: Optional[str]
@@ -361,7 +367,6 @@ class GraphNodesMixin:
                     user_query,
                     state["last_tool_usage"],
                 ),
-                name="int",  # messages with int tag are not shown to the user
             )
         ]
         last_msg = state["messages"][-1]
