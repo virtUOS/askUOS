@@ -207,6 +207,16 @@
             "console": "integratedTerminal",
    
         },
+                    {
+            "name": "test_api",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./tests/test_api.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
 
 
 
