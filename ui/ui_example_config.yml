@@ -1,0 +1,18 @@
+language: "Deutsch"  # Literal["Deutch", "English"]. 
+
+legal:
+  data_protection: "https://my_example.de/datenschutz/"
+  imprint: "https://my_example.de/impressum/"
+
+
+start_page:
+  welcome_message_english: "Welcome to our chatbot! How can I assist you today?"
+  welcome_message_german: "Willkommen bei unserem Chatbot! Wie kann ich Ihnen heute helfen?"
+
+
+chat_page:
+    # Configuration for the start page
+  delete_message_dialog_box_english: |
+    Are you sure you want to delete the chat history? This action cannot be undone.
+  delete_message_dialog_box_german: |
+    Sind Sie sicher, dass Sie den Chatverlauf löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.

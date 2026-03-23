@@ -1,25 +1,26 @@
 import asyncio
 import os
+import sys
 import time
 import uuid
 from typing import Optional
 
+sys.path.insert(0, "/app")
 import nest_asyncio
 import requests
 import streamlit as st
-from langchain_core.messages import HumanMessage
 from openai import AsyncOpenAI
 from streamlit import session_state
 from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
 
-from pages.utils import initialize_session_sate, load_css, setup_page
 from src.chatbot_log.chatbot_logger import logger
-from src.config.core_config import settings
+from ui.config.app_config import app_settings
+from ui.utils.utils import initialize_session_sate, load_css, setup_page
 
 # max number of messages after which a summary is generated
 MAX_MESSAGES_PER_USER = 150  # Limit for the number of messages per user (Redis)
-HUMAN_AVATAR = "./static/Icon-User.svg"
-ASSISTANT_AVATAR = "./static/Icon-chatbot.svg"
+HUMAN_AVATAR = "/app/ui/static/icons/Icon-User.svg"
+ASSISTANT_AVATAR = "/app/ui/static/icons/Icon-chatbot.svg"
 ROLES = ("assistant", "user")
 # Note: for security reasons, thread endpoints (fastapi-redis user history) is only accessible from localhost
 # if fastapi runs on different container the history access logic needs to be adapted.
@@ -246,7 +247,7 @@ class ChatApp:
             # history.add_user_message(prompt)
             # st.session_state["messages"].append(HumanMessage(content=prompt))
 
-            with st.chat_message(ROLES[1], avatar="./static/Icon-User.svg"):
+            with st.chat_message(ROLES[1], avatar="/app/ui/static/icons/Icon-User.svg"):
                 st.write(prompt)
                 # if history.messages[-1].type != ROLES[0]:  # "ai"
             self._run_async(self.generate_response_async(prompt))
@@ -262,12 +263,12 @@ class ChatApp:
         user_id = self.get_user_id()
         language = session_state.get("selected_language", "Deutsch")
 
-        with st.chat_message(ROLES[0], avatar="./static/Icon-chatbot.svg"):
+        with st.chat_message(ROLES[0], avatar="/app/ui/static/icons/Icon-chatbot.svg"):
             with st.spinner(session_state["_"]("Generating response...")):
                 message_placeholder = st.empty()
                 response = ""
                 start_time = time.time()
-                settings.time_request_sent = start_time
+                app_settings.time_request_sent = start_time
 
                 try:
                     stream = await client.chat.completions.create(
@@ -399,9 +400,9 @@ class ChatApp:
         if "delete" in st.query_params:
             st.query_params.delete = "false"
         message = (
-            settings.chat_page.delete_message_dialog_box_german
-            if settings.language == "Deutsch"
-            else settings.chat_page.delete_message_dialog_box_english
+            app_settings.chat_page.delete_message_dialog_box_german
+            if app_settings.language == "Deutsch"
+            else app_settings.chat_page.delete_message_dialog_box_english
         )
         st.markdown(message)
         if st.button(

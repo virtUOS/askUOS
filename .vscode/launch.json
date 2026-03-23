@@ -9,7 +9,7 @@
             "program": "/app/.venv/bin/streamlit",
             "args": [
                 "run",
-                "./start.py"
+                "./ui/start.py"
             ]
         },
 
@@ -22,7 +22,7 @@
             "env":{ "PYTHONPATH": "/app"},
             "args": [
                 "run",
-                "./pages/ask_uos_chat.py"
+                "./ui/pages/ask_uos_chat.py"
             ],
         
         },

@@ -51,15 +51,6 @@ class Model(BaseModel):
     model_name: str
 
 
-class Legal(BaseModel):
-    """
-    Configuration for legal information.
-    """
-
-    data_protection: str
-    imprint: str
-
-
 class ApplicationConfig(BaseModel):
     """
     Configuration for the application.
@@ -122,24 +113,6 @@ class VectorDBConfig(BaseModel):
 
     type: VectorDBTypes = VectorDBTypes.MILVUS
     settings: Union[MilvusSettings, RAGFlowSettings]
-
-
-class StartPageConfig(BaseModel):
-    """
-    Configuration for the start page.
-    """
-
-    welcome_message_english: str
-    welcome_message_german: str
-
-
-class ChatPageConfig(BaseModel):
-    """
-    Configuration for the chat page.
-    """
-
-    delete_message_dialog_box_english: str
-    delete_message_dialog_box_german: str
 
 
 class CrawlSettings(BaseModel):

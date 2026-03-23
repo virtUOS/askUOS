@@ -1,0 +1,55 @@
+models:
+  
+  - provider: "google" # ["openai", "google", "self-hosted"]
+    role: "main" # ["main", "helper"] # main: model used for agentic tasks and generatiom. Helper: user for summary generation and tasks that do not require reasoning (easy tasks)
+    model_name: "gemini-3-flash-preview"
+  
+  - provider: "google" # ["openai", "google", "self-hosted"]
+    role: "helper" # ["main", "helper"] # main: model used for agentic tasks and generatiom. Helper: user for summary generation and tasks that do not require reasoning (easy tasks)
+    model_name: "gemini-2.5-flash-lite"
+
+language: "Deutsch"  # Literal["Deutch", "English"]. 
+
+graph: 
+  summary_threshold: 70000 # in tokens
+
+application:
+  uni_domain: "https://uni.de/" # Used to identify university-specific links in the answers
+  debug: True
+  tracing: False
+  recursion_limit: 8 # default is 12 https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
+
+embedding:
+  # Text embedding configuration
+  type: "Ollama"
+  connection_settings: {
+    model_name: "nomic-embed-text",
+    base_url : "https://my-ollama-instance.de",
+    headers: {
+      "Authorization": "API-KEY"
+    }
+  }
+  chunk_size: 3500 # Make sure this is not higher than the context window of the model
+  chunk_overlap: 50
+
+vector_db_settings:
+  # Vector database configuration
+  type: "Infinity-RAGFlow"  
+  settings: 
+    base_url: "https://ragflow.de" 
+    chunk_size: 10  
+
+
+# embedding:
+#   # Text embedding configuration
+#   type: "FastEmbed"
+#   connection_settings: {
+#     model_name: "intfloat/multilingual-e5-large",
+ 
+#   }
+
+# Optional. If set up, implement e.g., cron job to run /app/src/chatbot_log/log_cleanup.py  
+log_settings:
+  delete_logs_days: 90 # Number of days to keep logs before deletion
+
+  
