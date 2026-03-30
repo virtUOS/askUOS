@@ -3,7 +3,6 @@ import os
 import threading
 from typing import Any, List, NamedTuple, Optional
 
-import frontmatter
 import httpx
 from dotenv import load_dotenv
 from pydantic import BaseModel

@@ -1,12 +1,15 @@
+import sys
+
+sys.path.insert(0, "/app")
 from time import sleep
 
 import streamlit as st
 from dotenv import load_dotenv
 from streamlit import session_state
 
-from pages.language import initialize_language
-from pages.utils import initialize_session_sate, load_css, setup_page
-from src.config.core_config import settings
+from ui.config.app_config import app_settings
+from ui.utils.language import initialize_language
+from ui.utils.utils import initialize_session_sate, load_css, setup_page
 
 # Load environment variables
 load_dotenv()
@@ -23,14 +26,14 @@ def initialize_app():
 def display_welcome_message():
 
     if st.session_state["chosen_language"] == "Deutsch":
-        start_message = settings.start_page.welcome_message_german
+        start_message = app_settings.start_page.welcome_message_german
     else:
-        start_message = settings.start_page.welcome_message_english
+        start_message = app_settings.start_page.welcome_message_english
 
     st.markdown(
         start_message.format(
-            settings.legal.data_protection,
-            settings.legal.imprint,
+            app_settings.legal.data_protection,
+            app_settings.legal.imprint,
         )
     )
 

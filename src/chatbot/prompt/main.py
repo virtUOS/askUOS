@@ -1,16 +1,18 @@
-from typing import Dict, List
+from typing import Dict, List, Literal
 
 from langchain_core.messages import SystemMessage
 
 import src.chatbot.prompt.prompt_text as text
 
 # from src.chatbot.agents.utils.agent_helpers import llm
-from src.chatbot.agents.utils.agent_helpers import llm_gemini
+from src.chatbot.agents.utils.agent_helpers import model_registry
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
 
-def translate_prompt() -> Dict[str, str]:
+def translate_prompt(
+    language: Literal["Deutsch", "English"] = "Deutsch",
+) -> Dict[str, str]:
     """
     Translates the prompt text based on the configured language.
 
@@ -18,9 +20,11 @@ def translate_prompt() -> Dict[str, str]:
         A dictionary containing the translated prompt text.
     """
 
-    if settings.language == "Deutsch":
+    # if settings.language == "Deutsch":
+    if language == "Deutsch":
         prompt_text = text.prompt_text_deutsch
-    elif settings.language == "English":
+    # elif settings.language == "English":
+    elif language == "English":
         prompt_text = text.prompt_text_english
     else:
         prompt_text = text.prompt_text_deutsch
@@ -32,21 +36,21 @@ def translate_prompt() -> Dict[str, str]:
 
 
 def get_system_prompt(
-    conversation_summary: str, messages: List[dict], user_input: str, current_date: str
+    user_input: str,
+    current_date: str,
+    language: Literal["Deutsch", "English"] = "Deutsch",
 ) -> List:
     """
     Generates a chat prompt template based on the provided prompt text.
 
-
     """
 
-    prompt_text = translate_prompt()
+    prompt_text = translate_prompt(language)
     system_message_text = prompt_text["system_message"].format(
         current_date,
         user_input,
-        conversation_summary,
     )
-    return [SystemMessage(content=system_message_text)] + messages
+    return [SystemMessage(content=system_message_text)]
 
 
 def get_prompt_length() -> int:
@@ -62,6 +66,8 @@ def get_prompt_length() -> int:
 
     # formula to roughly compute the number of tokens: https://stackoverflow.com/questions/70060847/how-to-work-with-openai-maximum-context-length-is-2049-tokens
 
-    num_prompt_tokens = llm_gemini().get_num_tokens(prompt_text["system_message"])
+    num_prompt_tokens = model_registry.llm_optional.llm.get_num_tokens(
+        prompt_text["system_message"]
+    )
 
     return num_prompt_tokens

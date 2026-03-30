@@ -10,21 +10,10 @@ from pydantic_settings import (
 
 from src.chatbot_log.chatbot_logger import logger
 
-from .models import (
-    ApplicationConfig,
-    CrawlSettings,
-    EmbeddingSettings,
-    GraphConfig,
-    LogSettings,
-    MilvusSettings,
-    Model,
-    RAGFlowSettings,
-    SearchConfig,
-    VectorDBConfig,
-)
+from .models import ChatPageConfig, Legal, StartPageConfig
 
 
-class Settings(BaseSettings):
+class AppSettings(BaseSettings):
     """
     Settings class for application configuration.
 
@@ -33,18 +22,15 @@ class Settings(BaseSettings):
 
     """
 
-    _instance: ClassVar[Optional["Settings"]] = None
+    _instance: ClassVar[Optional["AppSettings"]] = None
 
-    # search_config: SearchConfig
-    models: list[Model]
-    application: ApplicationConfig
-    embedding: EmbeddingSettings
-    vector_db_settings: VectorDBConfig
     language: Literal["Deutsch", "English"]
-    graph: GraphConfig
-    crawl_settings: CrawlSettings
-
-    model_config = SettingsConfigDict(yaml_file="./src/backend_config.yaml")
+    start_page: StartPageConfig
+    chat_page: ChatPageConfig
+    legal: Optional[Legal] = (
+        None  # Optional legal information (e.g., data protection, imprint)
+    )
+    model_config = SettingsConfigDict(yaml_file="/app/ui/ui_config.yml")
     # TODO move this a global object/context
     time_request_sent: Optional[float] = None
     # TODO remove (these are used for testing)
@@ -53,11 +39,10 @@ class Settings(BaseSettings):
     # TODO move to a global object/context
     # if the llm summarization mode is active the summarization result will be not sent to the user
     llm_summarization_mode: bool = False
-    log_settings: Optional[LogSettings] = None
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super(Settings, cls).__new__(cls)
+            cls._instance = super(AppSettings, cls).__new__(cls)
         return cls._instance
 
     def __init__(self, **data):
@@ -77,4 +62,4 @@ class Settings(BaseSettings):
         return (YamlConfigSettingsSource(settings_cls),)
 
 
-settings = Settings()
+app_settings = AppSettings()

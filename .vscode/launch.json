@@ -9,7 +9,7 @@
             "program": "/app/.venv/bin/streamlit",
             "args": [
                 "run",
-                "./start.py"
+                "./ui/start.py"
             ]
         },
 
@@ -22,7 +22,7 @@
             "env":{ "PYTHONPATH": "/app"},
             "args": [
                 "run",
-                "./pages/ask_uos_chat.py"
+                "./ui/pages/ask_uos_chat.py"
             ],
         
         },
@@ -125,10 +125,10 @@
         },
 
          {
-            "name": "deep_search",
+            "name": "main_api",
             "type": "debugpy",
             "request": "launch",
-            "program": "./deep_search.py",
+            "program": "/app/src/api/main.py",
             "cwd": "${workspaceFolder}",
             "env":{ "PYTHONPATH": "/app"},
             "console": "integratedTerminal",
@@ -207,6 +207,16 @@
             "console": "integratedTerminal",
    
         },
+                    {
+            "name": "test_api",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./tests/test_api.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
 
 
 
@@ -257,10 +267,10 @@
         },
 
         {
-            "name": "agent_lang_graph",
+            "name": "graph",
             "type": "debugpy",
             "request": "launch",
-            "program": "./src/chatbot/agents/agent_lang_graph.py",
+            "program": "./src/chatbot/agents/graph.py",
             "cwd": "${workspaceFolder}",
             "env":{ "PYTHONPATH": "/app"},
             "console": "integratedTerminal",

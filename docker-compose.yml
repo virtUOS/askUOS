@@ -32,7 +32,7 @@ services:
     networks:
       - default
     ports:
-      - 11235:11235
+      - "11235"
     restart: always
   
   promtail:
@@ -54,7 +54,7 @@ services:
     volumes:
       - redis-data:/data
     ports:
-      - "6379:6379"
+      - "6379"
     command: >
       --maxmemory 1024mb
       --maxmemory-policy allkeys-lru

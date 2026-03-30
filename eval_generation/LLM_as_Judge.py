@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from streamlit.testing.v1 import AppTest
 
 DeprecationWarning
-from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.graph import CampusManagementAgent
 from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.prompt.prompt_date import get_current_date
 from src.config.core_config import settings
@@ -133,7 +133,7 @@ Evaluate the semantic similarity and provide your assessment.
     ) -> Dict[str, Any]:
         """Evaluate a complete dataset and return aggregated results."""
 
-        agent = CampusManagementOpenAIToolsAgent.run()
+        agent = CampusManagementAgent.run()
         thread_id = 1
         config = {
             "configurable": {"thread_id": thread_id},

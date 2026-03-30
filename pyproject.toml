@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "AI chatbot for applicants and students – get instant answers about studies, teaching, and campus life"
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.135.1",
     "fastembed",
     "google-genai>=1.63.0",
     "ipython",
@@ -16,7 +17,9 @@ dependencies = [
     "langchain-openai",
     "langchain-redis",
     "langgraph",
+    "langgraph-checkpoint-redis>=0.3.5",
     "nest-asyncio>=1.6.0",
+    "openai>=2.20.0",
     "pydantic-settings",
     "pymilvus",
     "pypdf",
@@ -26,4 +29,5 @@ dependencies = [
     "streamlit===1.47.0",
     "streamlit-cookies-controller===0.0.4",
     "tqdm",
+    "uvicorn>=0.41.0",
 ]

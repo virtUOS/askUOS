@@ -1,8 +1,8 @@
 import streamlit as st
 from streamlit import session_state
 
-from pages.language import translate
-from src.config.core_config import settings
+from ui.config.app_config import app_settings
+from ui.utils.language import translate
 
 
 def initialize_session_sate() -> None:
@@ -15,13 +15,13 @@ def initialize_session_sate() -> None:
         "show_warning": True,
         "user_feedback_faces": None,
         "user_feedback_form": {},
-        "user_query": None,
+        "user_query": None,  # use to log user query when user leaves feedback
         "feedback_saved": False,
-        "response": None,
+        "response": None,  # use to log user query when user leaves feedback
         "time_taken": None,
         "chat_started": False,
-        "selected_language": settings.language,
-        "agent_language": settings.language,
+        "selected_language": app_settings.language,
+        "agent_language": app_settings.language,
         "agent": None,
         "ask_uos_user_id": None,
         "input_key_counter": 0,
@@ -38,7 +38,7 @@ def setup_page() -> None:
     """Set up the Streamlit page configuration."""
     st.set_page_config(
         page_title="ask.UOS",
-        page_icon="app/static/Icon-chatbot.png",
+        page_icon="/app/ui/static/icons/Icon-chatbot.png",
         layout="centered",
         initial_sidebar_state="collapsed",
     )
@@ -46,5 +46,5 @@ def setup_page() -> None:
 
 def load_css() -> None:
     """Load custom CSS styles."""
-    with open("./pages/static/style.css") as css:
+    with open("/app/ui/static/css/style.css") as css:
         st.markdown(f"<style>{css.read()}</style>", unsafe_allow_html=True)

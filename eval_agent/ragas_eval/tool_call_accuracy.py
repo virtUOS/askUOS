@@ -1,13 +1,13 @@
 import uuid
 
 import ragas.messages as r
+from evaluation.ragas_eval.tool_call_accuracy_db import queries, reference_tool_calls
 from langgraph.errors import GraphRecursionError
 from ragas.dataset_schema import MultiTurnSample
 from ragas.integrations.langgraph import convert_to_ragas_messages
 from ragas.metrics import ToolCallAccuracy
 
-from evaluation.ragas_eval.tool_call_accuracy_db import queries, reference_tool_calls
-from src.chatbot.agents.agent_lang_graph import CampusManagementOpenAIToolsAgent
+from src.chatbot.agents.graph import CampusManagementAgent
 from src.chatbot.prompt.main import get_system_prompt
 from src.chatbot.prompt.prompt_date import get_current_date
 from src.config.core_config import settings
@@ -16,7 +16,7 @@ if len(reference_tool_calls) != len(queries):
     raise ValueError("reference_tool_calls and queries must have the same length")
 
 
-graph = CampusManagementOpenAIToolsAgent.run()
+graph = CampusManagementAgent.run()
 scores = []
 fails = []
 

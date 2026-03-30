@@ -21,6 +21,17 @@ class CollectionNames(str, Enum):
     TROUBLESHOOTING = "troubleshooting"
 
 
+class ProviderNames(str, Enum):
+    OPENAI = "openai"
+    GOOGLE = "google"
+    SELF_HOSTED = "self-hosted"
+
+
+class RoleNames(str, Enum):
+    MAIN = "main"
+    HELPER = "helper"
+
+
 class SearchConfig(BaseModel):
     """
     Configuration for the search service.
@@ -30,22 +41,14 @@ class SearchConfig(BaseModel):
     service: str
 
 
-class ModelConfig(BaseModel):
+class Model(BaseModel):
     """
     Configuration for the model being used.
     """
 
+    provider: ProviderNames
+    role: RoleNames
     model_name: str
-    context_window: int  # Number of allowed tokens
-
-
-class Legal(BaseModel):
-    """
-    Configuration for legal information.
-    """
-
-    data_protection: str
-    imprint: str
 
 
 class ApplicationConfig(BaseModel):
@@ -112,27 +115,14 @@ class VectorDBConfig(BaseModel):
     settings: Union[MilvusSettings, RAGFlowSettings]
 
 
-class StartPageConfig(BaseModel):
-    """
-    Configuration for the start page.
-    """
-
-    welcome_message_english: str
-    welcome_message_german: str
-
-
-class ChatPageConfig(BaseModel):
-    """
-    Configuration for the chat page.
-    """
-
-    delete_message_dialog_box_english: str
-    delete_message_dialog_box_german: str
-
-
 class CrawlSettings(BaseModel):
     """Settings for web crawler behavior"""
 
     base_url: str
     crawl_payload: dict  # TODO : requires special validation, use the crawl4ai schema
     ttl_redis: int
+
+
+class GraphConfig(BaseModel):
+    # summarize if context is >= summary_threshold
+    summary_threshold: int

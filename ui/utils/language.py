@@ -3,7 +3,7 @@ import gettext
 import streamlit as st
 from streamlit import session_state
 
-from src.config.core_config import settings
+from ui.config.app_config import app_settings
 
 
 def translate():
@@ -38,12 +38,12 @@ def initialize_language() -> None:
             set_language(language="de")
             st.session_state["selected_language"] = "Deutsch"
             session_state["_"] = translate()
-            settings.language = "Deutsch"
+            app_settings.language = "Deutsch"
 
         elif st.session_state["chosen_language"] == "English":
             set_language(language="en")
             st.session_state["selected_language"] = "English"
-            settings.language = "English"
+            app_settings.language = "English"
             session_state["_"] = gettext.gettext
 
     # If no language is chosen yet set it to German
@@ -52,7 +52,7 @@ def initialize_language() -> None:
         st.query_params["lang"] = "de"
 
     language_options = ["Deutsch", "English"]
-    index_language = st.session_state.get("selected_language", settings.language)
+    index_language = st.session_state.get("selected_language", app_settings.language)
     st.radio(
         "Language",
         options=language_options,
