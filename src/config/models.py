@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import ClassVar, List, Literal, Optional, Tuple, Type, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 EmbeddingType = Literal["FastEmbed", "Ollama"]
 
@@ -49,6 +49,16 @@ class Model(BaseModel):
     provider: ProviderNames
     role: RoleNames
     model_name: str
+    base_url: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_base_url_for_self_hosted(self):
+        """
+        Validate that base_url is required when provider is self-hosted.
+        """
+        if self.provider == ProviderNames.SELF_HOSTED and not self.base_url:
+            raise ValueError("base_url is required when provider is 'self-hosted'")
+        return self
 
 
 class ApplicationConfig(BaseModel):
