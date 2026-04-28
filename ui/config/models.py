@@ -10,6 +10,10 @@ class Legal(BaseModel):
     imprint: str
 
 
+class UiConfig(BaseModel):
+    page_title: str
+
+
 class ChatPageConfig(BaseModel):
     """
     Configuration for the chat page.
@@ -17,6 +21,8 @@ class ChatPageConfig(BaseModel):
 
     delete_message_dialog_box_english: str
     delete_message_dialog_box_german: str
+    greeting_message_german: str
+    greeting_message_english: str
 
 
 class StartPageConfig(BaseModel):

@@ -197,9 +197,10 @@ class ChatApp:
 
         # use to save user-assistant message to the logs e.g., when user leaves feedback
         # st.session_state["messages"] = []
-
-        greeting_message = session_state["_"](
-            "Hello! I am happy to assist you with questions about the University of Osnabrück, including information about study programs, application processes, and admission requirements. \n How can I help you today?"
+        greeting_message = (
+            app_settings.chat_page.greeting_message_german
+            if app_settings.language == "Deutsch"
+            else app_settings.chat_page.greeting_message_english
         )
         # st.session_state["messages"].append(greeting_message)
         with st.chat_message(ROLES[0], avatar=ASSISTANT_AVATAR):
@@ -393,7 +394,7 @@ class ChatApp:
                 logger.info(f"[FEEDBACK] Feedback= {feedback}")
                 session_state.feedback_saved = True
 
-    @st.dialog("ask.UOS")
+    @st.dialog(app_settings.ui.page_title)
     def delete_chat_history(self):
         """Display a dialog to confirm chat history deletion."""
 
@@ -442,7 +443,7 @@ class ChatApp:
     def run(self):
         """Main method to run the application logic."""
         with st.container(key="page-header-container"):
-            st.title("ask.UOS")
+            st.title(app_settings.ui.page_title)
         initialize_session_sate()
         RemoveEmptyElementContainer()
         # Get or create user ID using our method
