@@ -357,7 +357,9 @@ if __name__ == "__main__":
     import redis.asyncio as aioredis
 
     async def test():
-        client = aioredis.Redis(host="redis", port=6379, decode_responses=True)
+        client = aioredis.Redis(
+            host=settings.redis.host, port=settings.redis.port, decode_responses=True
+        )
         await client.setex("test_key", 300, "hello")
         val = await client.get("test_key")
         print(f"Stored and retrieved: {val}")  # Should print "hello"

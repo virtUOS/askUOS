@@ -103,7 +103,7 @@ async def _examination_regulations_tool(
     filter_program_name = kwargs.get("filter_program_name", "")
     ref: list[Reference] = []
     results = []
-    # TODO: Needs asyn implementation
+    # TODO: Needs async implementation
     if VECTOR_DB_TYPE == VectorDBTypes.MILVUS:
 
         try:

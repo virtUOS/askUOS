@@ -19,6 +19,7 @@ from .models import (
     MilvusSettings,
     Model,
     RAGFlowSettings,
+    RedisService,
     SearchConfig,
     VectorDBConfig,
 )
@@ -36,9 +37,10 @@ class Settings(BaseSettings):
     _instance: ClassVar[Optional["Settings"]] = None
 
     # search_config: SearchConfig
+    redis: RedisService
     models: list[Model]
     application: ApplicationConfig
-    embedding: EmbeddingSettings
+    embedding: Optional[EmbeddingSettings] = None
     vector_db_settings: VectorDBConfig
     language: Literal["Deutsch", "English"]
     graph: GraphConfig

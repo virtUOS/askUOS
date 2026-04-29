@@ -41,6 +41,33 @@ class SearchConfig(BaseModel):
     service: str
 
 
+class Service(BaseModel):
+    """Base class for service configurations"""
+
+    host: str
+    port: str
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+
+class RedisService(Service):
+    """Redis-specific service configuration"""
+
+    ttl_graph_cache: int = (
+        120  # how long messages are cached. Msgs older than this value won't be shown to the user
+    )
+
+    def build_redis_url(self) -> str:
+        """Build Redis connection URL from service settings"""
+        if self.password:
+            if self.username:
+                return (
+                    f"redis://{self.username}:{self.password}@{self.host}:{self.port}"
+                )
+            return f"redis://:{self.password}@{self.host}:{self.port}"
+        return f"redis://{self.host}:{self.port}"
+
+
 class Model(BaseModel):
     """
     Configuration for the model being used.
