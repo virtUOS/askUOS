@@ -11,16 +11,6 @@ class VectorDBTypes(str, Enum):
     INFINITY_RAGFLOW = "Infinity-RAGFlow"
 
 
-class CollectionNames(str, Enum):
-    """
-    Collection names used in the application.
-    """
-
-    EXAMINATION_REGULATIONS = "examination_regulations"
-    FAQ = "faq"
-    TROUBLESHOOTING = "troubleshooting"
-
-
 class ProviderNames(str, Enum):
     OPENAI = "openai"
     GOOGLE = "google"
@@ -160,6 +150,22 @@ class CrawlSettings(BaseModel):
     ttl_redis: int
 
 
+class ExaminationRegulations(BaseModel):
+    collection_name: str
+
+
+class Troubleshooting(BaseModel):
+    collection_name: str
+
+
+class FaqSettings(BaseModel):
+    activate: bool = False
+    collection_name: Optional[str] = "faq"
+
+
 class GraphConfig(BaseModel):
     # summarize if context is >= summary_threshold
     summary_threshold: int
+    faq: FaqSettings
+    examination_regulations: ExaminationRegulations
+    troubleshooting: Troubleshooting

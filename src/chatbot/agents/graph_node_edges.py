@@ -27,7 +27,7 @@ from src.chatbot.tools.utils.tool_schema import (
 from src.chatbot.utils.constants import ToolNames
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
-from src.config.models import CollectionNames, VectorDBTypes
+from src.config.models import VectorDBTypes
 
 # Importat when it comes to models with restricted context window
 MESSAGE_HISTORY_LIMIT = 7
@@ -102,12 +102,12 @@ class GraphNodesMixin:
             if isinstance(result, Exception):
                 logger.error(f"Tool call failed: {result}")
                 continue
-            if result.source_name == CollectionNames.FAQ:
+            if result.source_name == settings.graph.faq.collection_name:
                 unique_refs = {item.url_reference_askuos for item in result.reference}
                 new_links.extend(unique_refs)
             elif result.source_name in (
-                CollectionNames.EXAMINATION_REGULATIONS,
-                CollectionNames.TROUBLESHOOTING,
+                settings.graph.examination_regulations.collection_name,
+                settings.graph.troubleshooting.collection_name,
             ):
                 new_doc_refs.extend(result.reference)
 
@@ -289,19 +289,20 @@ class GraphNodesMixin:
         visited_links_so_far = state.get("visited_links", [])
 
         # TODO: FAQ support only available in RAGFLOW. Needs to be done with Milvus
-        if (
-            state.get("rewrite_query", False)
-            and settings.vector_db_settings.type
-            == VectorDBTypes.INFINITY_RAGFLOW  # Infinity RAGFlow
-        ):
-            # if the agent is in the rewrite state, try to find answer in FAQs
-            tool_tasks.append(
-                retrieve_from_infinity_ragflow(
-                    collection_name=CollectionNames.FAQ.value,
-                    query=message.tool_calls[0]["args"].get("query"),
-                    extract_reference_url=True,
+        if settings.graph.faq.activate:
+            if (
+                state.get("rewrite_query", False)
+                and settings.vector_db_settings.type
+                == VectorDBTypes.INFINITY_RAGFLOW  # Infinity RAGFlow
+            ):
+                # if the agent is in the rewrite state, try to find answer in FAQs
+                tool_tasks.append(
+                    retrieve_from_infinity_ragflow(
+                        collection_name=settings.graph.faq.collection_name,
+                        query=message.tool_calls[0]["args"].get("query"),
+                        extract_reference_url=True,
+                    )
                 )
-            )
 
         for tool_call in message.tool_calls:
 
