@@ -17,6 +17,14 @@ redis:
   password: ""
   ttl_graph_cache: 120 # how long messages are cached. Msgs older than this value won't be shown to the user
 
+# General system messages are in the locale. (Optional)
+messages:
+  - msg_name: "further_help" # Literal["further_help"]
+    english: |
+      If you need personal assistance regarding studying at the university, you can visit this wesbsite ...  or ... .
+    german: |
+      Wenn Sie persönliche Unterstützung zum Studium an der Universität benötigen, können Sie die Website des ...  oder ... .
+
 
 graph: 
   summary_threshold: 70000 # in tokens

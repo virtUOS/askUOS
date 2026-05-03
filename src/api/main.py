@@ -33,6 +33,7 @@ from src.chatbot.prompt.prompt_date import get_current_date
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
+from src.config.models import Languages
 
 
 @asynccontextmanager
@@ -110,7 +111,7 @@ async def chat_completions(
         }'   --no-buffer
     """
 
-    language = request.language or "Deutsch"
+    language = request.language or Languages.GERMAN
     keep_user_message_history = request.keep_user_message_history
     error_messages = _get_error_messages(language)
     # Fresh thread_id if non provided (this means that the client sends all chat history e.g., Librechat)

@@ -6,10 +6,19 @@ from pydantic import BaseModel, model_validator
 EmbeddingType = Literal["FastEmbed", "Ollama"]
 
 
+class MsgName(str, Enum):
+    further_help = "further_help"
+
+
 class ToolNames(str, Enum):
     SEARCH_WEB_TOOL = "custom_university_web_search"
     EXAMINATION_REGULATIONS_TOOL = "examination_regulations"
     TROUBLESHOOTING_TOOL = "troubleshooting"
+
+
+class Languages(str, Enum):
+    GERMAN = "Deutsch"
+    ENGLISH = "English"
 
 
 class VectorDBTypes(str, Enum):
@@ -175,3 +184,9 @@ class GraphConfig(BaseModel):
     faq: FaqSettings
     examination_regulations: ExaminationRegulations
     troubleshooting: Troubleshooting
+
+
+class Message(BaseModel):
+    msg_name: MsgName
+    english: str
+    german: str

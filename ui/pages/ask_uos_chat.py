@@ -400,11 +400,14 @@ class ChatApp:
 
         if "delete" in st.query_params:
             st.query_params.delete = "false"
-        message = (
-            app_settings.chat_page.delete_message_dialog_box_german
-            if app_settings.language == "Deutsch"
-            else app_settings.chat_page.delete_message_dialog_box_english
+        message = session_state["_"](
+            "Are you sure you want to delete the chat history? This action cannot be undone."
         )
+        # message = (
+        #     app_settings.chat_page.delete_message_dialog_box_german
+        #     if app_settings.language == "Deutsch"
+        #     else app_settings.chat_page.delete_message_dialog_box_english
+        # )
         st.markdown(message)
         if st.button(
             session_state["_"]("Delete"),
