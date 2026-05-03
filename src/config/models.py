@@ -6,6 +6,12 @@ from pydantic import BaseModel, model_validator
 EmbeddingType = Literal["FastEmbed", "Ollama"]
 
 
+class ToolNames(str, Enum):
+    SEARCH_WEB_TOOL = "custom_university_web_search"
+    EXAMINATION_REGULATIONS_TOOL = "examination_regulations"
+    TROUBLESHOOTING_TOOL = "troubleshooting"
+
+
 class VectorDBTypes(str, Enum):
     MILVUS = "Milvus"
     INFINITY_RAGFLOW = "Infinity-RAGFlow"

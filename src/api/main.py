@@ -23,6 +23,7 @@ from src.api.helpers import (
     _format_references,
     _make_chunk,
     _make_completion,
+    _is_function_call_json,
 )
 from src.api.models import ChatCompletionRequest, ChatRequest, Message
 from src.api.translatations import _get_error_messages
@@ -234,6 +235,19 @@ async def chat_completions(
                     content = _extract_text_content(
                         state.values["messages"][-1].content
                     )
+                    if not content:
+                        raise ValueError(
+                            f"[API] Agent Node Failed to generate content. Query {user_message}"
+                        )
+
+                    if _is_function_call_json(content):
+                        # Check if content is a function call JSON that should not be shown
+                        logger.warning(
+                            f"[FUNCTION_CALL EXPOSED] Function call JSON detected in response. "
+                            f"Query: {user_message}. Content preview: {content[:100]}"
+                        )
+                        content = error_messages["generic"]
+
                     yield _make_chunk(completion_id, created, model, content=content)
                     await _save_to_chat_history(content)
 
@@ -293,6 +307,18 @@ async def chat_completions(
     try:
         result = await agent._graph.ainvoke(input_data, config=config)
         content = _extract_text_content(result["messages"][-1].content)
+
+        if not content:
+            raise ValueError(
+                f"[API] Agent Node Failed to generate content. Query {user_message}"
+            )
+        # Check if content is a function call JSON that should not be shown
+        if _is_function_call_json(content):
+            logger.warning(
+                f"[FUNCTION_CALL EXPOSED] Function call JSON detected in non-streaming response. "
+                f"Query: {user_message}. Content preview: {content[:100]}"
+            )
+            content = error_messages["generic"]
 
         new_links = list(set(result.get("visited_links", [])[prev_links_count:]))
         new_refs = result.get("doc_references", [])[prev_refs_count:]
@@ -356,6 +382,7 @@ async def delete_messages(
     return {"deleted": True}
 
 
+# TODO: This endpoint need to be updated or deleted. Do not use in production
 @app.post("/chat/stream")
 async def chat_stream(
     request: ChatRequest,
@@ -390,6 +417,7 @@ async def chat_stream(
             "language": request.language,
         }
 
+        error_messages = _get_error_messages(request.language)
         # Snapshot previous references so we only return NEW ones
         prev_state = await agent._graph.aget_state(config)
         if prev_state.values:
@@ -428,6 +456,17 @@ async def chat_stream(
         if not streamed:
             state = await agent._graph.aget_state(config)
             content = _extract_text_content(state.values["messages"][-1].content)
+            if not content:
+                raise ValueError("[API] Agent Node Failed to generate content")
+
+            # Check if content is a function call JSON that should not be shown
+            if _is_function_call_json(content):
+                logger.warning(
+                    f"[FUNCTION_CALL EXPOSED] Function call JSON detected in /chat/stream response. "
+                    f"Query: {request.message}. Content preview: {content[:100]}"
+                )
+                content = error_messages["generic"]
+
             yield content
 
         # Append references at the end of the stream

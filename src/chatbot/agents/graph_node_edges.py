@@ -24,7 +24,7 @@ from src.chatbot.tools.utils.tool_schema import (
     RetrieverInput,
     SearchInputWeb,
 )
-from src.chatbot.utils.constants import ToolNames
+from src.config.models import ToolNames
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 from src.config.models import VectorDBTypes

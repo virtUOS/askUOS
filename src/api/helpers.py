@@ -1,11 +1,13 @@
 import json
 import uuid
 from urllib.parse import unquote, urlparse
-
+import re
+import json
 from src.api.translatations import get_translator
 from src.chatbot.agents.models import Reference
 from src.config.core_config import settings
 from src.config.models import VectorDBTypes
+from src.config.models import ToolNames
 
 
 def _extract_text_content(content) -> str:
@@ -25,6 +27,51 @@ def _extract_text_content(content) -> str:
 
 def _completion_id() -> str:
     return f"chatcmpl-{uuid.uuid4().hex[:12]}"
+
+
+def _is_function_call_json(content: str) -> bool:
+    """Detect if content is a function call JSON that should not be shown to user.
+       Some LLMs fail to return proper structured output and return instead a tool call
+       as plain JSON string.
+    Args:
+        content: The message content to check
+
+    Returns:
+        True if content appears to be a function call JSON, False otherwise
+    """
+    if not content:
+        return False
+
+    content_stripped = content.strip()
+
+    # Check for function_call pattern in JSON
+    function_call_patterns = [
+        r'"function_call"\s*:',
+        r'"tool_calls"\s*:',
+    ]
+
+    for tool_name in ToolNames:
+        # Match the tool name as it would appear in JSON: "tool_name"
+        function_call_patterns.append(f'"{tool_name.value}"')
+
+    for pattern in function_call_patterns:
+        if re.search(pattern, content_stripped):
+            return True
+
+    # Check if content is valid JSON with function-related keys
+    try:
+        # Try to parse as JSON
+        parsed = json.loads(content_stripped)
+        if isinstance(parsed, dict):
+            # Check for function call structure
+            if "function_call" in parsed or "tool_calls" in parsed:
+                return True
+            if "name" in parsed and "arguments" in parsed:
+                return True
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    return False
 
 
 def _make_chunk(
