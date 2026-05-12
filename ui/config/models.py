@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 
 class Legal(BaseModel):
@@ -30,3 +31,8 @@ class StartPageConfig(BaseModel):
 
     welcome_message_english: str
     welcome_message_german: str
+
+
+class IframePageInfo(BaseModel):
+    page: Optional[str] = None
+    page_title: Optional[str] = None

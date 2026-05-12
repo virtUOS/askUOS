@@ -12,10 +12,15 @@ import streamlit as st
 from openai import AsyncOpenAI
 from streamlit import session_state
 from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
-
+from ui.config.models import IframePageInfo
 from src.chatbot_log.chatbot_logger import logger
 from ui.config.app_config import app_settings
-from ui.utils.utils import initialize_session_sate, load_css, setup_page
+from ui.utils.utils import (
+    initialize_session_sate,
+    load_css,
+    setup_page,
+    bot_called_from,
+)
 
 # max number of messages after which a summary is generated
 MAX_MESSAGES_PER_USER = 150  # Limit for the number of messages per user (Redis)
@@ -448,6 +453,11 @@ class ChatApp:
         with st.container(key="page-header-container"):
             st.title(app_settings.ui.page_title)
         initialize_session_sate()
+
+        # page from which the bot was called
+        # TODO: Append this information to the llm context
+        st.session_state["bot_called_from"] = bot_called_from()
+
         RemoveEmptyElementContainer()
         # Get or create user ID using our method
         # user_id = self.get_user_id()
