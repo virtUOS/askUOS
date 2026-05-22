@@ -4,6 +4,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 from src.config.core_config import settings
+from src.config.models import Languages
 
 
 class ChatRequest(BaseModel):
@@ -22,7 +23,7 @@ class ChatCompletionRequest(BaseModel):
     messages: List[Message]
     stream: bool = False
     thread_id: Optional[str] = Field(default_factory=lambda: str(uuid.uuid4()))
-    language: Literal["Deutsch", "English"] = "Deutsch"
+    language: Literal[Languages.GERMAN, Languages.ENGLISH] = Languages.GERMAN
     keep_user_message_history: bool = (
         False  # wather to keep the list of messages shown to the user (sent to the client)
     )

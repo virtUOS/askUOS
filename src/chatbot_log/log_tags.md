@@ -22,6 +22,7 @@
 - EMBEDDING
 - NOT-ANSWERED e.g., A recursion error occurs because the content needed to answer the question was not found. 
 - STREAMLIT
+- BOT-CALLED: the page from which the bot is called 
 
 
 ## Example Usage

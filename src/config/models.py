@@ -1,24 +1,29 @@
 from enum import Enum
 from typing import ClassVar, List, Literal, Optional, Tuple, Type, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 EmbeddingType = Literal["FastEmbed", "Ollama"]
+
+
+class MsgName(str, Enum):
+    further_help = "further_help"
+
+
+class ToolNames(str, Enum):
+    SEARCH_WEB_TOOL = "custom_university_web_search"
+    EXAMINATION_REGULATIONS_TOOL = "examination_regulations"
+    TROUBLESHOOTING_TOOL = "troubleshooting"
+
+
+class Languages(str, Enum):
+    GERMAN = "Deutsch"
+    ENGLISH = "English"
 
 
 class VectorDBTypes(str, Enum):
     MILVUS = "Milvus"
     INFINITY_RAGFLOW = "Infinity-RAGFlow"
-
-
-class CollectionNames(str, Enum):
-    """
-    Collection names used in the application.
-    """
-
-    EXAMINATION_REGULATIONS = "examination_regulations"
-    FAQ = "faq"
-    TROUBLESHOOTING = "troubleshooting"
 
 
 class ProviderNames(str, Enum):
@@ -41,6 +46,33 @@ class SearchConfig(BaseModel):
     service: str
 
 
+class Service(BaseModel):
+    """Base class for service configurations"""
+
+    host: str
+    port: str
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+
+class RedisService(Service):
+    """Redis-specific service configuration"""
+
+    ttl_graph_cache: int = (
+        120  # how long messages are cached. Msgs older than this value won't be shown to the user
+    )
+
+    def build_redis_url(self) -> str:
+        """Build Redis connection URL from service settings"""
+        if self.password:
+            if self.username:
+                return (
+                    f"redis://{self.username}:{self.password}@{self.host}:{self.port}"
+                )
+            return f"redis://:{self.password}@{self.host}:{self.port}"
+        return f"redis://{self.host}:{self.port}"
+
+
 class Model(BaseModel):
     """
     Configuration for the model being used.
@@ -49,6 +81,16 @@ class Model(BaseModel):
     provider: ProviderNames
     role: RoleNames
     model_name: str
+    base_url: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_base_url_for_self_hosted(self):
+        """
+        Validate that base_url is required when provider is self-hosted.
+        """
+        if self.provider == ProviderNames.SELF_HOSTED and not self.base_url:
+            raise ValueError("base_url is required when provider is 'self-hosted'")
+        return self
 
 
 class ApplicationConfig(BaseModel):
@@ -123,6 +165,28 @@ class CrawlSettings(BaseModel):
     ttl_redis: int
 
 
+class ExaminationRegulations(BaseModel):
+    collection_name: str
+
+
+class Troubleshooting(BaseModel):
+    collection_name: str
+
+
+class FaqSettings(BaseModel):
+    activate: bool = False
+    collection_name: Optional[str] = "faq"
+
+
 class GraphConfig(BaseModel):
     # summarize if context is >= summary_threshold
     summary_threshold: int
+    faq: FaqSettings
+    examination_regulations: ExaminationRegulations
+    troubleshooting: Troubleshooting
+
+
+class Message(BaseModel):
+    msg_name: MsgName
+    english: str
+    german: str

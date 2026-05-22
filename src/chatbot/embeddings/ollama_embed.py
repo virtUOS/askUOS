@@ -4,6 +4,7 @@ from langchain_ollama import OllamaEmbeddings
 
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
+from src.config.models import VectorDBTypes
 
 
 class OllamaSingleton:
@@ -37,8 +38,11 @@ class OllamaSingleton:
         return cls._instance
 
 
-if settings.embedding.type == "Ollama":
-    ollama_embedding = OllamaSingleton()
+# TODO Rewrite
+VECTOR_DB_TYPE = settings.vector_db_settings.type
+if VECTOR_DB_TYPE == VectorDBTypes.MILVUS:
+    if settings.embedding.type == "Ollama":
+        ollama_embedding = OllamaSingleton()
 
 
 def get_ollama_embeddings_vector(query: str) -> list[float]:

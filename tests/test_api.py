@@ -21,27 +21,27 @@ USER_QUERIES = [
     [
         "What are the admission requirements for bachelor bioloy?",
         "What documents do I need to apply?",
-        # "When is the application deadline?",
+        "When is the application deadline?",
     ],
     [
         "How do I apply for a student visa?",
         "How long does the visa process take?",
-        # "What are the visa fees?",
+        "What are the visa fees?",
     ],
     [
         "What courses are available in computer science?",
         "Is there a master's program in AI?",
-        # "What are the tuition fees?",
+        "What are the tuition fees?",
     ],
     [
         "Where is the international office?",
         "How do I get a student ID?",
-        # "What sports facilities are available?",
+        "What sports facilities are available?",
     ],
     [
         "What scholarships are available?",
         "How do I apply for financial aid?",
-        # "Is there on-campus housing?",
+        "Is there on-campus housing?",
     ],
 ]
 
@@ -95,7 +95,7 @@ def run_user_session(result: UserResult):
                     "language": "English",
                 },
                 stream=True,  #  do not buffer
-                timeout=120,
+                timeout=180,
             )
             response.raise_for_status()
             text = consume_stream(response)

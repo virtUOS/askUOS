@@ -10,8 +10,31 @@ models:
 
 language: "Deutsch"  # Literal["Deutch", "English"]. 
 
+redis:
+  host: "redis"
+  port: "6379"
+  username: ""
+  password: ""
+  ttl_graph_cache: 120 # how long messages are cached. Msgs older than this value won't be shown to the user
+
+# General system messages are in the locale. (Optional)
+messages:
+  - msg_name: "further_help" # Literal["further_help"]
+    english: |
+      If you need personal assistance regarding studying at the university, you can visit this wesbsite ...  or ... .
+    german: |
+      Wenn Sie persönliche Unterstützung zum Studium an der Universität benötigen, können Sie die Website des ...  oder ... .
+
+
 graph: 
   summary_threshold: 70000 # in tokens
+  faq:
+    activate: True
+    collection_name: "faq"
+  examination_regulations: 
+    collection_name: "POs-Test"
+  troubleshooting:
+    collection_name: "troubleshooting"
 
 application:
   uni_domain: "https://uni.de/" # Used to identify university-specific links in the answers
@@ -19,6 +42,7 @@ application:
   tracing: False
   recursion_limit: 8 # default is 12 https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
 
+# Only needed if using Milvus vector db
 embedding:
   # Text embedding configuration
   type: "Ollama"
@@ -40,6 +64,7 @@ vector_db_settings:
     chunk_size: 10  
 
 
+# Only needed if using Milvus vector db (choose either ollama or fastembed)
 # embedding:
 #   # Text embedding configuration
 #   type: "FastEmbed"

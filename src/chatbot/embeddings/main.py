@@ -7,9 +7,8 @@ from src.config.core_config import settings
 from src.config.models import EmbeddingType
 
 
-def get_embeddings(
-    query: str, type_embedding: EmbeddingType = settings.embedding.type
-) -> list[float]:
+def get_embeddings(query: str) -> list[float]:
+    type_embedding: EmbeddingType = settings.embedding.type
     logger.debug(f"Initializing {type_embedding} embedding client...")
 
     try:

@@ -6,6 +6,7 @@ from typing import Any
 import redis.asyncio as aioredis
 
 from src.chatbot_log.chatbot_logger import logger
+from src.config.core_config import settings
 
 
 class RedisClient:
@@ -29,8 +30,10 @@ class RedisClient:
         async with self._lock:
             if self._pool is None:
                 self._pool = aioredis.BlockingConnectionPool(
-                    host=host,
-                    port=port,
+                    host=settings.redis.host,
+                    port=settings.redis.port,
+                    username=settings.redis.username,
+                    password=settings.redis.password,
                     timeout=15,
                     decode_responses=True,
                     max_connections=50,

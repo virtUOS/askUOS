@@ -52,13 +52,32 @@ class LLMMixin:
                 streaming=True,
                 callbacks=[StdOutCallbackHandler()],
             )
-        elif (
-            model_conf.provider == ProviderNames.OPENAI
-            or model_conf.provider
-            == ProviderNames.SELF_HOSTED  # self-hosted model must be openai compatible
-        ):
+        elif model_conf.provider == ProviderNames.OPENAI:
             self.llm = ChatOpenAI(
                 model=model_conf.model_name,
+                temperature=0,
+                streaming=True,
+                callbacks=[StdOutCallbackHandler()],
+            )
+        elif (
+            model_conf.provider == ProviderNames.SELF_HOSTED
+        ):  # self-hosted model must be openai compatible
+            if model_conf.role == RoleNames.MAIN:
+                self_hosted_api_key = os.getenv("API_KEY_SELF_HOSTED_MAIN", "")
+            elif model_conf.role == RoleNames.HELPER:
+                self_hosted_api_key = os.getenv("API_KEY_SELF_HOSTED_HELPER", "")
+            else:
+                raise ValueError("Model Role not supported")
+
+            if not self_hosted_api_key:
+                raise ValueError(
+                    "You are trying to connect to a self-hosted model. Provide the respective api key in the environment file: API_KEY_SELF_HOSTED_MAIN, API_KEY_SELF_HOSTED_HELPER"
+                )
+
+            self.llm = ChatOpenAI(
+                model=model_conf.model_name,
+                base_url=model_conf.base_url,
+                api_key=self_hosted_api_key,
                 temperature=0,
                 streaming=True,
                 callbacks=[StdOutCallbackHandler()],

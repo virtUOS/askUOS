@@ -12,10 +12,15 @@ import streamlit as st
 from openai import AsyncOpenAI
 from streamlit import session_state
 from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
-
+from ui.config.models import IframePageInfo
 from src.chatbot_log.chatbot_logger import logger
 from ui.config.app_config import app_settings
-from ui.utils.utils import initialize_session_sate, load_css, setup_page
+from ui.utils.utils import (
+    initialize_session_sate,
+    load_css,
+    setup_page,
+    bot_called_from,
+)
 
 # max number of messages after which a summary is generated
 MAX_MESSAGES_PER_USER = 150  # Limit for the number of messages per user (Redis)
@@ -197,9 +202,10 @@ class ChatApp:
 
         # use to save user-assistant message to the logs e.g., when user leaves feedback
         # st.session_state["messages"] = []
-
-        greeting_message = session_state["_"](
-            "Hello! I am happy to assist you with questions about the University of Osnabrück, including information about study programs, application processes, and admission requirements. \n How can I help you today?"
+        greeting_message = (
+            app_settings.chat_page.greeting_message_german
+            if app_settings.language == "Deutsch"
+            else app_settings.chat_page.greeting_message_english
         )
         # st.session_state["messages"].append(greeting_message)
         with st.chat_message(ROLES[0], avatar=ASSISTANT_AVATAR):
@@ -393,17 +399,20 @@ class ChatApp:
                 logger.info(f"[FEEDBACK] Feedback= {feedback}")
                 session_state.feedback_saved = True
 
-    @st.dialog("ask.UOS")
+    @st.dialog(app_settings.ui.page_title)
     def delete_chat_history(self):
         """Display a dialog to confirm chat history deletion."""
 
         if "delete" in st.query_params:
             st.query_params.delete = "false"
-        message = (
-            app_settings.chat_page.delete_message_dialog_box_german
-            if app_settings.language == "Deutsch"
-            else app_settings.chat_page.delete_message_dialog_box_english
+        message = session_state["_"](
+            "Are you sure you want to delete the chat history? This action cannot be undone."
         )
+        # message = (
+        #     app_settings.chat_page.delete_message_dialog_box_german
+        #     if app_settings.language == "Deutsch"
+        #     else app_settings.chat_page.delete_message_dialog_box_english
+        # )
         st.markdown(message)
         if st.button(
             session_state["_"]("Delete"),
@@ -442,8 +451,13 @@ class ChatApp:
     def run(self):
         """Main method to run the application logic."""
         with st.container(key="page-header-container"):
-            st.title("ask.UOS")
+            st.title(app_settings.ui.page_title)
         initialize_session_sate()
+
+        # page from which the bot was called
+        # TODO: Append this information to the llm context
+        st.session_state["bot_called_from"] = bot_called_from()
+
         RemoveEmptyElementContainer()
         # Get or create user ID using our method
         # user_id = self.get_user_id()

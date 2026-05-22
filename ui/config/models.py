@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional
 
 
 class Legal(BaseModel):
@@ -10,13 +11,17 @@ class Legal(BaseModel):
     imprint: str
 
 
+class UiConfig(BaseModel):
+    page_title: str
+
+
 class ChatPageConfig(BaseModel):
     """
     Configuration for the chat page.
     """
 
-    delete_message_dialog_box_english: str
-    delete_message_dialog_box_german: str
+    greeting_message_german: str
+    greeting_message_english: str
 
 
 class StartPageConfig(BaseModel):
@@ -26,3 +31,8 @@ class StartPageConfig(BaseModel):
 
     welcome_message_english: str
     welcome_message_german: str
+
+
+class IframePageInfo(BaseModel):
+    page: Optional[str] = None
+    page_title: Optional[str] = None

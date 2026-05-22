@@ -28,7 +28,7 @@ class Chunk(BaseModel):
     doc_type_kwd: str
     document_id: str
     document_keyword: str  # documents name
-    highlight: str
+    highlight: Optional[str] = None
     id: str
     image_id: str
     important_keywords: List[str]
@@ -114,13 +114,20 @@ class RAGFlowSingleton:
                 },
             )
             if resp.status_code == 200:
-                r = resp.json()
-                return [
-                    RetrievedContentRagflow(
-                        chunk=Chunk(**chunk), doc_aggs=RetrievedDocs(**docs)
-                    )
-                    for chunk, docs in zip(r["data"]["chunks"], r["data"]["doc_aggs"])
-                ]
+                try:
+                    r = resp.json()
+                    r_parsed = [
+                        RetrievedContentRagflow(
+                            chunk=Chunk(**chunk), doc_aggs=RetrievedDocs(**docs)
+                        )
+                        for chunk, docs in zip(
+                            r["data"]["chunks"], r["data"]["doc_aggs"]
+                        )
+                    ]
+                    return r_parsed
+                except Exception as e:
+                    logger.error(f"Failed to map Ragflow answer to Model {e}")
+                    raise ValueError("Failed to map Ragflow answer to Model")
             raise ValueError(f"Failed: {resp.status_code} - {resp.text}")
 
     async def get_chunks(self, query: str, db_name: str) -> List[Chunk]:

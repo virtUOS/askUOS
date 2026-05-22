@@ -9,7 +9,7 @@ from src.chatbot.db.ragflow_client import ragflow_object
 from src.chatbot.embeddings.main import get_embeddings
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
-from src.config.models import CollectionNames, VectorDBTypes
+from src.config.models import VectorDBTypes
 
 DOCUMENT_SEPARATOR = "\n\n"
 NOT_FOUND_MESSAGE = "Result: No documents found"
@@ -103,7 +103,7 @@ async def _examination_regulations_tool(
     filter_program_name = kwargs.get("filter_program_name", "")
     ref: list[Reference] = []
     results = []
-    # TODO: Needs asyn implementation
+    # TODO: Needs async implementation
     if VECTOR_DB_TYPE == VectorDBTypes.MILVUS:
 
         try:
@@ -113,7 +113,9 @@ async def _examination_regulations_tool(
             }
 
             docs = retrieve_from_milvus(
-                CollectionNames.EXAMINATION_REGULATIONS, query, doc_search_params
+                settings.graph.examination_regulations.collection_name,
+                query,
+                doc_search_params,
             )
             # TODO: IMPLEMENT A RERANKING FUNCTION
 
@@ -130,7 +132,7 @@ async def _examination_regulations_tool(
     elif VECTOR_DB_TYPE == VectorDBTypes.INFINITY_RAGFLOW:
         query = f"{query}  {filter_program_name if filter_program_name else ''}"
         return await retrieve_from_infinity_ragflow(
-            CollectionNames.EXAMINATION_REGULATIONS.value, query
+            settings.graph.examination_regulations.collection_name, query
         )
     else:
         logger.error(f"[VECTOR DB]Unsupported vector DB type: {VECTOR_DB_TYPE}")
@@ -156,7 +158,7 @@ async def _retriever_his_in_one_tool(
             results = []
 
             docs = retrieve_from_milvus(
-                CollectionNames.TROUBLESHOOTING, query, doc_search_params
+                settings.graph.troubleshooting.collection_name, query, doc_search_params
             )
 
             for doc in docs[0]:
@@ -170,7 +172,7 @@ async def _retriever_his_in_one_tool(
     elif VECTOR_DB_TYPE == VectorDBTypes.INFINITY_RAGFLOW:
 
         return await retrieve_from_infinity_ragflow(
-            CollectionNames.TROUBLESHOOTING.value, query
+            settings.graph.troubleshooting.collection_name, query
         )
     else:
         logger.error(f"[VECTOR DB]Unsupported vector DB type: {VECTOR_DB_TYPE}")

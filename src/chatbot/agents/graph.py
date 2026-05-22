@@ -23,8 +23,6 @@ MESSAGE_HISTORY_LIMIT = 7
 # Maximum number of tokens for the conversation summary
 MAX_TOKEN_SUMMARY = 1000
 
-REDIS_DB_URI = "redis://redis:6379"
-
 
 class CampusManagementAgent(GraphNodesMixin, GraphEdgesMixin):
 
@@ -44,7 +42,8 @@ class CampusManagementAgent(GraphNodesMixin, GraphEdgesMixin):
     def __init__(self, **data):
         # data: key-value pairs passed through the run method, e.g., CampusManagementOpenAIToolsAgent.run(language='Deutsch')
         if not self._initialized:
-
+            # Get Redis URL from config
+            self.REDIS_DB_URI = settings.redis.build_redis_url()
             self._llm_optional = model_registry.llm_optional.llm  # llm_optional()
             self._llm = model_registry.chat_llm.llm  # llm_gemini()
 
@@ -75,8 +74,11 @@ class CampusManagementAgent(GraphNodesMixin, GraphEdgesMixin):
             return
 
         self._checkpointer = AsyncRedisSaver(
-            redis_url=REDIS_DB_URI,
-            ttl={"default_ttl": 120, "refresh_on_read": True},  #  120 minutes
+            redis_url=self.REDIS_DB_URI,
+            ttl={
+                "default_ttl": settings.redis.ttl_graph_cache,
+                "refresh_on_read": True,
+            },  #  120 minutes
         )
         await self._checkpointer.asetup()
 

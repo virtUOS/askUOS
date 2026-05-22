@@ -4,6 +4,9 @@ legal:
   data_protection: "https://my_example.de/datenschutz/"
   imprint: "https://my_example.de/impressum/"
 
+ui:
+  page_title: "ask.UOS" #app name
+
 
 start_page:
   welcome_message_english: "Welcome to our chatbot! How can I assist you today?"
@@ -16,3 +19,9 @@ chat_page:
     Are you sure you want to delete the chat history? This action cannot be undone.
   delete_message_dialog_box_german: |
     Sind Sie sicher, dass Sie den Chatverlauf löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.
+  greeting_message_english: |
+    Hello! I am happy to assist you with questions about the University of Osnabrück, including information about study programs, application processes, and admission requirements. \n How can I help you today?
+  greeting_message_german: |
+    Hallo! Ich unterstütze Sie gerne bei Fragen zur Universität Osnabrück, einschließlich Informationen zu Studiengängen, Bewerbungsprozessen und Zulassungsvoraussetzungen.\n Wie kann ich Ihnen heute helfen?
+
+# Note: For the icons, mount (to the container) your own custom icons to the /app/ui/static/icons/ directory with the same filenames (Icon-User.svg, Icon-chatbot.svg, Icon-chatbot.png). 

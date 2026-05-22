@@ -1,4 +1,4 @@
-from typing import ClassVar, Literal, Optional, Tuple, Type
+from typing import ClassVar, Literal, Optional, Tuple, Type, Any
 
 from pydantic import Field
 from pydantic_settings import (
@@ -19,8 +19,10 @@ from .models import (
     MilvusSettings,
     Model,
     RAGFlowSettings,
+    RedisService,
     SearchConfig,
     VectorDBConfig,
+    Message,
 )
 
 
@@ -36,13 +38,15 @@ class Settings(BaseSettings):
     _instance: ClassVar[Optional["Settings"]] = None
 
     # search_config: SearchConfig
+    redis: RedisService
     models: list[Model]
     application: ApplicationConfig
-    embedding: EmbeddingSettings
+    embedding: Optional[EmbeddingSettings] = None
     vector_db_settings: VectorDBConfig
     language: Literal["Deutsch", "English"]
     graph: GraphConfig
     crawl_settings: CrawlSettings
+    messages: Optional[list[Message]] = None
 
     model_config = SettingsConfigDict(yaml_file="./src/backend_config.yaml")
     # TODO move this a global object/context
@@ -54,6 +58,7 @@ class Settings(BaseSettings):
     # if the llm summarization mode is active the summarization result will be not sent to the user
     llm_summarization_mode: bool = False
     log_settings: Optional[LogSettings] = None
+    parsed_messages: Optional[dict] = None
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -75,6 +80,16 @@ class Settings(BaseSettings):
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
         return (YamlConfigSettingsSource(settings_cls),)
+
+    def model_post_init(self, context: Any) -> None:
+        if self.messages:
+            self.parsed_messages = {
+                item.msg_name.further_help.value: {
+                    "english": item.english,
+                    "german": item.german,
+                }
+                for item in self.messages
+            }
 
 
 settings = Settings()
