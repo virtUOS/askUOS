@@ -14,6 +14,7 @@ class ToolNames(str, Enum):
     SEARCH_WEB_TOOL = "custom_university_web_search"
     EXAMINATION_REGULATIONS_TOOL = "examination_regulations"
     TROUBLESHOOTING_TOOL = "troubleshooting"
+    PEOPLE_SEARCH = "uos_people_search"
 
 
 class Languages(str, Enum):

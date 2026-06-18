@@ -2,8 +2,13 @@ import asyncio
 import threading
 from typing import Dict, List
 
+from langchain.agents import create_agent
+from langchain_core.callbacks import StdOutCallbackHandler
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.prompts import PromptTemplate
+from langchain_core.tools.structured import StructuredTool
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.graph import END, START, StateGraph
 
@@ -30,13 +35,14 @@ class CampusManagementAgent(GraphNodesMixin, GraphEdgesMixin):
     _instance = None
     _lock = threading.Lock()
 
-    def __new__(cls):
+    def __new__(cls, mcp_tools: List[StructuredTool] = None):
         if not cls._instance:
             with cls._lock:
                 if not cls._instance:
                     cls._instance = super().__new__(cls)
                     cls._instance._initialized = False
                     cls._instance._async_initialized = False
+                    cls._instance.mcp_tools = mcp_tools
         return cls._instance
 
     def __init__(self, **data):
@@ -46,6 +52,7 @@ class CampusManagementAgent(GraphNodesMixin, GraphEdgesMixin):
             self.REDIS_DB_URI = settings.redis.build_redis_url()
             self._llm_optional = model_registry.llm_optional.llm  # llm_optional()
             self._llm = model_registry.chat_llm.llm  # llm_gemini()
+            self._llm_subagent = model_registry.subagent_llm.llm
 
             # self.language: str = Field(default=settings.language)
             self._graph: StateGraph = None
@@ -56,7 +63,8 @@ class CampusManagementAgent(GraphNodesMixin, GraphEdgesMixin):
             self._checkpointer: AsyncRedisSaver = (
                 None  # initialized later in async context
             )
-
+            # TODO recursion limit for subagents
+            self.subagent = create_agent(model=self._llm_subagent, tools=self.mcp_tools)
             tools = GraphNodesMixin.create_tools()
             self._tools_by_name = {tool.name: tool for tool in tools}
             # important: the code uses function calling as opposed to tool calling. (DEPENDS ON THE MODEL and how it was fine tuned)
@@ -156,6 +164,7 @@ class CampusManagementAgent(GraphNodesMixin, GraphEdgesMixin):
 
         graph_builder.add_node("tool_node", self.tool_node)
         graph_builder.add_node("judge_node", self.judge_node)
+        graph_builder.add_node("uos_people_search_node", self.uos_people_search_node)
         graph_builder.add_node("rewrite", self.rewrite)  # Re-writing the question
         graph_builder.add_node(
             "generate", self.generate
@@ -179,9 +188,10 @@ class CampusManagementAgent(GraphNodesMixin, GraphEdgesMixin):
             # Assess agent decision
             self.route_tools,
             {
-                # Translate the condition outputs to nodes in our graph
+                # Translate the condition outputs to nodes in the graph
                 "tool_node": "tool_node",
                 "judge_node": "judge_node",
+                "uos_people_search_node": "uos_people_search_node",
             },
         )
 
@@ -200,6 +210,7 @@ class CampusManagementAgent(GraphNodesMixin, GraphEdgesMixin):
         graph_builder.add_edge("rewrite", "agent_node")
         graph_builder.add_edge("generate_application", END)
         graph_builder.add_edge("generate_teaching_degree_node", END)
+        graph_builder.add_edge("uos_people_search_node", END)
 
         self._graph = graph_builder.compile(
             debug=DEBUG, checkpointer=self._checkpointer

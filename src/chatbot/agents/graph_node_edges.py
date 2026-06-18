@@ -2,6 +2,7 @@ import asyncio
 from collections import deque
 from typing import Annotated, ClassVar, Dict, List, Literal, Optional, Union
 
+from langchain.agents import create_agent
 from langchain.messages import RemoveMessage
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import PromptTemplate
@@ -23,11 +24,11 @@ from src.chatbot.tools.utils.tool_schema import (
     HisInOneInput,
     RetrieverInput,
     SearchInputWeb,
+    SearchWebQuery,
 )
-from src.config.models import ToolNames
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
-from src.config.models import VectorDBTypes
+from src.config.models import ToolNames, VectorDBTypes
 
 # Importat when it comes to models with restricted context window
 MESSAGE_HISTORY_LIMIT = 7
@@ -120,6 +121,9 @@ class GraphNodesMixin:
 
         return outputs_txt, search_query, new_links, new_doc_refs
 
+    def subagent_tool():
+        pass
+
     @staticmethod
     def create_tools() -> List:
         """Create and configure tools for the chatbot's agent.
@@ -152,6 +156,13 @@ class GraphNodesMixin:
                 coroutine=async_search,
                 description=translate_prompt()["description_university_web_search"],
                 args_schema=SearchInputWeb,
+                handle_tool_errors=True,
+            ),
+            StructuredTool.from_function(
+                name=ToolNames.PEOPLE_SEARCH,
+                func=GraphNodesMixin.subagent_tool,
+                description="Search for contact information of people employed at the University.",
+                args_schema=SearchWebQuery,
                 handle_tool_errors=True,
             ),
         ]
@@ -325,6 +336,10 @@ class GraphNodesMixin:
             elif tool_call["name"] == ToolNames.TROUBLESHOOTING_TOOL:
 
                 tool_tasks.append(_retriever_his_in_one_tool(**tool_call["args"]))
+            else:
+                logger.warning(
+                    f'[AGENT] Tool call not allowed. Tool name: {tool_call["name"]}'
+                )
 
         # Call tools
         retrieval_results: RetrievalResult = await asyncio.gather(
@@ -376,8 +391,7 @@ class GraphNodesMixin:
             "rewrite_query": True,
         }
 
-    def generate_helper(self, state, system_message_generate):
-
+    def _create_prompt_helper(self, state, system_message_generate):
         messages_history = state.get("messages", [])
         if not messages_history:
             logger.warning(
@@ -408,6 +422,11 @@ class GraphNodesMixin:
             raise MustContainSystemMessageException(
                 "The first message in the conversation must be a SystemMessage."
             )
+        return message_deque
+
+    def generate_helper(self, state, system_message_generate):
+
+        message_deque = self._create_prompt_helper(state, system_message_generate)
         response: AIMessage = self._llm.invoke(list(message_deque))
 
         return {
@@ -475,6 +494,33 @@ class GraphNodesMixin:
         )
         return self.generate_helper(state, system_message_generate)
 
+    async def uos_people_search_node(self, state: State) -> Dict:
+        logger.debug("[LANGGRAPH]uos_people_search_node: Generating answer")
+        language = state.get("language", "Deutsch")
+        system_message_generate = SystemMessage(
+            content=translate_prompt(language)["system_message_generate"].format(
+                state.get("current_date", ""),
+                state.get("user_initial_query", ""),
+                "",
+            )
+        )
+        llm_messages = self._create_prompt_helper(state, system_message_generate)
+        input_state = {"messages": list(llm_messages)}
+        response = await self.subagent.ainvoke(input_state)
+        # Extract the messages list from the response state
+        messages = response.get("messages", [])
+        if messages:
+            final_message = messages[-1]
+        else:
+            # Fallback if no messages returned
+            from langchain_core.messages import AIMessage
+
+            final_message = AIMessage(content="Unable to generate a response.")
+        return {
+            "messages": [_sanitize_ai_message(final_message)],
+            "search_query": [],
+        }
+
 
 class GraphEdgesMixin:
     """Mixin class handling edge routing and decision making in the graph."""
@@ -502,6 +548,9 @@ class GraphEdgesMixin:
             raise ValueError(f"No messages found in input state to tool_edge: {state}")
 
         if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
+            tool_names = [tool["name"] for tool in ai_message.tool_calls]
+            if ToolNames.PEOPLE_SEARCH in tool_names:
+                return "uos_people_search_node"
             return "tool_node"
         return "judge_node"
 

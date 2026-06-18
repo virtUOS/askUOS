@@ -166,6 +166,8 @@ class _ModelRegistry:
         for m in models:
             if m.role == RoleNames.MAIN:
                 self.chat_llm = ChatLlm(m)
+                # create subagent llm object
+                self.subagent_llm = ChatLlm(m)
             elif m.role == RoleNames.HELPER:
                 self.llm_optional = ChatLlmOptional(m)
             else:

@@ -5,13 +5,15 @@ import os
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Set
+from typing import List, Set
 
 from fastapi import Request  # WebSocket,
 from fastapi import Depends, FastAPI, HTTPException, Security, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, ToolMessage
+from langchain_core.tools.structured import StructuredTool
+from langchain_mcp_adapters.tools import load_mcp_tools
 from langgraph.errors import GraphRecursionError
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from langgraph.types import Overwrite
@@ -21,15 +23,16 @@ from src.api.helpers import (
     _completion_id,
     _extract_text_content,
     _format_references,
+    _is_function_call_json,
     _make_chunk,
     _make_completion,
-    _is_function_call_json,
 )
 from src.api.models import ChatCompletionRequest, ChatRequest, Message
 from src.api.translatations import _get_error_messages
 from src.chatbot.agents.graph import CampusManagementAgent
 from src.chatbot.db.redis_pool import redis_client
 from src.chatbot.prompt.prompt_date import get_current_date
+from src.chatbot.tools.mcp.main import client
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
@@ -41,7 +44,8 @@ async def lifespan(app: FastAPI):
     # TODO: Move intizialization of singletons and settings here
     await redis_client.initialize()
     # Startup: eagerly initialize the singleton so the first request isn't slow
-    agent = CampusManagementAgent()
+    tools: List[StructuredTool] = await client.get_tools(server_name="uos-intern")
+    agent = CampusManagementAgent(mcp_tools=tools)
     await agent._ensure_async_initialized()
     app.state.agent = agent
     yield
