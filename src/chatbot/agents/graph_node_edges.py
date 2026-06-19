@@ -4,14 +4,23 @@ from typing import Annotated, ClassVar, Dict, List, Literal, Optional, Union
 
 from langchain.agents import create_agent
 from langchain.messages import RemoveMessage
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.prompts import PromptTemplate
+from langchain_core.tools.structured import StructuredTool
+from langchain_mcp_adapters.tools import load_mcp_tools
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import RemoveMessage, add_messages
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
 from src.chatbot.agents.models import Reference, RetrievalResult
+from src.chatbot.agents.utils.agent_helpers import model_registry
 from src.chatbot.agents.utils.agent_retriever import (
     _examination_regulations_tool,
     _retriever_his_in_one_tool,
@@ -19,12 +28,13 @@ from src.chatbot.agents.utils.agent_retriever import (
 )
 from src.chatbot.agents.utils.exceptions import MustContainSystemMessageException
 from src.chatbot.prompt.main import get_system_prompt, translate_prompt
+from src.chatbot.tools.mcp.main import client
 from src.chatbot.tools.utils.tool_helpers import ReferenceRetriever
 from src.chatbot.tools.utils.tool_schema import (
     HisInOneInput,
+    PeopleSearchQuery,
     RetrieverInput,
     SearchInputWeb,
-    SearchWebQuery,
 )
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
@@ -111,8 +121,10 @@ class GraphNodesMixin:
                 settings.graph.troubleshooting.collection_name,
             ):
                 new_doc_refs.extend(result.reference)
-
-            # web search
+            if result.source_name == "other":
+                # TODO handle references for general tools
+                pass
+            # uni web search
             else:
                 new_links.extend(result.reference)
 
@@ -121,8 +133,34 @@ class GraphNodesMixin:
 
         return outputs_txt, search_query, new_links, new_doc_refs
 
-    def subagent_tool():
-        pass
+    @staticmethod
+    async def _people_search_subagent(query: PeopleSearchQuery) -> RetrievalResult:
+        tools: List[StructuredTool] = await client.get_tools(server_name="uos-intern")
+        _llm_subagent = model_registry.subagent_llm.llm
+        subagent = create_agent(
+            system_prompt="Your task is to find people's contact information. Use the tools provided for this pupose.",
+            model=_llm_subagent,
+            tools=tools,
+        )
+        response = await subagent.ainvoke(
+            {"messages": [{"role": "user", "content": query}]}
+        )
+        message_comtent = ""
+        messages = response.get("messages", [])
+        for m in messages:
+            if isinstance(m, ToolMessage):
+                print(f"Tool mesage content----------------: {m.content}")
+                message_comtent += str(m.content)
+
+        print(f"This is the entire tool messsage: {message_comtent} ")
+        retrieved = RetrievalResult(
+            result_text=message_comtent,
+            reference=[],
+            source_name="other",
+            search_query=query,
+        )
+        print(f"Retrieved people Search: {retrieved}")
+        return retrieved
 
     @staticmethod
     def create_tools() -> List:
@@ -135,6 +173,7 @@ class GraphNodesMixin:
 
         from src.chatbot.tools.search_web_tool import async_search
 
+        # TODO filter out tools according to config
         # TODO: Tool descriptions are always in german (Translate to english)
         return [
             StructuredTool.from_function(
@@ -160,9 +199,9 @@ class GraphNodesMixin:
             ),
             StructuredTool.from_function(
                 name=ToolNames.PEOPLE_SEARCH,
-                func=GraphNodesMixin.subagent_tool,
+                coroutine=GraphNodesMixin._people_search_subagent,
                 description="Search for contact information of people employed at the University.",
-                args_schema=SearchWebQuery,
+                args_schema=PeopleSearchQuery,
                 handle_tool_errors=True,
             ),
         ]
@@ -336,6 +375,12 @@ class GraphNodesMixin:
             elif tool_call["name"] == ToolNames.TROUBLESHOOTING_TOOL:
 
                 tool_tasks.append(_retriever_his_in_one_tool(**tool_call["args"]))
+
+            elif tool_call["name"] == ToolNames.PEOPLE_SEARCH:
+                tool_tasks.append(
+                    GraphNodesMixin._people_search_subagent(**tool_call["args"])
+                )
+
             else:
                 logger.warning(
                     f'[AGENT] Tool call not allowed. Tool name: {tool_call["name"]}'
@@ -510,6 +555,8 @@ class GraphNodesMixin:
         # Extract the messages list from the response state
         messages = response.get("messages", [])
         if messages:
+            for m in messages:
+                print(m)
             final_message = messages[-1]
         else:
             # Fallback if no messages returned
@@ -548,9 +595,9 @@ class GraphEdgesMixin:
             raise ValueError(f"No messages found in input state to tool_edge: {state}")
 
         if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
-            tool_names = [tool["name"] for tool in ai_message.tool_calls]
-            if ToolNames.PEOPLE_SEARCH in tool_names:
-                return "uos_people_search_node"
+            # tool_names = [tool["name"] for tool in ai_message.tool_calls]
+            # if ToolNames.PEOPLE_SEARCH in tool_names:
+            #     return "uos_people_search_node"
             return "tool_node"
         return "judge_node"
 

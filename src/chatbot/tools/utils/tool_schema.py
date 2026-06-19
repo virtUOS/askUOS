@@ -1,8 +1,10 @@
 from pydantic import BaseModel, Field
 
 
-class SearchWebQuery(BaseModel):
-    query: str = Field(description="should be a search query")
+class PeopleSearchQuery(BaseModel):
+    query: str = Field(
+        description="should be a search query e.g., Name of a person to look for"
+    )
 
 
 class SearchInputWeb(BaseModel):

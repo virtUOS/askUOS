@@ -64,7 +64,11 @@ class CampusManagementAgent(GraphNodesMixin, GraphEdgesMixin):
                 None  # initialized later in async context
             )
             # TODO recursion limit for subagents
-            self.subagent = create_agent(model=self._llm_subagent, tools=self.mcp_tools)
+            self.subagent = create_agent(
+                system_prompt="Your task is to find people's contact information. Use the tools provided for this pupose.",
+                model=self._llm_subagent,
+                tools=self.mcp_tools,
+            )
             tools = GraphNodesMixin.create_tools()
             self._tools_by_name = {tool.name: tool for tool in tools}
             # important: the code uses function calling as opposed to tool calling. (DEPENDS ON THE MODEL and how it was fine tuned)
