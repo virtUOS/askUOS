@@ -2,6 +2,7 @@ import asyncio
 from collections import deque
 from typing import Annotated, ClassVar, Dict, List, Literal, Optional, Union
 
+from async_lru import alru_cache
 from langchain.agents import create_agent
 from langchain.messages import RemoveMessage
 from langchain_core.messages import (
@@ -12,7 +13,6 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.prompts import PromptTemplate
-from langchain_core.tools.structured import StructuredTool
 from langchain_mcp_adapters.tools import load_mcp_tools
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import RemoveMessage, add_messages
@@ -121,10 +121,10 @@ class GraphNodesMixin:
                 settings.graph.troubleshooting.collection_name,
             ):
                 new_doc_refs.extend(result.reference)
-            if result.source_name == "other":
+            elif result.source_name == "other":
                 # TODO handle references for general tools
                 pass
-            # uni web search
+            # web search
             else:
                 new_links.extend(result.reference)
 
@@ -134,32 +134,52 @@ class GraphNodesMixin:
         return outputs_txt, search_query, new_links, new_doc_refs
 
     @staticmethod
-    async def _people_search_subagent(query: PeopleSearchQuery) -> RetrievalResult:
-        tools: List[StructuredTool] = await client.get_tools(server_name="uos-intern")
-        _llm_subagent = model_registry.subagent_llm.llm
-        subagent = create_agent(
-            system_prompt="Your task is to find people's contact information. Use the tools provided for this pupose.",
-            model=_llm_subagent,
-            tools=tools,
-        )
-        response = await subagent.ainvoke(
-            {"messages": [{"role": "user", "content": query}]}
-        )
-        message_comtent = ""
-        messages = response.get("messages", [])
-        for m in messages:
-            if isinstance(m, ToolMessage):
-                print(f"Tool mesage content----------------: {m.content}")
-                message_comtent += str(m.content)
+    @alru_cache(maxsize=100, ttl=60 * 60 * 24)
+    async def _people_search(query: PeopleSearchQuery):
+        from src.chatbot.tools.mcp.main import people_search_client
 
-        print(f"This is the entire tool messsage: {message_comtent} ")
+        # 281472104712336
+        print(
+            f"----------------------Client ID : {id(people_search_client)}---------------------------"
+        )
+        _llm_subagent = model_registry.subagent_llm.llm
+        server_name = list(people_search_client.connections.keys())[0]
         retrieved = RetrievalResult(
-            result_text=message_comtent,
+            result_text="The search Failed",
             reference=[],
             source_name="other",
             search_query=query,
         )
-        print(f"Retrieved people Search: {retrieved}")
+        # Create a session explicitly
+        try:
+            async with people_search_client.session(server_name) as session:
+                # Pass the session to load tools, resources, or prompts
+                tools = await load_mcp_tools(session)
+                agent = create_agent(
+                    system_prompt="Use the provided Tools to find People's contact information",
+                    model=_llm_subagent,
+                    tools=tools,
+                )
+
+                response = await agent.ainvoke(
+                    {"messages": [{"role": "user", "content": query}]}
+                )
+                message_comtent = ""
+                messages = response.get("messages", [])
+                for m in messages:
+                    if isinstance(m, ToolMessage):
+                        message_comtent += str(m.content)
+
+                retrieved = RetrievalResult(
+                    result_text=message_comtent,
+                    reference=[],
+                    source_name="other",
+                    search_query=query,
+                )
+                print(f"Retrieved people Search: {retrieved}")
+        except Exception as e:
+            logger.exception(f"[PEOPLE-SEARCH] Search Failed: {e}")
+
         return retrieved
 
     @staticmethod
@@ -175,7 +195,7 @@ class GraphNodesMixin:
 
         # TODO filter out tools according to config
         # TODO: Tool descriptions are always in german (Translate to english)
-        return [
+        tools = [
             StructuredTool.from_function(
                 name=ToolNames.TROUBLESHOOTING_TOOL,
                 coroutine=_retriever_his_in_one_tool,
@@ -197,14 +217,20 @@ class GraphNodesMixin:
                 args_schema=SearchInputWeb,
                 handle_tool_errors=True,
             ),
-            StructuredTool.from_function(
-                name=ToolNames.PEOPLE_SEARCH,
-                coroutine=GraphNodesMixin._people_search_subagent,
-                description="Search for contact information of people employed at the University.",
-                args_schema=PeopleSearchQuery,
-                handle_tool_errors=True,
-            ),
         ]
+
+        # TODO modify system prompt, make more general. Say use these tools and if more are provided use them as well.
+        if settings.people_search:
+            tools.append(
+                StructuredTool.from_function(
+                    name=ToolNames.PEOPLE_SEARCH,
+                    coroutine=GraphNodesMixin._people_search,
+                    description="Search for contact information of people related to the University, e.g., Employees.",
+                    args_schema=PeopleSearchQuery,
+                    handle_tool_errors=True,
+                )
+            )
+        return tools
 
     @staticmethod
     def filter_messages(messages: List[BaseMessage], k: int) -> List[BaseMessage]:
@@ -321,6 +347,8 @@ class GraphNodesMixin:
 
         return {"score_judgement_binary": score.judgement_binary}
 
+    # TODO Cache the entire tool node use langgraph from langgraph.types import CachePolicy
+    # TODO Only cache when no tool exceptions occurred
     async def tool_node(self, state: Dict) -> Dict:
         """Process tool calls."""
 
@@ -377,9 +405,7 @@ class GraphNodesMixin:
                 tool_tasks.append(_retriever_his_in_one_tool(**tool_call["args"]))
 
             elif tool_call["name"] == ToolNames.PEOPLE_SEARCH:
-                tool_tasks.append(
-                    GraphNodesMixin._people_search_subagent(**tool_call["args"])
-                )
+                tool_tasks.append(GraphNodesMixin._people_search(**tool_call["args"]))
 
             else:
                 logger.warning(

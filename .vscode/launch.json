@@ -52,6 +52,17 @@
         },
 
         {
+            "name": "semantic_evaluator",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./evaluation/RAG_evaluation/semantic_evaluator.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
+        {
             "name": "topic_adherence_db",
             "type": "debugpy",
             "request": "launch",
@@ -183,6 +194,18 @@
             "console": "integratedTerminal",
    
         },
+
+           {
+            "name": "rag_data_gen",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/app/synthetic_data_gen/rag_data_gen.py",
+            "cwd": "${workspaceFolder}",
+            "env":{ "PYTHONPATH": "/app"},
+            "console": "integratedTerminal",
+   
+        },
+
 
         
 

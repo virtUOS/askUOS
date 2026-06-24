@@ -23,6 +23,7 @@ from .models import (
     SearchConfig,
     VectorDBConfig,
     Message,
+    MCPConf,
 )
 
 
@@ -47,6 +48,7 @@ class Settings(BaseSettings):
     graph: GraphConfig
     crawl_settings: CrawlSettings
     messages: Optional[list[Message]] = None
+    people_search: Optional[MCPConf] = None
 
     model_config = SettingsConfigDict(yaml_file="./src/backend_config.yaml")
     # TODO move this a global object/context

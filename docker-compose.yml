@@ -7,7 +7,7 @@ services:
   app:
     build: .
     container_name: bot-container-dev
-    command: streamlit run ./start.py --server.port 8501
+    #command: streamlit run ./ui/start.py --server.port 8501
     env_file:
       - .env.dev
     volumes:
@@ -25,6 +25,17 @@ services:
       retries: 3
       start_period: 30s  # wait for 30 seconds before starting health checks
 
+  uos_search_mcp:
+    image: ghcr.io/virtuos/mcp-uos:1.3.0
+    environment:
+      - UOS_MCP_SKIP_LOGIN=true
+    ports:
+      - "8000"
+    networks:
+      - default 
+    restart: always
+    
+
 
   crawl4ai:
     image: unclecode/crawl4ai:0.8.0
@@ -35,18 +46,18 @@ services:
       - "11235"
     restart: always
   
-  promtail:
-    image: grafana/promtail:3.2.1
-    container_name: promtail
-    volumes:
-      - ./promtail-config.yaml:/etc/promtail/config.yaml
-      - logs:/var/log
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    command: -config.file=/etc/promtail/config.yaml
-    restart: unless-stopped
-    networks:
-      - default
+  # promtail:
+  #   image: grafana/promtail:3.2.1
+  #   container_name: promtail
+  #   volumes:
+  #     - ./promtail-config.yaml:/etc/promtail/config.yaml
+  #     - logs:/var/log
+  #     - /var/lib/docker/containers:/var/lib/docker/containers:ro
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #   command: -config.file=/etc/promtail/config.yaml
+  #   restart: unless-stopped
+  #   networks:
+  #     - default
   
   redis:
     container_name: ask_uos_redis

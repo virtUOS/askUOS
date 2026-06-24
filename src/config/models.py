@@ -14,7 +14,7 @@ class ToolNames(str, Enum):
     SEARCH_WEB_TOOL = "custom_university_web_search"
     EXAMINATION_REGULATIONS_TOOL = "examination_regulations"
     TROUBLESHOOTING_TOOL = "troubleshooting"
-    PEOPLE_SEARCH = "uos_people_search"
+    PEOPLE_SEARCH = "people_seach"
 
 
 class Languages(str, Enum):
@@ -191,3 +191,9 @@ class Message(BaseModel):
     msg_name: MsgName
     english: str
     german: str
+
+
+class MCPConf(BaseModel):
+    transport: str
+    url: str
+    headers: dict[str, str]
