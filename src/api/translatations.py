@@ -1,7 +1,8 @@
 import gettext
 from functools import lru_cache
-from src.config.models import Languages, MsgName
+
 from src.config.core_config import settings
+from src.config.models import Languages, MsgName
 
 
 @lru_cache(maxsize=4)
@@ -45,6 +46,10 @@ def _get_error_messages(language: str) -> dict:
         + further_help,
         "generic": _(
             "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+        )
+        + further_help,
+        "generic_with_references": _(
+            "I'm sorry, but I am unable to process your request right now. I've gathered some sources below that might be helpful. Feel free to take a look, or try asking your question in a different way."
         )
         + further_help,
     }

@@ -21,9 +21,9 @@ from src.api.helpers import (
     _completion_id,
     _extract_text_content,
     _format_references,
+    _is_function_call_json,
     _make_chunk,
     _make_completion,
-    _is_function_call_json,
 )
 from src.api.models import ChatCompletionRequest, ChatRequest, Message
 from src.api.translatations import _get_error_messages
@@ -206,8 +206,8 @@ async def chat_completions(
                         )
                     ):
                         text = _extract_text_content(msg.content)
-                        ai_answer += text
                         if text:
+                            ai_answer += text
                             streamed = True
                             yield _make_chunk(
                                 completion_id, created, model, content=text
@@ -221,14 +221,38 @@ async def chat_completions(
                 )
                 new_refs = values.get("doc_references", [])[prev_refs_count:]
                 refs_text = _format_references(new_links, new_refs, language)
-                if refs_text:
+                # if both answer and sources exist
+                if refs_text and ai_answer:
                     yield _make_chunk(completion_id, created, model, content=refs_text)
 
                     content_ref = ai_answer + refs_text
                     await _save_to_chat_history(content_ref)
-                else:
-                    if streamed:
-                        await _save_to_chat_history(ai_answer)
+                    streamed = True
+                    if len(ai_answer) < 5:
+                        logger.warning(
+                            f"[AI-ANSWER-TOO-SHORT] AI answer too short: Answer: {ai_answer}"
+                        )
+                # if an answer could not be generated but some sources were found
+                elif refs_text and not ai_answer:
+                    _only_ref_content = (
+                        error_messages["generic_with_references"] + refs_text
+                    )
+                    yield _make_chunk(
+                        completion_id, created, model, content=_only_ref_content
+                    )
+                    content_ref = _only_ref_content + refs_text
+                    await _save_to_chat_history(content_ref)
+                    streamed = True
+                    logger.warning(
+                        "[ONLY_REFERENCE_ANSWER] Failed to provide an answer. Only sources were provided"
+                    )
+                # if an answer was generated without references
+                elif streamed and ai_answer:
+                    await _save_to_chat_history(ai_answer)
+                    if len(ai_answer) < 5:
+                        logger.warning(
+                            f"[AI-ANSWER-TOO-SHORT] AI answer too short: Answer: {ai_answer}"
+                        )
 
                 # Direct response (no tools used)
                 if not streamed:
@@ -238,7 +262,7 @@ async def chat_completions(
                     )
                     if not content:
                         raise ValueError(
-                            f"[API] Agent Node Failed to generate content. Query {user_message}"
+                            f"[API] Agent Node Failed to generate content or there was no content to stream. Query {user_message}"
                         )
 
                     if _is_function_call_json(content):

@@ -49,6 +49,7 @@ class LLMMixin:
                 model=model_conf.model_name,
                 temperature=1.0,
                 max_retries=2,
+                timeout=60,
                 streaming=True,
                 callbacks=[StdOutCallbackHandler()],
             )
@@ -57,6 +58,8 @@ class LLMMixin:
                 model=model_conf.model_name,
                 temperature=0,
                 streaming=True,
+                timeout=60,
+                max_retries=2,
                 callbacks=[StdOutCallbackHandler()],
             )
         elif (
@@ -79,6 +82,8 @@ class LLMMixin:
                 base_url=model_conf.base_url,
                 api_key=self_hosted_api_key,
                 temperature=0,
+                timeout=60,
+                max_retries=2,
                 streaming=True,
                 callbacks=[StdOutCallbackHandler()],
             )

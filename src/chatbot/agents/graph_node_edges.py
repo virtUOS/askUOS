@@ -24,10 +24,9 @@ from src.chatbot.tools.utils.tool_schema import (
     RetrieverInput,
     SearchInputWeb,
 )
-from src.config.models import ToolNames
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
-from src.config.models import VectorDBTypes
+from src.config.models import ToolNames, VectorDBTypes
 
 # Importat when it comes to models with restricted context window
 MESSAGE_HISTORY_LIMIT = 7
@@ -36,12 +35,16 @@ MESSAGE_HISTORY_LIMIT = 7
 # TODO Verify if this step is necessary
 def _sanitize_ai_message(message: AIMessage) -> AIMessage:
     """Strip non-serializable metadata."""
-    return AIMessage(
-        content=message.content,
-        tool_calls=message.tool_calls or [],
-        additional_kwargs=message.additional_kwargs or {},
-        id=message.id,
-    )
+    try:
+        _m = AIMessage(
+            content=message.content,
+            tool_calls=message.tool_calls or [],
+            additional_kwargs=message.additional_kwargs or {},
+            id=message.id,
+        )
+    except Exception as e:
+        logger.error(f"Model Answer Could not be mapped to AIMessage: {e}")
+    return _m
 
 
 def add_lists(existing: list, new: list) -> list:
@@ -196,7 +199,10 @@ class GraphNodesMixin:
         # Prepend system message ONLY for the LLM call — never persisted to state
         # The first message in the conversation must be a SystemMessage.
         llm_messages = system_prompt + filtered_messages
-        response = self._llm_with_tools.invoke(llm_messages)
+        try:
+            response = self._llm_with_tools.invoke(llm_messages)
+        except Exception as e:
+            logger.error(f"[LLM-OPERATION] LLM called failed: {e}")
         return {
             "messages": [_sanitize_ai_message(response)],
             "search_query": [],
@@ -408,7 +414,13 @@ class GraphNodesMixin:
             raise MustContainSystemMessageException(
                 "The first message in the conversation must be a SystemMessage."
             )
-        response: AIMessage = self._llm.invoke(list(message_deque))
+        try:
+
+            response: AIMessage = self._llm.invoke(list(message_deque))
+        except Exception as e:
+            logger.error(f"[LLM-OPERATION] LLM called failed: {e}")
+
+        logger.debug("[LANGGRAPH] Answer Generated... Sending to API...")
 
         return {
             "messages": [_sanitize_ai_message(response)],

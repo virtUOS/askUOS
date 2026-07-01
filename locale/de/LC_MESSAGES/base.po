@@ -78,6 +78,9 @@ msgstr "Es tut mir leid, aber ich konnte nicht genügend Informationen finden, u
 msgid "The information provided draws on the documents below that can be found in the [University Website]({}). We encourage you to visit the site to explore these resources for additional details and insights!"
 msgstr "Die bereitgestellten Informationen basieren auf den untenstehenden Dokumenten, die auf der [Website der Universität]({}) zu finden sind. Wir empfehlen Ihnen, die Website zu besuchen, um diese Ressourcen für weitere Details und Einblicke zu erkunden!"
 
+msgid "I'm sorry, but I am unable to process your request right now. I've gathered some sources below that might be helpful. Feel free to take a look, or try asking your question in a different way."
+msgstr "Es tut mir leid, aber ich kann Ihre Anfrage momentan nicht bearbeiten. Ich habe Ihnen unten einige Quellen zusammengestellt, die hilfreich sein könnten. Schauen Sie sich diese gerne an oder versuchen Sie, Ihre Frage anders zu formulieren."
+
 msgid "Pages"
 msgstr "Seiten"
 

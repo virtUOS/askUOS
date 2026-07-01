@@ -9,7 +9,7 @@
 - FEEDBACK
 - CRAWL
 - SEARCH: e.g., Programmable search engine related logs
-- LMM-OPERATION
+- LLM-OPERATION: e.g., LLM timeout
 - FILEIO: File input/output operations
 - SECURITY: Security-related events
 - METRICS: Performance or usage metrics
@@ -23,6 +23,9 @@
 - NOT-ANSWERED e.g., A recursion error occurs because the content needed to answer the question was not found. 
 - STREAMLIT
 - BOT-CALLED: the page from which the bot is called 
+- FUNCTION_CALL EXPOSED: Function call JSON detected in response
+- ONLY_REFERENCE_ANSWER: Only sources were provided to the user.
+- AI-ANSWER-TOO-SHORT
 
 
 ## Example Usage

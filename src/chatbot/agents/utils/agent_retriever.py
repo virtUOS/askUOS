@@ -29,6 +29,13 @@ async def retrieve_from_infinity_ragflow(
     try:
 
         retrieved = await ragflow_object.get_chunks(query, collection_name)
+        if not retrieved:
+            return RetrievalResult(
+                result_text=NOT_FOUND_MESSAGE,
+                reference=ref,
+                source_name=collection_name,
+                search_query=query,
+            )
         for retrieved_item in retrieved:
             source = retrieved_item.chunk.document_keyword
             page = retrieved_item.chunk.page

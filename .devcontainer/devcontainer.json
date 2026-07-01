@@ -30,7 +30,8 @@
 				"ms-python.python",
 				"mechatroner.rainbow-csv",
 				"RooVeterinaryInc.roo-cline",
-				"Redis.redis-for-vscode"
+				"Redis.redis-for-vscode",
+				"ZooCodeOrganization.zoo-code"
 			]
 		},
 		"postCreateCommand": "uv sync --frozen"

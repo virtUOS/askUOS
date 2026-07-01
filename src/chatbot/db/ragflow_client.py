@@ -76,11 +76,18 @@ class RAGFlowSingleton:
                     )
         return cls._instance
 
+    # TODO: Use a singleton with pooling. This is a quick fix.
+    # TODO: Consider retrying the request
     def _get_client(self) -> httpx.AsyncClient:
         """Create a fresh client every time — httpx is lightweight."""
         return httpx.AsyncClient(
             headers={"Authorization": f"Bearer {self.api_key}"},
-            timeout=30,
+            timeout=httpx.Timeout(
+                connect=15.0,  # Time to establish connection
+                read=60.0,  # Time to receive response (RAG can be slow)
+                write=15.0,  # Time to send request body
+                pool=5.0,  # Time waiting for connection from pool
+            ),
         )
 
     async def get_db_id(self, db_name: str) -> str:
@@ -97,22 +104,36 @@ class RAGFlowSingleton:
                 if datasets and "data" in datasets and datasets["data"]:
                     self.dbs[db_name] = datasets["data"][0]["id"]
                     return self.dbs[db_name]
-            raise ValueError(f"Database '{db_name}' not found: {resp.status_code}")
+            logger.error(
+                f"[RAGFlow] Error getting db id:  {db_name}, error message: {datasets['message']}"
+            )
+            raise ValueError(
+                f"Database '{db_name}' not found: {resp.status_code}, Response status: {resp.status_code}"
+            )
 
     async def retrieve_chunks(
         self, query: str, db_id: str, page_size: int = NUMBER_CHUNKS_RETRIEVE
     ):
         async with self._get_client() as client:
-            resp = await client.post(
-                f"{self.base_url}/api/v1/retrieval",
-                json={
-                    "question": query,
-                    "dataset_ids": [db_id],
-                    "document_ids": [],
-                    "page_size": page_size,
-                    "cross_languages": ["German", "English"],
-                },
-            )
+            try:
+                resp = await client.post(
+                    f"{self.base_url}/api/v1/retrieval",
+                    json={
+                        "question": query,
+                        "dataset_ids": [db_id],
+                        "document_ids": [],
+                        "page_size": page_size,
+                        "cross_languages": ["German", "English"],
+                    },
+                )
+            except httpx.ReadTimeout:
+                logger.error("[RAGFlow] (Retrieval) Time out")
+                return None
+            except Exception as e:
+                logger.error(
+                    f"[RAGFlow] (Retrieval) Post request to RAGFlow failed: {e}"
+                )
+                return None
             if resp.status_code == 200:
                 try:
                     r = resp.json()
@@ -128,6 +149,10 @@ class RAGFlowSingleton:
                 except Exception as e:
                     logger.error(f"Failed to map Ragflow answer to Model {e}")
                     raise ValueError("Failed to map Ragflow answer to Model")
+
+            logger.error(
+                f"[RAGFlow] Error while retrieving chunks. Response status: {resp.status_code}"
+            )
             raise ValueError(f"Failed: {resp.status_code} - {resp.text}")
 
     async def get_chunks(self, query: str, db_name: str) -> List[Chunk]:
@@ -136,9 +161,12 @@ class RAGFlowSingleton:
         try:
             db_id = await self.get_db_id(db_name)
             chunks = await self.retrieve_chunks(query, db_id)
-            logger.debug(
-                f"[RAGFlow]Retrieved {len(chunks)} chunks for query '{query}' in database '{db_name}'."
-            )
+            if chunks:
+                logger.debug(
+                    f"[RAGFlow]Retrieved {len(chunks)} chunks for query '{query}' in database '{db_name}'."
+                )
+            else:
+                raise ValueError("No chunks were returned by RAGFlow.")
         except Exception as e:
             logger.error(f"[RAGFlow]Error retrieving chunks: {e}")
         return chunks
