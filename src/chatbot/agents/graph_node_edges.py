@@ -28,10 +28,12 @@ from src.chatbot.agents.utils.agent_retriever import (
 )
 from src.chatbot.agents.utils.exceptions import MustContainSystemMessageException
 from src.chatbot.prompt.main import get_system_prompt, translate_prompt
-from src.chatbot.tools.mcp.main import client
+
+# from src.chatbot.tools.mcp.main import client
 from src.chatbot.tools.utils.tool_helpers import ReferenceRetriever
 from src.chatbot.tools.utils.tool_schema import (
     HisInOneInput,
+    ItServiceSearchQuery,
     PeopleSearchQuery,
     RetrieverInput,
     SearchInputWeb,
@@ -98,6 +100,7 @@ class State(TypedDict):
     visited_links: Annotated[list[str], add_lists]
     doc_references: Annotated[list, add_lists]  # list of doc reference objects
     language: Optional[str]  # Literal["Deutsch", "English"]
+    assess_documents: Optional[bool]
 
 
 class GraphNodesMixin:
@@ -183,6 +186,52 @@ class GraphNodesMixin:
         return retrieved
 
     @staticmethod
+    async def _it_services_search(query: ItServiceSearchQuery):
+        from src.chatbot.tools.mcp.main import it_services_search
+
+        _system_prompt = settings.it_services_search.prompt
+
+        _llm_subagent = model_registry.subagent_llm.llm
+        server_name = list(it_services_search.connections.keys())[0]
+        retrieved = RetrievalResult(
+            result_text="The search Failed",
+            reference=[],
+            source_name="other",
+            search_query=query,
+        )
+        # Create a session explicitly
+        try:
+            async with it_services_search.session(server_name) as session:
+                # Pass the session to load tools, resources, or prompts
+                tools = await load_mcp_tools(session)
+                agent = create_agent(
+                    system_prompt=_system_prompt,
+                    model=_llm_subagent,
+                    tools=tools,
+                )
+
+                response = await agent.ainvoke(
+                    {"messages": [{"role": "user", "content": query}]}
+                )
+                message_comtent = ""
+                messages = response.get("messages", [])
+                for m in messages:
+                    if isinstance(m, ToolMessage):
+                        message_comtent += str(m.content)
+
+                retrieved = RetrievalResult(
+                    result_text=message_comtent,
+                    reference=[],
+                    source_name="other",
+                    search_query=query,
+                )
+                logger.info("RETRIEVED FROM UOS-MCP")
+        except Exception as e:
+            logger.exception(f"[UOS-SEARCH] Search Failed: {e}")
+
+        return retrieved
+
+    @staticmethod
     def create_tools() -> List:
         """Create and configure tools for the chatbot's agent.
 
@@ -227,6 +276,16 @@ class GraphNodesMixin:
                     coroutine=GraphNodesMixin._people_search,
                     description="Search for contact information of people related to the University, e.g., Employees.",
                     args_schema=PeopleSearchQuery,
+                    handle_tool_errors=True,
+                )
+            )
+        if settings.it_services_search:
+            tools.append(
+                StructuredTool.from_function(
+                    name=ToolNames.IT_SERVICES_SEARCH,
+                    coroutine=GraphNodesMixin._it_services_search,
+                    description="Search for information about the IT Services at the Universit of Osnabrueck. For example, infomration about how to connect to wifi, use StudIP or any other IT service. ",
+                    args_schema=ItServiceSearchQuery,
                     handle_tool_errors=True,
                 )
             )
@@ -407,6 +466,11 @@ class GraphNodesMixin:
             elif tool_call["name"] == ToolNames.PEOPLE_SEARCH:
                 tool_tasks.append(GraphNodesMixin._people_search(**tool_call["args"]))
 
+            elif tool_call["name"] == ToolNames.IT_SERVICES_SEARCH:
+                tool_tasks.append(
+                    GraphNodesMixin._it_services_search(**tool_call["args"])
+                )
+
             else:
                 logger.warning(
                     f'[AGENT] Tool call not allowed. Tool name: {tool_call["name"]}'
@@ -433,6 +497,12 @@ class GraphNodesMixin:
             "teaching_degree": teaching_degree,
             "visited_links": new_links,
             "doc_references": new_doc_refs,
+            "assess_documents": (
+                False
+                if ToolNames.IT_SERVICES_SEARCH
+                in [n["name"] for n in message.tool_calls]
+                else True
+            ),
         }
 
     def rewrite(self, state):
@@ -654,6 +724,11 @@ class GraphEdgesMixin:
         if len(tool_messages) < 10:
             logger.debug("[LANGGRAPH] GRADE DOCUMENTS EDGE: No tool messages found")
             return "rewrite"
+
+        # information coming from the it_service_search is not verified
+        if not state.get("assess_documents", True):
+            logger.debug("[GRADE DOCUMENTS EDGE] Documents were not graded")
+            return "generate"
 
         tool_query = " ".join(state["search_query"])
 

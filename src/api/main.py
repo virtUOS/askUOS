@@ -32,7 +32,8 @@ from src.api.translatations import _get_error_messages
 from src.chatbot.agents.graph import CampusManagementAgent
 from src.chatbot.db.redis_pool import redis_client
 from src.chatbot.prompt.prompt_date import get_current_date
-from src.chatbot.tools.mcp.main import client
+
+# from src.chatbot.tools.mcp.main import client
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
@@ -44,8 +45,9 @@ async def lifespan(app: FastAPI):
     # TODO: Move intizialization of singletons and settings here
     await redis_client.initialize()
     # Startup: eagerly initialize the singleton so the first request isn't slow
-    tools: List[StructuredTool] = await client.get_tools(server_name="uos-intern")
-    agent = CampusManagementAgent(mcp_tools=tools)
+    # tools: List[StructuredTool] = await client.get_tools(server_name="uos-intern")
+    # agent = CampusManagementAgent(mcp_tools=tools)
+    agent = CampusManagementAgent()
     await agent._ensure_async_initialized()
     app.state.agent = agent
     yield

@@ -15,6 +15,7 @@ class ToolNames(str, Enum):
     EXAMINATION_REGULATIONS_TOOL = "examination_regulations"
     TROUBLESHOOTING_TOOL = "troubleshooting"
     PEOPLE_SEARCH = "people_seach"
+    IT_SERVICES_SEARCH = "it_services_search"
 
 
 class Languages(str, Enum):
@@ -197,3 +198,4 @@ class MCPConf(BaseModel):
     transport: str
     url: str
     headers: dict[str, str]
+    prompt: Optional[str] = None

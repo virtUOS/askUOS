@@ -7,6 +7,12 @@ class PeopleSearchQuery(BaseModel):
     )
 
 
+class ItServiceSearchQuery(BaseModel):
+    query: str = Field(
+        description="should be a search query e.g., Name of IT service e.g., StudIP, Matrix etc. and user's question"
+    )
+
+
 class SearchInputWeb(BaseModel):
     query: str = Field(description="should be a search query")
     about_application: bool = Field(

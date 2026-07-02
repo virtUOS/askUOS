@@ -14,3 +14,15 @@ if settings.people_search:
             },
         }
     )
+
+
+if settings.it_services_search:
+    it_services_search = MultiServerMCPClient(
+        {
+            "it_services_search": {
+                "transport": settings.it_services_search.transport,  # HTTP-based remote server
+                "url": settings.it_services_search.url,
+                "headers": settings.it_services_search.headers,
+            },
+        }
+    )

@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     crawl_settings: CrawlSettings
     messages: Optional[list[Message]] = None
     people_search: Optional[MCPConf] = None
+    it_services_search: Optional[MCPConf] = None
 
     model_config = SettingsConfigDict(yaml_file="./src/backend_config.yaml")
     # TODO move this a global object/context
