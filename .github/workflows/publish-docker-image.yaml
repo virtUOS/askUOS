@@ -7,6 +7,7 @@ on:
       - dev
       - ragflow
       - agent_async
+      - uos-people-search
     paths:
       - 'src/**'
       - 'pages/**'
