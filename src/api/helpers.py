@@ -1,13 +1,12 @@
 import json
+import re
 import uuid
 from urllib.parse import unquote, urlparse
-import re
-import json
+
 from src.api.translatations import get_translator
 from src.chatbot.agents.models import Reference
 from src.config.core_config import settings
-from src.config.models import VectorDBTypes
-from src.config.models import ToolNames
+from src.config.models import ToolNames, VectorDBTypes
 
 
 def _extract_text_content(content) -> str:

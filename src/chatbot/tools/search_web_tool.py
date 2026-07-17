@@ -11,7 +11,7 @@ import dotenv
 import nest_asyncio
 import redis.asyncio as redis
 
-from src.chatbot.agents.models import RetrievalResult, ScrapeResult
+from src.chatbot.agents.models import RetrievalResult, RetrievalToolType, ScrapeResult
 from src.chatbot.agents.utils.agent_helpers import model_registry
 from src.chatbot.db.redis_pool import redis_client
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
@@ -328,7 +328,10 @@ async def async_search(**kwargs) -> Tuple[str, List]:
             )
 
         retrieved = RetrievalResult(
-            result_text=final_output, reference=visited_urls, search_query=query
+            result_text=final_output,
+            reference=visited_urls,
+            search_query=query,
+            retrieval_tool=RetrievalToolType.WEB_SEARCH,
         )
         # -------------------------- cache store ---------------------------
         if len(final_output) > 20:

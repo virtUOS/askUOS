@@ -29,6 +29,21 @@ class RetrieverInput(BaseModel):
     )
 
 
+class TaskInput(BaseModel):
+    agent_name: str
+    task_description: str
+
+
+class AgentRetrievedResult(BaseModel):
+    # TODO Replace judge node?
+    information_found: bool = Field(
+        description="whether any useful information was found during retrieval."
+    )
+    chunk_information: list[str] = Field(
+        description="Unchanged COMPLETE chunks (Piece of information) needed to answer the user's query/solve the user's request"
+    )
+
+
 class HisInOneInput(BaseModel):
     """Input to the retriever for the HISinOne tool."""
 

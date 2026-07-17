@@ -28,6 +28,7 @@ from src.api.helpers import (
 from src.api.models import ChatCompletionRequest, ChatRequest, Message
 from src.api.translatations import _get_error_messages
 from src.chatbot.agents.graph import CampusManagementAgent
+from src.chatbot.agents.subagents.main import subagents_registry
 from src.chatbot.db.redis_pool import redis_client
 from src.chatbot.prompt.prompt_date import get_current_date
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
@@ -40,6 +41,11 @@ from src.config.models import Languages
 async def lifespan(app: FastAPI):
     # TODO: Move intizialization of singletons and settings here
     await redis_client.initialize()
+
+    # Initialize agents if mcps were provided !! subagents must be initialized first
+    if settings.mcp_agents:
+        # await subagents_registry.create_subagents()
+        await subagents_registry.create_mcp_clients()
     # Startup: eagerly initialize the singleton so the first request isn't slow
     agent = CampusManagementAgent()
     await agent._ensure_async_initialized()

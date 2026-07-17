@@ -1,16 +1,32 @@
 import asyncio
+import json
+import os
+import pdb
 from collections import deque
 from typing import Annotated, ClassVar, Dict, List, Literal, Optional, Union
+from urllib.parse import urlparse
 
+from langchain.agents import create_agent
+from langchain.agents.structured_output import ToolStrategy
 from langchain.messages import RemoveMessage
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_classic.tools import StructuredTool
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.prompts import PromptTemplate
+from langchain_mcp_adapters.tools import load_mcp_tools
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import RemoveMessage, add_messages
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, create_model
 from typing_extensions import TypedDict
 
-from src.chatbot.agents.models import Reference, RetrievalResult
+from src.chatbot.agents.models import Reference, RetrievalResult, RetrievalToolType
+from src.chatbot.agents.subagents.main import subagents_registry
+from src.chatbot.agents.utils.agent_helpers import model_registry
 from src.chatbot.agents.utils.agent_retriever import (
     _examination_regulations_tool,
     _retriever_his_in_one_tool,
@@ -20,9 +36,11 @@ from src.chatbot.agents.utils.exceptions import MustContainSystemMessageExceptio
 from src.chatbot.prompt.main import get_system_prompt, translate_prompt
 from src.chatbot.tools.utils.tool_helpers import ReferenceRetriever
 from src.chatbot.tools.utils.tool_schema import (
+    AgentRetrievedResult,
     HisInOneInput,
     RetrieverInput,
     SearchInputWeb,
+    TaskInput,
 )
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
@@ -101,27 +119,156 @@ class GraphNodesMixin:
         new_links = []
         new_doc_refs = []
 
-        for result in retrieval_result:
-            if isinstance(result, Exception):
-                logger.error(f"Tool call failed: {result}")
-                continue
-            if result.source_name == settings.graph.faq.collection_name:
-                unique_refs = {item.url_reference_askuos for item in result.reference}
-                new_links.extend(unique_refs)
-            elif result.source_name in (
-                settings.graph.examination_regulations.collection_name,
-                settings.graph.troubleshooting.collection_name,
-            ):
-                new_doc_refs.extend(result.reference)
+        if retrieval_result:
+            for result in retrieval_result:
+                # For general mcps, this should return a doc_reference markdown link
 
-            # web search
-            else:
-                new_links.extend(result.reference)
+                if isinstance(result, Exception):
+                    logger.error(f"Tool call failed: {result}")
+                    continue
+                if result.source_name == settings.graph.faq.collection_name:
+                    unique_refs = {
+                        item.url_reference_askuos for item in result.reference
+                    }
+                    new_links.extend(unique_refs)
+                elif result.retrieval_tool == RetrievalToolType.RAGFLOW.value:
 
-            outputs_txt += result.result_text + "\n\n"
-            search_query.append(result.search_query)
+                    new_doc_refs.extend(result.reference)
 
-        return outputs_txt, search_query, new_links, new_doc_refs
+                # web search
+                elif result.retrieval_tool == RetrievalToolType.WEB_SEARCH.value:
+                    new_links.extend(result.reference)
+
+                elif result.retrieval_tool == RetrievalToolType.UNKNOWN.value:
+                    pass
+
+                outputs_txt += result.result_text + "\n\n"
+                search_query.append(result.search_query)
+
+            return outputs_txt, search_query, new_links, new_doc_refs
+        return "No content found", search_query, new_links, new_doc_refs
+
+    @staticmethod
+    def extract_ragflow_chunks(
+        chunks: list, url_reference: str = None, query: str = None
+    ):
+        DOCUMENT_SEPARATOR = "\n\n"
+        results = []
+        ref = []
+
+        for retrieved_item in chunks:
+            source = retrieved_item["document_keyword"]
+            page = (
+                retrieved_item["positions"][0][0] if retrieved_item["positions"] else 0
+            )
+
+            ref.append(
+                Reference(
+                    source=source,
+                    page=page,
+                    doc_id=retrieved_item["document_id"],
+                    url_reference_askuos="",  # references are done in fastapi
+                )
+            )
+            results.append(f"Source: {source} \nText: {retrieved_item['content']}")
+        # https://ragflow.de/document/541adbd59f694d86277375f17b9b4306?ext=pdf&prefix=document
+        return RetrievalResult(
+            result_text=DOCUMENT_SEPARATOR.join(results),
+            reference=ref,
+            source_name=retrieved_item["dataset_name"],
+            search_query=query,
+            retrieval_tool=RetrievalToolType.RAGFLOW,
+        )
+
+    @staticmethod
+    async def task(agent_name: str, task_description: str):
+        """Launch an ephemeral subagent for a task."""
+        # SUBAGENTS: dict = subagents_registry.subagents
+        CLIENTS: dict = subagents_registry.clients
+        # get the right client name
+        client = CLIENTS[agent_name]
+        result = False
+        async with client.session(agent_name) as session:
+
+            tools: StructuredTool = await load_mcp_tools(session)
+            agent = create_agent(
+                model=model_registry.subagent_llm.llm,
+                tools=tools,
+                response_format=ToolStrategy(AgentRetrievedResult),
+                system_prompt=subagents_registry.extras[agent_name]["prompt"],
+            )
+            try:
+                # TODO The subagents should ONLY return the tool messages that are needed to answer the users questions. The tool messages should not be modified by the subagent.
+                result = await agent.ainvoke(
+                    {"messages": [{"role": "user", "content": task_description}]}
+                )
+
+                if result["structured_response"].information_found:
+                    # e.g., ragflow mcp returns json string that need to be loaded into json
+                    # TODO consider just getting the result of the last tool call??
+                    tool_messages: list[dict] = [
+                        msg.content[-1]
+                        for msg in result["messages"]
+                        if isinstance(msg, ToolMessage)
+                    ]
+
+                    # result["messages"][2].content
+                    # [msg for msg in result["messages"] if isinstance(msg, ToolMessage)]
+
+                    # pdb.set_trace()
+                    if subagents_registry.extras[agent_name]["is_ragflow"]:
+
+                        # pdb.set_trace()
+                        text = tool_messages[-2].get("text", "")
+                        if not text:
+                            logger.error(
+                                "[RAGFLOW] Chunk information could not be extracted"
+                            )
+                        chunks: dict = json.loads(text)
+
+                        tool_messages = GraphNodesMixin.extract_ragflow_chunks(
+                            chunks=chunks["chunks"], query=task_description
+                        )
+
+                        # pdb.set_trace()
+                        return tool_messages
+                    else:
+                        return RetrievalResult(
+                            result_text=[
+                                msg.get("text", "")
+                                for msg in tool_messages
+                                if isinstance(msg, dict)
+                            ],
+                            reference=None,
+                            source_name=None,
+                            search_query=task_description,
+                            retrieval_tool=RetrievalToolType.UNKNOWN,
+                        )
+
+                return RetrievalResult(
+                    result_text="No iformation retrieved that could answer/solve the user's query",
+                    reference=None,
+                    source_name=None,
+                    search_query=task_description,
+                    retrieval_tool=RetrievalToolType.UNKNOWN,
+                )
+
+            except Exception as e:
+                pdb.set_trace()
+                logger.error(f"[SUBAGENT] Subagent call failed: {e}")
+
+        # agent = SUBAGENTS[agent_name]
+        # result = await agent.ainvoke(
+        #     {"messages": [{"role": "user", "content": task_description}]}
+        # )
+        # print(
+        #     "here is the log--------------------////////////////#####################################---------------------"
+        # )
+        # print(f"-----------------{result}-------------------")
+        # print("--------------------////////////////---------------------")
+
+        # # return result["messages"][-1].content
+        # return result
 
     @staticmethod
     def create_tools() -> List:
@@ -130,12 +277,11 @@ class GraphNodesMixin:
         Returns:
             List[BaseTool]: Configured tools for the agent
         """
-        from langchain_classic.tools import StructuredTool
 
         from src.chatbot.tools.search_web_tool import async_search
 
         # TODO: Tool descriptions are always in german (Translate to english)
-        return [
+        tools = [
             StructuredTool.from_function(
                 name=ToolNames.TROUBLESHOOTING_TOOL,
                 coroutine=_retriever_his_in_one_tool,
@@ -143,13 +289,14 @@ class GraphNodesMixin:
                 args_schema=HisInOneInput,
                 handle_tool_errors=True,
             ),
-            StructuredTool.from_function(
-                name=ToolNames.EXAMINATION_REGULATIONS_TOOL,
-                coroutine=_examination_regulations_tool,
-                description=translate_prompt()["examination_regulations"],
-                args_schema=RetrieverInput,
-                handle_tool_errors=True,
-            ),
+            # StructuredTool.from_function(
+            #     name=ToolNames.EXAMINATION_REGULATIONS_TOOL,
+            #     coroutine=_examination_regulations_tool,
+            #     description=translate_prompt()["examination_regulations"],
+            #     args_schema=RetrieverInput,
+            #     handle_tool_errors=True,
+            # ),
+            # TODO: Make serarch available through mcp
             StructuredTool.from_function(
                 name=ToolNames.SEARCH_WEB_TOOL,
                 coroutine=async_search,
@@ -158,6 +305,32 @@ class GraphNodesMixin:
                 handle_tool_errors=True,
             ),
         ]
+
+        if settings.mcp_agents:
+
+            class _TaskInput(TaskInput):
+
+                _TaskInput = create_model(
+                    "TaskInput",
+                    agent_name=(
+                        Literal[tuple(subagents_registry.agent_names)],
+                        Field(..., description="Agent name"),
+                    ),
+                    task_description=(str, Field(..., description="Task description")),
+                    __base__=TaskInput,
+                )
+
+            tools.append(
+                StructuredTool.from_function(
+                    name=ToolNames.TASK,
+                    coroutine=GraphNodesMixin.task,
+                    description=subagents_registry.description,
+                    args_schema=_TaskInput,
+                    handle_tool_errors=True,
+                )
+            )
+
+        return tools
 
     @staticmethod
     def filter_messages(messages: List[BaseMessage], k: int) -> List[BaseMessage]:
@@ -324,23 +497,25 @@ class GraphNodesMixin:
                 tool_tasks.append(async_search(**tool_call["args"]))
 
             # TODO: Unify all vector db based tools. They all should return the same format (text,(source, page))
-            elif tool_call["name"] == ToolNames.EXAMINATION_REGULATIONS_TOOL:
+            # elif tool_call["name"] == ToolNames.EXAMINATION_REGULATIONS_TOOL:
 
-                tool_tasks.append(_examination_regulations_tool(**tool_call["args"]))
+            #     tool_tasks.append(_examination_regulations_tool(**tool_call["args"]))
 
             elif tool_call["name"] == ToolNames.TROUBLESHOOTING_TOOL:
 
                 tool_tasks.append(_retriever_his_in_one_tool(**tool_call["args"]))
+            elif tool_call["name"] == ToolNames.TASK:
+                tool_tasks.append(GraphNodesMixin.task(**tool_call["args"]))
 
         # Call tools
-        retrieval_results: RetrievalResult = await asyncio.gather(
+        retrieval_results: list[RetrievalResult] = await asyncio.gather(
             *tool_tasks, return_exceptions=True
         )
+
         outputs_txt, search_query, new_links, new_doc_refs = self._extract_tool_info(
             retrieval_results
         )
         # TODO Sometines the agent calls several tools and the tokens surpass the defined context window. Do summarization here.
-
         last_tool_usage = state["messages"][-1].additional_kwargs
         # Remove last ai message, otherwise it will be shown to the user (generated in agent node)
         last_msg = state["messages"][-1]

@@ -1,6 +1,8 @@
+import asyncio
 from enum import Enum
 from typing import ClassVar, List, Literal, Optional, Tuple, Type, Union
 
+from langchain_mcp_adapters.client import MultiServerMCPClient
 from pydantic import BaseModel, model_validator
 
 EmbeddingType = Literal["FastEmbed", "Ollama"]
@@ -14,6 +16,7 @@ class ToolNames(str, Enum):
     SEARCH_WEB_TOOL = "custom_university_web_search"
     EXAMINATION_REGULATIONS_TOOL = "examination_regulations"
     TROUBLESHOOTING_TOOL = "troubleshooting"
+    TASK = "task"
 
 
 class Languages(str, Enum):
@@ -190,3 +193,51 @@ class Message(BaseModel):
     msg_name: MsgName
     english: str
     german: str
+
+
+class MCPAgentConf(BaseModel):
+    transport: Literal["stdio", "sse", "http"]
+    url: str
+    headers: dict[str, str]
+    agent_name: str  # each mcp is connected to a retriaval agent. The agent name should be telling. As the name is also passed to the LLM.
+    prompt: Optional[str] = None  # it is passed to the agent
+    description: str  # Tells the routing agent (main agent) when to use this mcp/agent (it is not a tool decription)
+    is_ragflow: bool = (
+        False  # Ragflow mcp has better support e.g., references are parsed and added to final answer
+    )
+
+    async def test_connection(self) -> bool:
+        client = MultiServerMCPClient(
+            {
+                self.agent_name: {
+                    "transport": self.transport,
+                    "url": self.url,
+                    "headers": self.headers,
+                },
+            }
+        )
+
+        try:
+            # This attempts to establish the connection
+            async with client.session(self.agent_name) as session:
+                # Verify the session is active by listing tools
+                tools = await session.list_tools()
+                print(f"Connected! Found {len(tools)} tools.")
+            return True
+        except Exception as e:
+            raise RuntimeError(f"SSE Connection failed: {e}") from e
+
+    # TODO: Test mcp connection here.
+    async def get_tools(self):
+        client = MultiServerMCPClient(
+            {
+                self.agent_name: {
+                    "transport": self.transport,
+                    "url": self.url,
+                    "headers": self.headers,
+                },
+            }
+        )
+        # Connection to the mcp is tested here
+        tools = await client.get_tools()
+        return tools

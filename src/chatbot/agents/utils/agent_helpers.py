@@ -168,9 +168,11 @@ class _ModelRegistry:
         models = settings.models
         self.chat_llm = None
         self.llm_optional = None
+        self.subagent_llm = None
         for m in models:
             if m.role == RoleNames.MAIN:
                 self.chat_llm = ChatLlm(m)
+                self.subagent_llm = ChatLlm(m)
             elif m.role == RoleNames.HELPER:
                 self.llm_optional = ChatLlmOptional(m)
             else:

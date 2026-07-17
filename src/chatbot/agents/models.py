@@ -1,4 +1,5 @@
 import json
+from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -66,6 +67,12 @@ class Reference(BaseModel):
     url_reference_askuos: str | None = None
 
 
+class RetrievalToolType(Enum):
+    RAGFLOW = "Ragflow"
+    WEB_SEARCH = "web search"
+    UNKNOWN = "unknown"
+
+
 class RetrievalResult(BaseModel):
     result_text: str = Field(description="Retrieved text from a tool", default="")
     reference: list = []
@@ -74,6 +81,9 @@ class RetrievalResult(BaseModel):
         default="",
     )
     search_query: str
+    retrieval_tool: str | None = (
+        None  # name of the tool use for retrieval. Some tools returned custom references
+    )
 
     def to_json(self) -> str:
         return self.model_dump_json()

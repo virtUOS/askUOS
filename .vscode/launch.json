@@ -132,6 +132,7 @@
             "cwd": "${workspaceFolder}",
             "env":{ "PYTHONPATH": "/app"},
             "console": "integratedTerminal",
+            "subProcess": true, 
    
         },
 
