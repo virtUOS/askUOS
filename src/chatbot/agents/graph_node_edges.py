@@ -42,7 +42,7 @@ from src.chatbot.tools.utils.tool_schema import (
     SearchInputWeb,
     TaskInput,
 )
-from src.chatbot_log.chatbot_logger import logger
+from src.chatbot_log.chatbot_logger import log_event, logger
 from src.config.core_config import settings
 from src.config.models import ToolNames, VectorDBTypes
 
@@ -254,7 +254,7 @@ class GraphNodesMixin:
                 )
 
             except Exception as e:
-                pdb.set_trace()
+                # pdb.set_trace()
                 logger.error(f"[SUBAGENT] Subagent call failed: {e}")
 
         # agent = SUBAGENTS[agent_name]
@@ -349,7 +349,7 @@ class GraphNodesMixin:
 
         return messages[-k:]
 
-    def agent_node(self, state: State) -> Dict:
+    async def agent_node(self, state: State) -> Dict:
         """Decide course of action.
 
         Args:
@@ -373,7 +373,7 @@ class GraphNodesMixin:
         # The first message in the conversation must be a SystemMessage.
         llm_messages = system_prompt + filtered_messages
         try:
-            response = self._llm_with_tools.invoke(llm_messages)
+            response = await self._llm_with_tools.ainvoke(llm_messages)
         except Exception as e:
             logger.error(f"[LLM-OPERATION] LLM called failed: {e}")
         return {
@@ -381,7 +381,7 @@ class GraphNodesMixin:
             "search_query": [],
         }
 
-    def judge_node(self, state: State) -> Dict:
+    async def judge_node(self, state: State) -> Dict:
         """Evaluate if agent's decision to not use tools was appropriate.
 
         Args:
@@ -391,7 +391,6 @@ class GraphNodesMixin:
             Dict: Updated state with judgement result
         """
         language = state.get("language", "Deutsch")
-        logger.debug("[LANGGRAPH][JUDGE NODE] Evaluating agent's decision to use tools")
 
         class JudgementResult(BaseModel):
             """Result of agent's tool usage judgement."""
@@ -432,14 +431,22 @@ class GraphNodesMixin:
         )
 
         chain = prompt | llm_with_str_output
-        score = chain.invoke(
+        score = await chain.ainvoke(
             {"question": state["user_initial_query"], "context": state["messages"][-1]}
         )
 
+        # Structured decision event: queryable later on decision/reason (e.g.
+        # "how often does the agent skip tools when it shouldn't"), instead
+        # of only being visible as free text when the decision was "no".
+        log_event(
+            "JUDGE_NODE",
+            "Evaluated agent's decision to not use a tool",
+            node="judge_node",
+            decision=score.judgement_binary,
+            reason=score.reason,
+        )
+
         if score.judgement_binary.lower() == "no":
-            logger.debug(
-                f"[LANGGRAPH][JUGE NODE] The agent should have used a tool. Reason: {score.reason}"
-            )
             # TODO use reducer to mange messages
             return {
                 "messages": [
@@ -543,6 +550,16 @@ class GraphNodesMixin:
         language = state.get("language", "Deutsch")
         user_query = state["user_initial_query"]
 
+        # Structured event so rewrite frequency/patterns (e.g. "which queries
+        # keep getting rewritten") can be analyzed later, not just observed
+        # live in the moment.
+        log_event(
+            "REWRITE",
+            "Instructing agent to rephrase the question",
+            node="rewrite",
+            original_query=user_query,
+        )
+
         msg = [
             HumanMessage(
                 content=translate_prompt(language)["rewrite_msg_human"].format(
@@ -557,7 +574,7 @@ class GraphNodesMixin:
             "rewrite_query": True,
         }
 
-    def generate_helper(self, state, system_message_generate):
+    async def generate_helper(self, state, system_message_generate):
 
         messages_history = state.get("messages", [])
         if not messages_history:
@@ -591,7 +608,7 @@ class GraphNodesMixin:
             )
         try:
 
-            response: AIMessage = self._llm.invoke(list(message_deque))
+            response: AIMessage = await self._llm.ainvoke(list(message_deque))
         except Exception as e:
             logger.error(f"[LLM-OPERATION] LLM called failed: {e}")
 
@@ -601,7 +618,7 @@ class GraphNodesMixin:
             "messages": [_sanitize_ai_message(response)],
         }
 
-    def generate(self, state: State) -> Dict:
+    async def generate(self, state: State) -> Dict:
         """Generate final answer based on retrieved documents.
 
         Args:
@@ -620,9 +637,9 @@ class GraphNodesMixin:
                 tool_message,
             )
         )
-        return self.generate_helper(state, system_message_generate)
+        return await self.generate_helper(state, system_message_generate)
 
-    def generate_application(self, state: State) -> Dict:
+    async def generate_application(self, state: State) -> Dict:
 
         logger.debug(["[LANGGRAPH][GENERATE APPLICATION NODE] Generating answer"])
         # tool_message = self._clean_tool_message or state.get("tool_messages", None)
@@ -637,9 +654,9 @@ class GraphNodesMixin:
                 tool_message,
             )
         )
-        return self.generate_helper(state, system_message_generate)
+        return await self.generate_helper(state, system_message_generate)
 
-    def generate_teaching_degree_node(self, state: State) -> Dict:
+    async def generate_teaching_degree_node(self, state: State) -> Dict:
         """Generate answer for teaching degree related queries.
 
         Args:
@@ -660,7 +677,7 @@ class GraphNodesMixin:
                 tool_message,
             )
         )
-        return self.generate_helper(state, system_message_generate)
+        return await self.generate_helper(state, system_message_generate)
 
 
 class GraphEdgesMixin:
@@ -705,7 +722,7 @@ class GraphEdgesMixin:
             return "agent_node"
         return END
 
-    def grade_documents(self, state: State) -> Literal["generate", "rewrite"]:
+    async def grade_documents(self, state: State) -> Literal["generate", "rewrite"]:
         """Evaluate if retrieved documents are relevant to the query.
 
         Args:
@@ -717,7 +734,13 @@ class GraphEdgesMixin:
         language = state.get("language", "Deutsch")
         tool_messages = state.get("tool_messages", "")
         if len(tool_messages) < 10:
-            logger.debug("[LANGGRAPH] GRADE DOCUMENTS EDGE: No tool messages found")
+            log_event(
+                "GRADE_DOCUMENTS",
+                "No tool messages found; routing to rewrite",
+                node="grade_documents",
+                decision="rewrite",
+                reason="no_tool_messages",
+            )
             return "rewrite"
 
         tool_query = " ".join(state["search_query"])
@@ -741,7 +764,7 @@ class GraphEdgesMixin:
             input_variables=["context", "question"],
         )
         chain = prompt | llm_with_str_output
-        scored_result = chain.invoke(
+        scored_result = await chain.ainvoke(
             {
                 "question": f'{state["user_initial_query"]}, {tool_query}',
                 "context": tool_messages,
@@ -749,25 +772,33 @@ class GraphEdgesMixin:
         )
 
         try:
-            # score = scored_result.binary_score.lower()
             score = scored_result.binary_score.lower()
-            if score.lower() in ["yes", "ja"]:
+            if score in ["yes", "ja"]:
                 # TODO Further process the relevant paragraphs
                 # self._clean_tool_message = scored_result.relevant_paragraphs
-                logger.debug(
-                    f"[LANGGRAPH][GRADE DOCUMENTS EDGE] DECISION: DOCS RELEVANT. Reason: {scored_result.reason}"
-                )
                 if state.get("teaching_degree", False):
-                    return "generate_teaching_degree_node"
-
+                    next_node = "generate_teaching_degree_node"
                 elif state.get("about_application", False):
-                    return "generate_application"
+                    next_node = "generate_application"
                 else:
-                    return "generate"
+                    next_node = "generate"
+
+                log_event(
+                    "GRADE_DOCUMENTS",
+                    "Documents graded relevant",
+                    node="grade_documents",
+                    decision=next_node,
+                    reason=scored_result.reason,
+                )
+                return next_node
 
             else:
-                logger.debug(
-                    f"[LANGGRAPH][GRADE DOCUMENTS EDGE] DECISION: DOCS NOT RELEVANT. Reason: {scored_result.reason}"
+                log_event(
+                    "GRADE_DOCUMENTS",
+                    "Documents graded not relevant; routing to rewrite",
+                    node="grade_documents",
+                    decision="rewrite",
+                    reason=scored_result.reason,
                 )
                 return "rewrite"
         except Exception as e:

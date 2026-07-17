@@ -32,7 +32,7 @@ from src.chatbot.agents.subagents.main import subagents_registry
 from src.chatbot.db.redis_pool import redis_client
 from src.chatbot.prompt.prompt_date import get_current_date
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
-from src.chatbot_log.chatbot_logger import logger
+from src.chatbot_log.chatbot_logger import bind_request_context, log_event, logger
 from src.config.core_config import settings
 from src.config.models import Languages
 
@@ -123,6 +123,13 @@ async def chat_completions(
     # Fresh thread_id if non provided (this means that the client sends all chat history e.g., Librechat)
     thread_id = request.thread_id if request.thread_id else str(uuid.uuid4())
 
+    # Bind thread_id so every log line for this request — across main.py and
+    # the graph nodes — carries it automatically, without passing it through
+    # every call site by hand. request_id is bound below once completion_id
+    # is known.
+    bind_request_context(thread_id=thread_id)
+    turn_start = time.monotonic()
+
     config = {
         "configurable": {"thread_id": thread_id},
         "recursion_limit": settings.application.recursion_limit,
@@ -158,6 +165,7 @@ async def chat_completions(
     completion_id = _completion_id()
     created = int(time.time())
     model = request.model
+    bind_request_context(request_id=completion_id)
 
     # Snapshot previous references
     prev_state = await agent._graph.aget_state(config)
@@ -189,6 +197,9 @@ async def chat_completions(
 
         async def stream_generator():
             streamed = False
+            error = None
+            ai_answer = ""
+            refs_text = ""
 
             # Role chunk (first chunk announces the role)
             yield _make_chunk(completion_id, created, model, role="assistant")
@@ -280,12 +291,14 @@ async def chat_completions(
                         content = error_messages["generic"]
 
                     yield _make_chunk(completion_id, created, model, content=content)
+                    ai_answer = content
                     await _save_to_chat_history(content)
 
             except GraphRecursionError:
-                logger.warning(
-                    f"[NOT-ANSWERED] Recursion limit reached. Query: {user_message}"
-                )
+                # No separate warning log here — the TURN_COMPLETED event
+                # below already records error="recursion" for every such
+                # turn, so a free-text line would just duplicate that.
+                error = "recursion"
                 content = error_messages["recursion"]
                 yield _make_chunk(
                     completion_id,
@@ -296,9 +309,9 @@ async def chat_completions(
                 await _save_to_chat_history(content)
 
             except ProgrammableSearchException:
-                logger.error(
-                    f"[SEARCH-ERROR] Search tool failed. Query: {user_message}"
-                )
+                # Same as above — TURN_COMPLETED already records
+                # error="search_error"; no need to log it a second time.
+                error = "search_error"
                 content = (error_messages["search_error"],)
                 yield _make_chunk(
                     completion_id,
@@ -309,6 +322,7 @@ async def chat_completions(
                 await _save_to_chat_history(content)
 
             except Exception as e:
+                error = "unexpected_error"
                 logger.exception(f"[ERROR] Unexpected error processing query: {e}")
                 content = error_messages["generic"]
                 yield _make_chunk(
@@ -323,6 +337,20 @@ async def chat_completions(
             yield _make_chunk(completion_id, created, model, finish_reason="stop")
             yield "data: [DONE]\n\n"
 
+            # One canonical, structured event per completed turn — covers
+            # most "what happened for this user's question" analysis without
+            # having to reconstruct it from scattered debug lines.
+            log_event(
+                "TURN_COMPLETED",
+                "Chat turn completed",
+                query=user_message,
+                language=str(language),
+                has_references=refs_text or "",
+                ai_answer=ai_answer,
+                error=error,
+                latency_ms=round((time.monotonic() - turn_start) * 1000, 1),
+            )
+
         return StreamingResponse(
             stream_generator(),
             media_type="text/event-stream",
@@ -335,6 +363,7 @@ async def chat_completions(
 
     # ─── Non-streaming ─────────────────────────────────
 
+    error = None
     try:
         result = await agent._graph.ainvoke(input_data, config=config)
         content = _extract_text_content(result["messages"][-1].content)
@@ -355,19 +384,38 @@ async def chat_completions(
         new_refs = result.get("doc_references", [])[prev_refs_count:]
         refs_text = _format_references(new_links, new_refs, language)
     except GraphRecursionError:
-        logger.warning(f"[NOT-ANSWERED] Recursion limit reached. Query: {user_message}")
+        # No separate warning log here — the TURN_COMPLETED event below
+        # already records error="recursion" for every such turn, so a
+        # free-text line would just duplicate that.
+        error = "recursion"
         content = error_messages["recursion"]
         refs_text = ""
 
     except ProgrammableSearchException:
-        logger.error(f"[SEARCH-ERROR] Search tool failed. Query: {user_message}")
+        # Same as above — TURN_COMPLETED already records
+        # error="search_error"; no need to log it a second time.
+        error = "search_error"
         content = error_messages["search_error"]
         refs_text = ""
 
     except Exception as e:
+        error = "unexpected_error"
         logger.exception(f"[ERROR] Unexpected error processing query: {e}")
         content = error_messages["generic"]
         refs_text = ""
+
+    log_event(
+        "TURN_COMPLETED",
+        "Chat turn completed",
+        query=user_message,
+        language=str(language),
+        streaming=False,
+        has_references=bool(refs_text),
+        ai_answer=content or "",
+        error=error,
+        latency_ms=round((time.monotonic() - turn_start) * 1000, 1),
+    )
+
     return JSONResponse(
         _make_completion(completion_id, created, model, content, refs_text)
     )
@@ -429,6 +477,7 @@ async def chat_stream(
             --no-buffer
     """
     agent = CampusManagementAgent()
+    bind_request_context(thread_id=request.thread_id)
 
     async def text_generator():
         config = {

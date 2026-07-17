@@ -17,7 +17,7 @@ from src.chatbot.db.redis_pool import redis_client
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import decode_string
 from src.chatbot.utils.helpers import compute_search_num_tokens
-from src.chatbot_log.chatbot_logger import logger
+from src.chatbot_log.chatbot_logger import log_event, logger
 from src.config.core_config import settings
 
 # colorama.init(strip=True)
@@ -146,14 +146,14 @@ async def crawl_urls_via_api(
 async def extract_url_redis(
     url: str, cache_key: str, client: redis.Redis
 ) -> ScrapeResult | str:
-
-    # Try to get from cache
+    # No per-URL logging here on purpose — this runs once per URL per tool
+    # call (up to MAX_NUM_LINKS), and a debug line per URL adds noise without
+    # adding insight. visit_urls_extract logs one aggregated hit/miss/error
+    # count for the whole batch instead.
     cached_content = await client.get(cache_key)
     if cached_content:
-        logger.debug("[REDIS] CACHE HIT – key=%s (url=%s)", cache_key, url)
         return ScrapeResult.from_json(cached_content)
 
-    logger.debug("[REDIS] CACHE MISS – key=%s (url=%s)", cache_key, url)
     return url
 
 
@@ -232,15 +232,34 @@ async def visit_urls_extract(
         # ------------------------------------------------------------------
         # Process cache results
         # ------------------------------------------------------------------
+        cache_hits = 0
+        cache_misses = 0
+        cache_errors = 0
         for c in task_url_cache_result:
             if isinstance(c, str):
+                cache_misses += 1
                 filtered_urls.append(c)
             elif isinstance(c, ScrapeResult):
+                cache_hits += 1
                 contents.append(
                     c.formatted_markdown
                 )  # ← use cached content immediately
             elif isinstance(c, Exception):
+                cache_errors += 1
                 logger.error(f"[REDIS] Error accessing cache: {c}")
+
+        # One aggregated event per tool call instead of one debug line per
+        # URL — same information (and a hit-rate that's actually easy to
+        # trend over time), far less noise.
+        log_event(
+            "SEARCH_CACHE",
+            "Checked URL cache for search results",
+            node="visit_urls_extract",
+            urls_checked=len(urls),
+            cache_hits=cache_hits,
+            cache_misses=cache_misses,
+            cache_errors=cache_errors,
+        )
 
         if filtered_urls:
             scraping_result = await crawl_urls_via_api(filtered_urls, session=session)
@@ -291,7 +310,6 @@ async def async_search(**kwargs) -> Tuple[str, List]:
     try:
 
         client = redis_client.client
-        logger.debug("[REDIS] Async client created: %s", client)
         query = kwargs.get("query", "")
         query_url = decode_string(query)
         url = SEARCH_URL + query_url
@@ -302,10 +320,22 @@ async def async_search(**kwargs) -> Tuple[str, List]:
         cache_key = f"{__name__}:async_search:{url}"
         cached_content = await client.get(cache_key)
         if cached_content:
-            logger.debug("[REDIS] Retrieved cached searched results (urls)")
+            log_event(
+                "SEARCH_CACHE",
+                "Query-level cache hit",
+                node="async_search",
+                query=query,
+                cache="hit",
+            )
             return RetrievalResult.from_json(cached_content)
 
-        logger.debug("[SEARCH] Cache miss – proceeding with live search")
+        log_event(
+            "SEARCH_CACHE",
+            "Query-level cache miss; proceeding with live search",
+            node="async_search",
+            query=query,
+            cache="miss",
+        )
 
         visited_urls, contents = await visit_urls_extract(
             url=url,

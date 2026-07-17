@@ -29,14 +29,16 @@ def _completion_id() -> str:
 
 
 def _is_function_call_json(content: str) -> bool:
-    """Detect if content is a function call JSON that should not be shown to user.
-       Some LLMs fail to return proper structured output and return instead a tool call
-       as plain JSON string.
+    """Detect if content is a leaked function/tool call that should not be shown to user.
+       Some LLMs fail to return proper structured tool_calls output and instead leak the
+       call as plain text — either as JSON (e.g. {"tool_calls": ...}) or as pseudo Python
+       call syntax (e.g. ausführen_tool(tool_name='custom_university_web_search',
+       tool_arguments={'query': '...'})).
     Args:
         content: The message content to check
 
     Returns:
-        True if content appears to be a function call JSON, False otherwise
+        True if content appears to be a leaked function/tool call, False otherwise
     """
     if not content:
         return False
@@ -47,11 +49,19 @@ def _is_function_call_json(content: str) -> bool:
     function_call_patterns = [
         r'"function_call"\s*:',
         r'"tool_calls"\s*:',
+        # Pseudo Python-call leaks, e.g. some_tool(tool_name='...', tool_arguments={...})
+        r"\w+\(\s*tool_name\s*=",
+        r"tool_arguments\s*=",
+        # Known tool input field names used as kwargs, regardless of the (possibly
+        # hallucinated/translated) wrapper function name, e.g. foo(query='...', about_application=True)
+        r"\b(query|about_application|teaching_degree|agent_name|task_description|filter_program_name)\s*=\s*['\"{]",
     ]
 
     for tool_name in ToolNames:
-        # Match the tool name as it would appear in JSON: "tool_name"
-        function_call_patterns.append(f'"{tool_name.value}"')
+        # Match the tool name however it's quoted: "tool_name", 'tool_name', or bare tool_name(
+        escaped = re.escape(tool_name.value)
+        function_call_patterns.append(rf"""['"]{escaped}['"]""")
+        function_call_patterns.append(rf"\b{escaped}\s*\(")
 
     for pattern in function_call_patterns:
         if re.search(pattern, content_stripped):
