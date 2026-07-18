@@ -53,11 +53,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(yaml_file="./src/backend_config.yaml")
     # TODO move this a global object/context
     time_request_sent: Optional[float] = None
-    # TODO remove (these are used for testing)
-    # final_output_tokens: list = []
-    # final_search_tokens: list = []
+
     log_settings: Optional[LogSettings] = None
     parsed_messages: Optional[dict] = None
+    ragflow_reference_url: Optional[str] = None
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:

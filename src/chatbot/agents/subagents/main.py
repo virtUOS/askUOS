@@ -1,5 +1,6 @@
 import asyncio
 import threading
+from urllib.parse import urlparse
 
 from langchain.agents import create_agent
 from langchain.tools import tool
@@ -37,6 +38,11 @@ class _SubagentsRegistry:
                 ### Available agents:
                 """
             for i in settings.mcp_agents:
+                if i.is_ragflow:
+                    parsed = urlparse(i.url)
+                    settings.ragflow_reference_url = (
+                        f"{parsed.scheme}://{parsed.netloc}"
+                    )
                 self.agent_names.append(i.agent_name)
                 self.extras[i.agent_name] = {
                     "prompt": i.prompt,
@@ -53,6 +59,7 @@ class _SubagentsRegistry:
                     }
                 )
 
+    # TODO: DELETE METHOD
     async def create_subagents(self):
         if not self._initialized:
             self._initialized = True

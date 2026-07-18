@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import uuid
 from urllib.parse import unquote, urlparse
@@ -194,7 +195,8 @@ def _format_references(
     parts = ["\n\n---\n\n"]
 
     # ─── Document references ──────────────────────────
-    if new_refs:
+    # doc_references
+    if new_refs and settings.ragflow_reference_url:
         # TODO: Move to config file
         # reference_url = "https://www.uni-osnabrueck.de/studium/im-studium/zugangs-zulassungs-und-pruefungsordnungen/"
         # TODO move messages to config file
@@ -224,9 +226,9 @@ def _format_references(
                 grouped[source]["pages"].append(page)
 
         # Build ragflow link template if configured
-        ragflow_link = None
-        if settings.vector_db_settings.type == VectorDBTypes.INFINITY_RAGFLOW:
-            ragflow_link = "{}/document/{}?ext=pdf&prefix=document"
+
+        RAGFLOW_BETA_TOKEN = os.getenv("RAGFLOW_BETA_TOKEN", "")
+        ragflow_link = "{}/document/{}?ext=pdf&prefix=document&auth={}"
 
         for source, info in grouped.items():
             pages = sorted(info["pages"])
@@ -241,7 +243,9 @@ def _format_references(
 
             if doc_id and ragflow_link:
                 link = ragflow_link.format(
-                    settings.vector_db_settings.settings.base_url, doc_id
+                    settings.ragflow_reference_url,
+                    doc_id,
+                    RAGFLOW_BETA_TOKEN,
                 )
                 parts.append(f"- [{source}]({link}),{page_text}\n")
             else:

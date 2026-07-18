@@ -174,7 +174,8 @@ class GraphNodesMixin:
                 )
             )
             results.append(f"Source: {source} \nText: {retrieved_item['content']}")
-        # https://ragflow.de/document/541adbd59f694d86277375f17b9b4306?ext=pdf&prefix=document
+        # Frontend endpoint https://ragflow.de/document/541adbd59f694d86277375f17b9b4306?ext=pdf&prefix=document&auth=beta_token
+        # Backed endpoint https://ragflow.de/api/v1/documents/doc_id/preview
         return RetrievalResult(
             result_text=DOCUMENT_SEPARATOR.join(results),
             reference=ref,
