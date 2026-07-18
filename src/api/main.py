@@ -312,7 +312,7 @@ async def chat_completions(
                 # Same as above — TURN_COMPLETED already records
                 # error="search_error"; no need to log it a second time.
                 error = "search_error"
-                content = (error_messages["search_error"],)
+                content = error_messages["search_error"]
                 yield _make_chunk(
                     completion_id,
                     created,

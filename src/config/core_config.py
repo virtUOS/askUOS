@@ -1,4 +1,4 @@
-from typing import ClassVar, Literal, Optional, Tuple, Type, Any
+from typing import Any, ClassVar, Literal, Optional, Tuple, Type
 
 from pydantic import Field
 from pydantic_settings import (
@@ -16,14 +16,14 @@ from .models import (
     EmbeddingSettings,
     GraphConfig,
     LogSettings,
+    MCPAgentConf,
+    Message,
     MilvusSettings,
     Model,
     RAGFlowSettings,
     RedisService,
     SearchConfig,
     VectorDBConfig,
-    Message,
-    MCPAgentConf,
 )
 
 
@@ -56,9 +56,6 @@ class Settings(BaseSettings):
     # TODO remove (these are used for testing)
     # final_output_tokens: list = []
     # final_search_tokens: list = []
-    # TODO move to a global object/context
-    # if the llm summarization mode is active the summarization result will be not sent to the user
-    llm_summarization_mode: bool = False
     log_settings: Optional[LogSettings] = None
     parsed_messages: Optional[dict] = None
 

@@ -60,13 +60,10 @@ async def generate_summary(text: str, query: str) -> str:
     
     """
 
-    # TODO :BUG CANNOT CHANGE GLOBAL VARIABLE, MY RAISE A RACE CONDITION
-    settings.llm_summarization_mode = True
-
     messages = [("human", reduce_template_string)]
     # TODO: Allthough is very unlikely, make sure that the messages length is not greater than llm context window
     try:
-        response = model_registry.llm_optional.llm.invoke(messages)
+        response = await model_registry.llm_optional.llm.ainvoke(messages)
         summary = response.content
     except:
         logger.error(f"[WEB-SEARCH-SUMMARY] Error while summarizing web content")

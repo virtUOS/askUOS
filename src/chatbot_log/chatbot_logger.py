@@ -6,7 +6,7 @@ import os
 import socket
 import sys
 from datetime import datetime, timezone
-from logging.handlers import QueueHandler, QueueListener
+from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from queue import Queue
 
 # ---------------------------------------------------------------------------
@@ -136,36 +136,81 @@ logger.propagate = False
 logger.addFilter(_ContextFilter())
 
 # ---------------------------------------------------------------------------
-# Output: stdout only.
-# ---------------------------------------------------------------------------
-# We intentionally do NOT write to a file here. A RotatingFileHandler
-# pointed at a file on a volume shared by multiple replicas/containers is
-# unsafe: each process rotates and writes independently with no cross-process
-# coordination, which interleaves writes and corrupts rotation once more than
-# one replica is running. Docker (and any orchestrator) already captures and
-# isolates each container's stdout per-replica, which is replica-safe by
-# construction and requires no extra code here. If centralized file-based
-# collection is needed later, ship stdout out via a log driver / Promtail
-# rather than writing to a shared file from inside the app.
-_stream_handler = logging.StreamHandler(sys.stdout)
-_stream_handler.setFormatter(_JsonFormatter())
-
-# ---------------------------------------------------------------------------
-# Non-blocking logging via a background thread.
+# Non-blocking logging via background threads.
 # ---------------------------------------------------------------------------
 # logging.Handler.emit() does synchronous I/O. Called directly, every
 # logger.info/debug/error(...) call blocks the calling thread — including
 # the FastAPI event loop thread and Streamlit's per-session threads — for the
 # duration of the write. QueueHandler/QueueListener decouples "record the
 # event" (a fast, thread-safe queue.put) from "write the bytes" (done on a
-# single background thread by the listener), for both async and sync callers
-# alike — no asyncio-specific code needed, since Streamlit's threads and
-# FastAPI's coroutines are just different callers of the same thread-safe
-# logger.
-_log_queue: "Queue" = Queue(-1)  # unbounded: never blocks/drops on enqueue
-_queue_handler = QueueHandler(_log_queue)
-logger.addHandler(_queue_handler)
+# background thread by the listener), for both async and sync callers alike
+# — no asyncio-specific code needed, since Streamlit's threads and FastAPI's
+# coroutines are just different callers of the same thread-safe logger.
+#
+# Two independent sinks, each with its OWN queue and listener thread, so
+# slowness in one can never delay the other:
 
-_listener = QueueListener(_log_queue, _stream_handler, respect_handler_level=True)
-_listener.start()
-atexit.register(_listener.stop)
+# ---------------------------------------------------------------------------
+# Sink 1: stdout — replica-safe by construction (Docker captures and
+# isolates each container's stdout natively). Used for live tailing via
+# `docker compose logs` / `docker logs`.
+# ---------------------------------------------------------------------------
+_stdout_handler = logging.StreamHandler(sys.stdout)
+_stdout_handler.setFormatter(_JsonFormatter())
+
+_stdout_queue: "Queue" = Queue(-1)  # unbounded: never blocks/drops on enqueue
+logger.addHandler(QueueHandler(_stdout_queue))
+
+_stdout_listener = QueueListener(
+    _stdout_queue, _stdout_handler, respect_handler_level=True
+)
+_stdout_listener.start()
+atexit.register(_stdout_listener.stop)
+
+# ---------------------------------------------------------------------------
+# Sink 2: a per-replica file inside the `logs` volume — this is what lets
+# log history survive `docker compose down` + `up` (named volumes aren't
+# removed unless `-v`/`--volumes` is passed), while staying replica-safe:
+# each replica writes to its OWN file, named after its instance id, so
+# there's no cross-process write/rotation contention like there would be
+# with one shared file across replicas (which is exactly what we moved away
+# from previously). Same JSON formatter as stdout, so it's already in the
+# right shape for Promtail/Loki to ingest later without changes.
+#
+# This whole sink is best-effort and optional: if the volume isn't mounted,
+# permissions are wrong, or the disk is full, we log a warning (via the
+# stdout sink, already up by this point) and continue without file logging
+# rather than letting a durability nice-to-have take the whole app down.
+# Everything that can fail here (creating the directory, opening the file)
+# happens BEFORE the queue/handler are wired up, so a failure never leaves
+# an orphaned queue with nothing consuming it.
+# ---------------------------------------------------------------------------
+_LOG_DIR = os.getenv("LOG_DIR", "logs")
+_LOG_FILE = os.path.join(_LOG_DIR, f"log-{_INSTANCE_ID}.log")
+
+try:
+    # exist_ok=True avoids a race if multiple replicas start at the same
+    # time and all try to create the shared directory concurrently.
+    os.makedirs(_LOG_DIR, exist_ok=True)
+    _file_handler = RotatingFileHandler(
+        _LOG_FILE, maxBytes=1024 * 1024 * 250, backupCount=7
+    )
+    _file_handler.setFormatter(_JsonFormatter())
+
+    _file_queue: "Queue" = Queue(-1)
+    logger.addHandler(QueueHandler(_file_queue))
+
+    # A separate listener/thread from stdout's — a slow disk or volume
+    # backend can never delay stdout output (or vice versa); each sink is
+    # fully isolated.
+    _file_listener = QueueListener(
+        _file_queue, _file_handler, respect_handler_level=True
+    )
+    _file_listener.start()
+    atexit.register(_file_listener.stop)
+except OSError as e:
+    logger.warning(
+        f"[SYSTEM] Could not set up file-based logging at {_LOG_FILE!r} "
+        f"({e}); continuing with stdout-only logging.",
+        extra={"tag": "LOGGING_FILE_SINK_UNAVAILABLE"},
+    )

@@ -1,7 +1,6 @@
 import asyncio
 import os
 import sys
-import time
 import uuid
 from typing import Optional
 
@@ -12,14 +11,15 @@ import streamlit as st
 from openai import AsyncOpenAI
 from streamlit import session_state
 from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
-from ui.config.models import IframePageInfo
-from src.chatbot_log.chatbot_logger import logger
+
+from src.chatbot_log.chatbot_logger import log_event, logger
 from ui.config.app_config import app_settings
+from ui.config.models import IframePageInfo
 from ui.utils.utils import (
+    bot_called_from,
     initialize_session_sate,
     load_css,
     setup_page,
-    bot_called_from,
 )
 
 # max number of messages after which a summary is generated
@@ -273,8 +273,6 @@ class ChatApp:
             with st.spinner(session_state["_"]("Generating response...")):
                 message_placeholder = st.empty()
                 response = ""
-                start_time = time.time()
-                app_settings.time_request_sent = start_time
 
                 try:
                     stream = await client.chat.completions.create(
@@ -302,11 +300,6 @@ class ChatApp:
                         )
                         message_placeholder.markdown(response)
 
-                end_time = time.time()
-                time_taken = end_time - start_time
-                session_state["time_taken"] = time_taken
-                logger.info(f"[METRICS] Response time: {time_taken:.2f}s")
-
                 self.store_response(response, prompt)
 
     def store_response(
@@ -315,10 +308,6 @@ class ChatApp:
         prompt: str,
     ):
         """Store the assistant's response and prompt in session state."""
-
-        # Log user query and bot answer
-        logger.info(f"[USERQUERY] User's query: {prompt}")
-        logger.info(f"[BOTANSWER] Assistant's response: {output}")
 
         st.session_state.user_query = prompt
         st.session_state.response = output
@@ -394,9 +383,10 @@ class ChatApp:
 
                 feedback["user_query"] = session_state.user_query
                 feedback["response"] = st.session_state.response
-                feedback["time_taken"] = session_state.time_taken
+                feedback["thread_id"] = st.session_state["ask_uos_user_id"]
 
-                logger.info(f"[FEEDBACK] Feedback= {feedback}")
+                log_event("FEEDBACK", "User Feedback", **feedback)
+                # logger.info(f"[FEEDBACK] Feedback= {feedback}")
                 session_state.feedback_saved = True
 
     @st.dialog(app_settings.ui.page_title)

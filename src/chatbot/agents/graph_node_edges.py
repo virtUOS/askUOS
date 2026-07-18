@@ -54,15 +54,18 @@ MESSAGE_HISTORY_LIMIT = 7
 def _sanitize_ai_message(message: AIMessage) -> AIMessage:
     """Strip non-serializable metadata."""
     try:
-        _m = AIMessage(
+        return AIMessage(
             content=message.content,
             tool_calls=message.tool_calls or [],
             additional_kwargs=message.additional_kwargs or {},
             id=message.id,
         )
     except Exception as e:
-        logger.error(f"Model Answer Could not be mapped to AIMessage: {e}")
-    return _m
+
+        logger.error(
+            f"[LLM-OPERATION] Model answer could not be mapped to AIMessage: {e}"
+        )
+        raise
 
 
 def add_lists(existing: list, new: list) -> list:
@@ -375,7 +378,9 @@ class GraphNodesMixin:
         try:
             response = await self._llm_with_tools.ainvoke(llm_messages)
         except Exception as e:
+            # node failure.
             logger.error(f"[LLM-OPERATION] LLM called failed: {e}")
+            raise
         return {
             "messages": [_sanitize_ai_message(response)],
             "search_query": [],
@@ -607,10 +612,10 @@ class GraphNodesMixin:
                 "The first message in the conversation must be a SystemMessage."
             )
         try:
-
             response: AIMessage = await self._llm.ainvoke(list(message_deque))
         except Exception as e:
             logger.error(f"[LLM-OPERATION] LLM called failed: {e}")
+            raise
 
         logger.debug("[LANGGRAPH] Answer Generated... Sending to API...")
 
