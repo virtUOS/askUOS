@@ -1,0 +1,36 @@
+# askUOS UI Configuration Example
+# Copy this file to ui_config.yml and customize with your settings
+
+# Language settings
+# Options: "Deutsch", "English"
+language: "Deutsch"
+
+# Legal information (optional)
+# Replace with your actual URLs for privacy policy and imprint
+legal:
+  data_protection: "https://my_example.de/datenschutz/"
+  imprint: "https://my_example.de/impressum/"
+
+# UI settings
+ui:
+  page_title: "ask.UOS"  # Application name displayed in browser tab
+
+# Start page messages
+start_page:
+  welcome_message_english: "Welcome to our chatbot! How can I assist you today?"
+  welcome_message_german: "Willkommen bei unserem Chatbot! Wie kann ich Ihnen heute helfen?"
+
+# Chat page messages
+chat_page:
+  greeting_message_english: |
+    Hello! I am happy to assist you with questions about the University of Osnabrück,
+    including information about study programs, application processes, and admission requirements.
+    How can I help you today?
+  greeting_message_german: |
+    Hallo! Ich unterstütze Sie gerne bei Fragen zur Universität Osnabrück,
+    einschließlich Informationen zu Studiengängen, Bewerbungsprozessen und Zulassungsvoraussetzungen.
+    Wie kann ich Ihnen heute helfen?
+
+# Custom icons (optional)
+# To use custom icons, mount your files to /app/ui/static/icons/ in the container
+# Required filenames: Icon-User.svg, Icon-chatbot.svg, Icon-chatbot.png

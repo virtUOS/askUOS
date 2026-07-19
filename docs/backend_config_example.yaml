@@ -1,0 +1,111 @@
+# askUOS Backend Configuration Example
+# Copy this file to backend_config.yaml and customize with your settings
+
+models:
+  # Main model - used for agentic tasks and generation
+  - provider: "google"  # Options: "openai", "google", "self-hosted"
+    role: "main"
+    model_name: "gemini-3-flash-preview"
+
+  # Helper model - used for summary generation and tasks that don't require reasoning
+  - provider: "google"  # Options: "openai", "google", "self-hosted"
+    role: "helper"
+    model_name: "gemini-2.5-flash-lite"
+
+# Language settings
+# Options: "Deutsch", "English"
+language: "Deutsch"
+
+# Redis configuration (used for caching)
+redis:
+  host: "redis"
+  port: "6379"
+  username: ""
+  password: ""
+  ttl_graph_cache: 120  # How long messages are cached (in seconds)
+
+# Custom system messages (optional)
+# These override default messages
+messages:
+  - msg_name: "further_help"  # Options: "further_help"
+    english: |
+      If you need personal assistance regarding studying at the university, you can visit this website ... or ... .
+    german: |
+      Wenn Sie persönliche Unterstützung zum Studium an der Universität benötigen, können Sie die Website des ... oder ... .
+
+# Graph configuration
+graph:
+  summary_threshold: 70000  # Number of tokens before triggering a summary
+
+  # FAQ collection configuration
+  # Create a collection in RAGFlow with FAQs to be used by the bot. Optional
+  faq:
+    activate: True
+    collection_name: "faq"
+
+  # Examination regulations collection
+  # Create a collection in RAGFlow for examination regulations
+  examination_regulations:
+    collection_name: "examination_regulations"
+
+  # Troubleshooting collection
+  # Create a collection in RAGFlow for troubleshooting software issues (e.g., HISinOne issues)
+  troubleshooting:
+    collection_name: "troubleshooting"
+
+# Application settings
+application:
+  debug: False
+  tracing: False
+  recursion_limit: 20 # default is 12 https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
+
+
+
+############## Impotant!########
+# Configure target_elements accordingly. You can inspect e.g., the University Website to find the target elements, that is, the elements that contain the information you want to extract. 
+# Usually information is contained in the main tag. You can also just set the target_elements to `body`, but bear in mind that this will 
+# pass lots of useless information to the llm and may increase costs and lower answer quality.
+############## Impotant!#########
+crawl_settings:
+  # Crawl4AI service URL (when running in Docker compose)
+  base_url: "http://crawl4ai:11235/crawl"
+  # TTL for cached web pages (48 hours in seconds)
+  ttl_redis: 172800
+
+  # Crawler settings
+  crawl_payload:
+    browser_config:
+      type: "BrowserConfig"
+      params:
+        headless: true
+    crawler_config:
+      type: "CrawlerRunConfig"
+      params:
+        stream: false
+        cache_mode:
+          type: "CacheMode"
+          params: "enabled"
+        check_cache_freshness: true
+        cache_validation_timeout: 10.0
+        word_count_threshold: 100
+        # Target elements to extract from web pages
+        # Usually "main" tag, but can be customized
+        target_elements:
+          - "main"
+          - "div#content"
+          - "div#page"
+        scan_full_page: true
+
+# Vector database settings (RAGFlow)
+vector_db_settings:
+  type: "Infinity-RAGFlow"
+  settings:
+    # Replace with your RAGFlow instance URL
+    base_url: "https://ragflow.de"
+    chunk_size: 10
+
+
+
+# Optional. If set up, implement e.g., cron job to run /app/src/chatbot_log/log_cleanup.py  
+log_settings:
+  delete_logs_days: 90  # Number of days to keep logs before deletion

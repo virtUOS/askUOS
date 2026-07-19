@@ -1,0 +1,143 @@
+# networks:
+#   default:
+#     name: botnet
+
+services:
+  app:
+    container_name: ask_uos
+    image: ghcr.io/virtuos/askuos:1.0.1
+    # Replace with your desired image tag (e.g., latest, a specific version)
+    # image: ghcr.io/virtuos/askuos:latest
+    command: >
+      bash -c "
+        uvicorn src.api.main:app --host 0.0.0.0 --port 8000 &
+        streamlit run ./ui/start.py --server.port 8501
+      "
+    env_file:
+      - .env.prod
+    ports:
+      - "8501:8501"
+      - "8000:8000"
+    depends_on:
+      - redis
+    restart: always
+    volumes:
+      - logs:/app/logs
+      #- ./prompt_text.py:/app/src/chatbot/prompt/prompt_text.py
+      - ./config.toml:/app/ui/.streamlit/config.toml
+      - ./backend_config.yaml:/app/src/backend_config.yaml
+      - ./ui_config.yml:/app/ui/ui_config.yml
+      - fastembed:/tmp/fastembed_cache/
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  redis:
+    container_name: ask_uos_redis
+    image: redis:latest
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379"
+    restart: always
+    command: >
+      --maxmemory 6144mb
+      --maxmemory-policy allkeys-lru
+      --maxmemory-samples 5
+    # Adjust maxmemory based on your server RAM:
+    # 4GB server   -> 4096mb
+    # 8GB server   -> 6144mb
+    # 16GB+ server -> 8192mb or more
+
+  crawl4ai:
+    image: unclecode/crawl4ai:0.8.0
+    container_name: ask_uos_crawl4ai
+    ports:
+      - "11235"
+    restart: always
+
+  # Optional: Caddy reverse proxy (uncomment and configure if needed)
+  caddy:
+    image: docker.io/library/caddy:2.8.4-alpine
+    container_name: caddy
+    restart: always
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./datenschutz.html:/var/www/html/datenschutz.html
+      - ./impressum.html:/var/www/html/impressum.html
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - app
+
+  # Optional: Monitoring services (Need to be configured separately)
+  # You need to create promtail-config.yml and config_loki.yml
+  # These services are optional and have nothing to do with the chatbot's main functionality
+  node_exporter:
+    image: docker.io/prom/node-exporter:v1.8.2
+    container_name: node_exporter
+    restart: always
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.ignored-mount-points="^(/rootfs|/host|)/(sys|proc|dev|host|etc)($$|/)"'
+      - '--collector.filesystem.ignored-fs-types="^(sys|proc|auto|cgroup|devpts|ns|au|fuse\.lxc|mqueue)(fs|)$$"'
+
+  promtail:
+    image: grafana/promtail:3.2.1
+    container_name: promtail
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yaml
+      - logs:/app/logs
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yaml
+    restart: always
+    networks:
+      - default
+
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: always
+    volumes:
+      - ./config_loki.yml:/etc/loki/local-config.yaml
+    networks:
+      - default
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: always
+    ports:
+      - "8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    depends_on:
+      - redis
+
+volumes:
+  caddy_data:
+  caddy_config:
+  logs:
+  sqlite-data:
+  fastembed:
+  redis-data:

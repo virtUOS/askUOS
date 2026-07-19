@@ -1,0 +1,37 @@
+# Enable OpenMetrics for Prometheus (optional, for monitoring)
+{
+    servers {
+        metrics
+    }
+}
+
+# Redirect alternative hostnames to main domain
+# Uncomment and add your alternative hostnames here
+# example.com {
+#     redir https://your-domain.de{uri}
+# }
+
+# Replace 'your-domain.de' with your actual domain name
+# The Caddyfile will auto-provision SSL certificates via Let's Encrypt
+your-domain.de {
+    # Serve static pages for privacy policy and imprint
+    handle_path /datenschutz.html {
+        root * /var/www/html/datenschutz.html
+        file_server
+    }
+    handle_path /impressum.html {
+        root * /var/www/html/impressum.html
+        file_server
+    }
+
+    # API endpoints (FastAPI backend)
+    handle /v1/* {
+        reverse_proxy app:8000
+    }
+    handle /health {
+        reverse_proxy app:8000
+    }
+
+    # Direct requests to chatbot app (Streamlit)
+    reverse_proxy app:8501
+}
