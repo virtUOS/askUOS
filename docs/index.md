@@ -4,8 +4,7 @@ Documentation for ask.UOS, an AI chatbot for university-related queries.
 
 ## Quick Start
 
-- [Getting Started](getting-started.md)
-- [Configuration](configuration.md)
+- [Installation Guide](getting-started.md)
 - [Architecture Overview](architecture/overview.md)
 
 ## Sections
@@ -23,14 +22,13 @@ Documentation for ask.UOS, an AI chatbot for university-related queries.
 - Containerized architecture
 - Real-time chat interface
 - Caching for performance
+- AI-Agent is OpenAI compatible, that is, it can be accessed over `/v1/completions`
 
 ## Technology Stack
 
 - LangChain + LangGraph
 - Streamlit
-- Milvus
 - Redis
-- OpenAI GPT
 - Docker
 
 ---

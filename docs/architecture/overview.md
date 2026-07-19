@@ -10,11 +10,11 @@ graph TB
     Frontend --> Backend[Application Backend]
     Backend --> AI[AI Agent]
     Backend --> Cache[Redis Cache]
-    Backend --> VectorDB[Milvus Vector DB]
+    Backend --> DB[Vector DB]
     AI --> Tools[Tools Layer]
     Tools --> WebSearch[Web Search]
     Tools --> DocRetrieval[Document Retrieval]
-    DocRetrieval --> VectorDB
+    DocRetrieval --> DB
     WebSearch --> Crawler[crawl4ai]
     WebSearch --> SQLite[SQLite]
     Backend --> Logs[Logging System]
@@ -25,23 +25,18 @@ graph TB
 - Presentation: Streamlit web application
 - Application: Business logic and orchestration
 - AI Agent: Decision engine
-- Data: Redis, Milvus, SQLite
+- Data: Redis, RAGFlow, SQLite
 - Infrastructure: Docker Compose
 
 ## Service Architecture
 
 - Web: Frontend application
 - Redis: Caching and sessions
-- Milvus: Vector database
-- etcd: Metadata storage
-- MinIO: Object storage
+- RAGFlow: Document Engine
+- Backed exposes a `/v1/completions` endpoint for the AI agent.
 
-## Data Flow
 
-- Session data: Redis
-- Vector data: Milvus
-- Cache data: Redis
-- Logs: Files
+
 
 
 
