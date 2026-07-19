@@ -2,6 +2,29 @@
 
 This guide explains how to deploy the askUOS chatbot using Docker Compose. Caddy is provided as a suggested reverse proxy, but you can use any reverse proxy of your choice (e.g., Nginx).
 
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Directory Structure](#directory-structure)
+- [Environment Variables (`.env.prod`)](#environment-variables-envprod)
+  - [Required Google API Permissions](#required-google-api-permissions)
+- [Backend Configuration (`backend_config.yaml`)](#backend-configuration-backend_configyaml)
+- [UI Configuration (`ui_config.yml`)](#ui-configuration-ui_configyml)
+- [Streamlit Configuration (`config.toml`)](#streamlit-configuration-configtoml)
+- [Prompts Configuration (`prompt_text.py`)](#prompts-configuration-prompt_textpy)
+  - [Adapting Prompts for Your University](#adapting-prompts-for-your-university)
+  - [Mounting the Prompts File](#mounting-the-prompts-file)
+  - [Best Practices for Customization](#best-practices-for-customization)
+- [Docker Compose Configuration](#docker-compose-configuration)
+- [Caddy Configuration (`Caddyfile`) - Optional](#caddy-configuration-caddyfile---optional)
+  - [Using a Different Reverse Proxy](#using-a-different-reverse-proxy)
+- [Deployment Steps](#deployment-steps)
+- [Access Points](#access-points)
+- [Troubleshooting](#troubleshooting)
+- [Updating](#updating)
+
+---
+
 ## Prerequisites
 
 - Docker and Docker Compose installed on the server
@@ -319,6 +342,7 @@ To rollback, specify a previous image tag in the docker-compose.yml file:
 ```yaml
 image: ghcr.io/virtuos/askuos:previous-version
 
+```
 
 ## Next Steps
 
