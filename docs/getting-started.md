@@ -149,11 +149,11 @@ gatherUsageStats = false
 
 ## Prompts Configuration (`prompt_text.py`)
 
-The prompt configuration file ([`src/chatbot/prompt/prompt_text.py`](src/chatbot/prompt/prompt_text.py)) contains pyhton dictionaries (`prompt_text_english` and `prompt_text_deutsch`) that specifiy the system messages and instructions that define the chatbot's behavior, personality, and knowledge scope. **This file must be mounted to the container (`container_name: ask_uos`) during installation** at the path `/app/src/chatbot/prompt/prompt_text.py`.
+The prompt configuration file ([`src/chatbot/prompt/prompt_text.py`](../src/chatbot/prompt/prompt_text.py)) contains pyhton dictionaries (`prompt_text_english` and `prompt_text_deutsch`) that specifiy the system messages and instructions that define the chatbot's behavior, personality, and knowledge scope. **This file must be mounted to the container (`container_name: ask_uos`) during installation** at the path `/app/src/chatbot/prompt/prompt_text.py`.
 
 ### Adapting Prompts for Your University
 
-When deploying askUOS at a different university, you must customize the prompts to reflect your institution's specific information. Copy and modify this file: [`src/chatbot/prompt/prompt_text.py`](src/chatbot/prompt/prompt_text.py). 
+When deploying askUOS at a different university, you must customize the prompts to reflect your institution's specific information. Copy and modify this file: [`src/chatbot/prompt/prompt_text.py`](../src/chatbot/prompt/prompt_text.py).
 
 Here are the key areas to modify:
 
