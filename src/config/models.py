@@ -3,7 +3,7 @@ from enum import Enum
 from typing import ClassVar, List, Literal, Optional, Tuple, Type, Union
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 EmbeddingType = Literal["FastEmbed", "Ollama"]
 
@@ -38,6 +38,11 @@ class ProviderNames(str, Enum):
 class RoleNames(str, Enum):
     MAIN = "main"
     HELPER = "helper"
+    # Optional dedicated model for ephemeral MCP subagent tool-calling tasks
+    # (GraphNodesMixin.task()). If no "subagent" entry is configured, the
+    # main model is reused (see _ModelRegistry.create_models), so this is
+    # backward compatible with existing configs.
+    SUBAGENT = "subagent"
 
 
 class SearchConfig(BaseModel):
@@ -105,6 +110,17 @@ class ApplicationConfig(BaseModel):
     recursion_limit: int = 12
     tracing: bool = False
     opik_project_name: str = "askUOSTesting"
+    # Default recursion limit for ephemeral MCP subagents (see MCPAgentConf.
+    # recursion_limit for a per-agent override). Kept separate from the main
+    # graph's own recursion_limit above since a subagent's tool-calling loop
+    # is a different, independently-tunable budget.
+    subagent_recursion_limit: int = 10
+    # If True, a configured MCP agent that fails its startup connectivity
+    # check (see MCPAgentConf.test_connection) aborts application startup
+    # entirely. If False (default), the failure is logged loudly but the app
+    # still starts — that agent will simply fail gracefully at request time
+    # (see GraphNodesMixin.task) instead of blocking deployment.
+    fail_on_mcp_unreachable: bool = False
 
 
 class EmbeddingConnectionSettings(BaseModel):
@@ -198,15 +214,30 @@ class Message(BaseModel):
 class MCPAgentConf(BaseModel):
     transport: Literal["stdio", "sse", "http"]
     url: str
-    headers: dict[str, str]
+    headers: dict[str, str] = Field(default_factory=dict)
+    # Recursion limit for this subagent's own tool-calling loop (separate
+    # from the main graph's ApplicationConfig.recursion_limit).
+    recursion_limit: Optional[int] = 8
+    # Optional wall-clock timeout (seconds) for a single subagent invocation,
+    # so one hung MCP tool can't stall the whole user turn indefinitely.
+    timeout_seconds: Optional[float] = None
     agent_name: str  # each mcp is connected to a retriaval agent. The agent name should be telling. As the name is also passed to the LLM.
     prompt: Optional[str] = None  # it is passed to the agent
     description: str  # Tells the routing agent (main agent) when to use this mcp/agent (it is not a tool decription)
     is_ragflow: bool = (
         False  # Ragflow mcp has better support e.g., references are parsed and added to final answer
     )
+    enabled: bool = (
+        True  # Set to False to keep a config block without activating it (e.g. during rollout/testing)
+    )
 
-    async def test_connection(self) -> bool:
+    async def test_connection(self) -> int:
+        """Attempt to connect to the configured MCP server and list its tools.
+
+        Returns the number of tools found on success. Raises RuntimeError on
+        any failure (unreachable host, bad auth headers, wrong transport,
+        etc.) so callers can decide how strictly to react.
+        """
         client = MultiServerMCPClient(
             {
                 self.agent_name: {
@@ -218,16 +249,22 @@ class MCPAgentConf(BaseModel):
         )
 
         try:
-            # This attempts to establish the connection
             async with client.session(self.agent_name) as session:
-                # Verify the session is active by listing tools
                 tools = await session.list_tools()
-                print(f"Connected! Found {len(tools)} tools.")
-            return True
+            # session.list_tools() (the mcp SDK's ClientSession) returns a
+            # ListToolsResult object with a .tools list attribute, not a bare
+            # list — len(tools) directly raises TypeError, which the except
+            # below previously mislabeled as a connection failure even
+            # though the connection and the call both succeeded. Some
+            # wrappers may already hand back a plain list, so fall back to
+            # the value itself if there's no .tools attribute.
+            tool_list = getattr(tools, "tools", tools)
+            return len(tool_list)
         except Exception as e:
-            raise RuntimeError(f"SSE Connection failed: {e}") from e
+            raise RuntimeError(
+                f"MCP connection failed for '{self.agent_name}': {e}"
+            ) from e
 
-    # TODO: Test mcp connection here.
     async def get_tools(self):
         client = MultiServerMCPClient(
             {

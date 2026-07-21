@@ -1,7 +1,8 @@
 import asyncio
 import json
+import logging
 import os
-import pdb
+import traceback
 from collections import deque
 from typing import Annotated, ClassVar, Dict, List, Literal, Optional, Union
 from urllib.parse import urlparse
@@ -165,12 +166,18 @@ class GraphNodesMixin:
                 retrieved_item["positions"][0][0] if retrieved_item["positions"] else 0
             )
 
+            RAGFLOW_BETA_TOKEN = os.getenv("RAGFLOW_BETA_TOKEN", "")
+            ragflow_link = "{}/document/{}?ext=pdf&prefix=document&auth={}"
             ref.append(
                 Reference(
                     source=source,
                     page=page,
                     doc_id=retrieved_item["document_id"],
-                    url_reference_askuos="",  # references are done in fastapi
+                    url_reference_askuos=ragflow_link.format(
+                        url_reference,
+                        retrieved_item["document_id"],
+                        RAGFLOW_BETA_TOKEN,
+                    ),  # references are done in fastapi
                 )
             )
             results.append(f"Source: {source} \nText: {retrieved_item['content']}")
@@ -185,94 +192,142 @@ class GraphNodesMixin:
         )
 
     @staticmethod
+    def _no_info_result(task_description: str) -> RetrievalResult:
+
+        return RetrievalResult(
+            result_text="No information retrieved that could answer/solve the user's query",
+            search_query=task_description,
+            retrieval_tool=RetrievalToolType.UNKNOWN,
+        )
+
+    @staticmethod
+    def _describe_exception(e: BaseException, _depth: int = 0) -> str:
+        """Render an exception for logging, unwrapping ExceptionGroup/
+        TaskGroup wrappers so the *actual* underlying failure is visible.
+
+        The MCP client session (anyio/asyncio TaskGroup under the hood)
+        wraps any real failure (connection refused, DNS failure, auth
+        rejected, bad transport, etc.) in a generic
+        "unhandled errors in a TaskGroup (N sub-exception(s))" message with
+        no detail of its own — str(e) on that wrapper is useless for
+        diagnosing what actually went wrong. Both the builtin
+        ExceptionGroup (py311+) and the `exceptiongroup` backport expose the
+        real failures via `.exceptions`, so we recurse into that instead of
+        relying on isinstance checks tied to a specific Python version.
+        """
+        sub_exceptions = getattr(e, "exceptions", None)
+        if sub_exceptions:
+            if _depth > 5:  # defensive: avoid runaway recursion on odd input
+                return f"{type(e).__name__} (too deeply nested to unwrap further)"
+            return " | ".join(
+                GraphNodesMixin._describe_exception(sub, _depth + 1)
+                for sub in sub_exceptions
+            )
+
+        description = f"{type(e).__name__}: {e}"
+        cause = e.__cause__ or (e.__context__ if not e.__suppress_context__ else None)
+        if cause is not None and cause is not e:
+            description += (
+                f" (caused by {GraphNodesMixin._describe_exception(cause, _depth + 1)})"
+            )
+        return description
+
+    @staticmethod
     async def task(agent_name: str, task_description: str):
         """Launch an ephemeral subagent for a task."""
-        # SUBAGENTS: dict = subagents_registry.subagents
         CLIENTS: dict = subagents_registry.clients
-        # get the right client name
         client = CLIENTS[agent_name]
-        result = False
-        async with client.session(agent_name) as session:
+        agent_extras = subagents_registry.extras[agent_name]
 
-            tools: StructuredTool = await load_mcp_tools(session)
-            agent = create_agent(
-                model=model_registry.subagent_llm.llm,
-                tools=tools,
-                response_format=ToolStrategy(AgentRetrievedResult),
-                system_prompt=subagents_registry.extras[agent_name]["prompt"],
-            )
-            try:
+        try:
+            async with client.session(agent_name) as session:
+                tools: StructuredTool = await load_mcp_tools(session)
+                agent = create_agent(
+                    model=model_registry.subagent_llm.llm,
+                    tools=tools,
+                    response_format=ToolStrategy(AgentRetrievedResult),
+                    system_prompt=agent_extras["prompt"],
+                )
+
                 # TODO The subagents should ONLY return the tool messages that are needed to answer the users questions. The tool messages should not be modified by the subagent.
-                result = await agent.ainvoke(
-                    {"messages": [{"role": "user", "content": task_description}]}
+                invoke_coro = agent.ainvoke(
+                    {"messages": [{"role": "user", "content": task_description}]},
+                    config={"recursion_limit": agent_extras["recursion_limit"]},
                 )
+                timeout_seconds = agent_extras.get("timeout_seconds")
+                if timeout_seconds:
+                    result = await asyncio.wait_for(
+                        invoke_coro, timeout=timeout_seconds
+                    )
+                else:
+                    result = await invoke_coro
 
-                if result["structured_response"].information_found:
-                    # e.g., ragflow mcp returns json string that need to be loaded into json
-                    # TODO consider just getting the result of the last tool call??
-                    tool_messages: list[dict] = [
-                        msg.content[-1]
-                        for msg in result["messages"]
-                        if isinstance(msg, ToolMessage)
-                    ]
+                if not result["structured_response"].information_found:
+                    return GraphNodesMixin._no_info_result(task_description)
 
-                    # result["messages"][2].content
-                    # [msg for msg in result["messages"] if isinstance(msg, ToolMessage)]
+                # e.g., ragflow mcp returns json string that need to be loaded into json
+                # TODO consider just getting the result of the last tool call??
+                tool_messages: list[dict] = [
+                    msg.content[-1]
+                    for msg in result["messages"]
+                    if isinstance(msg, ToolMessage)
+                ]
 
-                    # pdb.set_trace()
-                    if subagents_registry.extras[agent_name]["is_ragflow"]:
-
-                        # pdb.set_trace()
-                        text = tool_messages[-2].get("text", "")
-                        if not text:
-                            logger.error(
-                                "[RAGFLOW] Chunk information could not be extracted"
-                            )
-                        chunks: dict = json.loads(text)
-
-                        tool_messages = GraphNodesMixin.extract_ragflow_chunks(
-                            chunks=chunks["chunks"], query=task_description
+                if agent_extras["is_ragflow"]:
+                    # NOTE: this assumes the ragflow chunk payload is the
+                    # second-to-last tool message. Fragile if the subagent
+                    # calls a different number/order of tools than expected
+                    # (see bugs_to_fix.md #23) — guarded here just enough to
+                    # avoid an IndexError, not to fully fix the assumption.
+                    # The last tool message -1 is the structured output, message -2 is the actual tool message.
+                    if len(tool_messages) < 2:
+                        logger.error(
+                            "[RAGFLOW] Expected at least 2 tool messages to extract "
+                            f"chunk information, got {len(tool_messages)}"
                         )
+                        return GraphNodesMixin._no_info_result(task_description)
 
-                        # pdb.set_trace()
-                        return tool_messages
-                    else:
-                        return RetrievalResult(
-                            result_text=[
-                                msg.get("text", "")
-                                for msg in tool_messages
-                                if isinstance(msg, dict)
-                            ],
-                            reference=None,
-                            source_name=None,
-                            search_query=task_description,
-                            retrieval_tool=RetrievalToolType.UNKNOWN,
+                    text = tool_messages[-2].get("text", "")
+                    if not text:
+                        logger.error(
+                            "[RAGFLOW] Chunk information could not be extracted"
                         )
+                        return GraphNodesMixin._no_info_result(task_description)
+                    chunks: dict = json.loads(text)
 
-                return RetrievalResult(
-                    result_text="No iformation retrieved that could answer/solve the user's query",
-                    reference=None,
-                    source_name=None,
-                    search_query=task_description,
-                    retrieval_tool=RetrievalToolType.UNKNOWN,
-                )
+                    return GraphNodesMixin.extract_ragflow_chunks(
+                        chunks=chunks["chunks"],
+                        url_reference=agent_extras["reference_url"],
+                        query=task_description,
+                    )
+                else:
+                    combined_text = "\n\n".join(
+                        msg.get("text", "")
+                        for msg in tool_messages
+                        if isinstance(msg, dict)
+                    )
+                    return RetrievalResult(
+                        result_text=combined_text,
+                        search_query=task_description,
+                        retrieval_tool=RetrievalToolType.UNKNOWN,
+                    )
 
-            except Exception as e:
-                # pdb.set_trace()
-                logger.error(f"[SUBAGENT] Subagent call failed: {e}")
-
-        # agent = SUBAGENTS[agent_name]
-        # result = await agent.ainvoke(
-        #     {"messages": [{"role": "user", "content": task_description}]}
-        # )
-        # print(
-        #     "here is the log--------------------////////////////#####################################---------------------"
-        # )
-        # print(f"-----------------{result}-------------------")
-        # print("--------------------////////////////---------------------")
-
-        # # return result["messages"][-1].content
-        # return result
+        except Exception as e:
+            log_event(
+                "SUBAGENT_ERROR",
+                "Subagent call failed; returning graceful fallback",
+                level=logging.ERROR,
+                agent_name=agent_name,
+                task_description=task_description,
+                error=GraphNodesMixin._describe_exception(e),
+                # Full traceback too (truncated defensively) — the
+                # unwrapped `error` field above names the real exception
+                # type/message, but the traceback pinpoints exactly where
+                # it happened, which matters for TaskGroup-wrapped MCP
+                # session failures that don't otherwise say much.
+                traceback=traceback.format_exc()[-4000:],
+            )
+            return GraphNodesMixin._no_info_result(task_description)
 
     @staticmethod
     def create_tools() -> List:
@@ -310,7 +365,10 @@ class GraphNodesMixin:
             ),
         ]
 
-        if settings.mcp_agents:
+        # Check the populated registry (not just settings.mcp_agents), since
+        # every configured agent could have enabled: False — Literal[()]
+        # with zero options would otherwise raise when building the schema.
+        if subagents_registry.agent_names:
 
             class _TaskInput(TaskInput):
 

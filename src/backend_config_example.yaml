@@ -1,12 +1,19 @@
 models:
-  
+
   - provider: "google" # ["openai", "google", "self-hosted"]
-    role: "main" # ["main", "helper"] # main: model used for agentic tasks and generatiom. Helper: user for summary generation and tasks that do not require reasoning (easy tasks)
+    role: "main" # ["main", "helper", "subagent"] # main: model used for agentic tasks and generatiom. Helper: used for summary generation and tasks that do not require reasoning (easy tasks). Subagent: used for ephemeral MCP subagent tool-calling tasks (see mcp_agents below)
     model_name: "gemini-3-flash-preview"
-  
+
   - provider: "google" # ["openai", "google", "self-hosted"]
-    role: "helper" # ["main", "helper"] # main: model used for agentic tasks and generatiom. Helper: user for summary generation and tasks that do not require reasoning (easy tasks)
+    role: "helper" # ["main", "helper", "subagent"]
     model_name: "gemini-2.5-flash-lite"
+
+  # Optional. If omitted, MCP subagents (mcp_agents below) reuse the "main"
+  # model above. Configure this only if you want subagent tool-calling tasks
+  # to use a different (e.g. cheaper/faster) model than the main conversation.
+  # - provider: "openai" # ["openai", "google", "self-hosted"]
+  #   role: "subagent" # ["main", "helper", "subagent"]
+  #   model_name: "gpt-4.1-mini"
 
 language: "Deutsch"  # Literal["Deutch", "English"]. 
 

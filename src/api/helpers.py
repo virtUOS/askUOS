@@ -84,6 +84,76 @@ def _is_function_call_json(content: str) -> bool:
     return False
 
 
+class StreamingLeakGuard:
+    """Guards a token-by-token answer stream against a leaked function/tool
+    call blob (see `_is_function_call_json`) reaching the client, while
+    preserving live streaming for the overwhelmingly common clean case.
+
+    Only the first `SNIFF_WINDOW_CHARS` characters of the answer are held
+    back to check for the leak signature. If they're clean, that buffered
+    text is flushed at once and every token after it is passed straight
+    through live, exactly as before — the fix only adds a small, fixed
+    delay before streaming starts, not a delay proportional to the whole
+    answer. If the sniff window looks like a leak, the rest of the answer
+    is accumulated silently (never shown), and the caller is expected to
+    substitute a fallback message once the stream ends.
+
+    Usage:
+        guard = StreamingLeakGuard()
+        async for token in some_stream:
+            piece = guard.feed(token)
+            if piece:
+                yield piece
+        tail = guard.finalize()
+        if tail:
+            yield tail
+        if guard.leaked:
+            # substitute a fallback message; guard.full_answer has the
+            # complete (suppressed) text for logging/debugging.
+            ...
+    """
+
+    SNIFF_WINDOW_CHARS = 60
+
+    def __init__(self):
+        self._buffer = ""
+        self._sniffing = True
+        self.leaked = False
+        self.full_answer = ""
+
+    def feed(self, text: str) -> str:
+        """Feed a newly-arrived token/chunk. Returns the text (possibly
+        empty) that should be yielded to the client right now."""
+        if not text:
+            return ""
+        self.full_answer += text
+
+        if not self._sniffing:
+            return "" if self.leaked else text
+
+        self._buffer += text
+        if len(self._buffer) < self.SNIFF_WINDOW_CHARS:
+            return ""
+        return self._resolve_sniff()
+
+    def finalize(self) -> str:
+        """Call once the underlying stream has ended. Returns any
+        still-buffered text that should be flushed — only relevant if the
+        whole answer was shorter than the sniff window and turned out
+        clean."""
+        if self._sniffing:
+            return self._resolve_sniff()
+        return ""
+
+    def _resolve_sniff(self) -> str:
+        self._sniffing = False
+        if _is_function_call_json(self._buffer):
+            self.leaked = True
+            return ""
+        flushed, self._buffer = self._buffer, ""
+        return flushed
+
+
 def _make_chunk(
     completion_id: str,
     created: int,
@@ -195,44 +265,42 @@ def _format_references(
     parts = ["\n\n---\n\n"]
 
     # ─── Document references ──────────────────────────
-    # doc_references
-    if new_refs and settings.ragflow_reference_url:
-        # TODO: Move to config file
-        # reference_url = "https://www.uni-osnabrueck.de/studium/im-studium/zugangs-zulassungs-und-pruefungsordnungen/"
-        # TODO move messages to config file
-        # parts.append(
-        #     _(
-        #         "The information provided draws on the documents below that can be found in the [University Website]({}). We encourage you to visit the site to explore these resources for additional details and insights!"
-        #     ).format(reference_url)
-        # )
-        # parts.append("\n\n")
-
-        # Group by source: {"ZPO-GHR.pdf": {"pages": [32, 45], "doc_id": "..."}}
+    # doc_references — each Reference already carries its own fully-formed
+    # link in `url_reference_askuos` (built per-agent in
+    # GraphNodesMixin.extract_ragflow_chunks, using that agent's own MCP
+    # reference URL)
+    if new_refs:
+        # Group by source: {"ZPO-GHR.pdf": {"pages": [32, 45], "doc_id": "...", "ragflow_link": "..."}}
         parts.append(f"**{_('Documents')}:**\n")
         grouped = {}
         for ref in new_refs:
             if isinstance(ref, dict):
-                source = ref.get("source", "Unknown")
+                source = ref.get(
+                    "source", "Unknown"
+                )  # document_keyword or doc name in ragflow
                 page = ref.get("page")
                 doc_id = ref.get("doc_id")
+                ragflow_link = ref.get("url_reference_askuos")
             else:
-                source = ref.source
+                source = ref.source  # document_keyword
                 page = ref.page
                 doc_id = ref.doc_id
+                ragflow_link = ref.url_reference_askuos
 
             if source not in grouped:
-                grouped[source] = {"pages": [], "doc_id": doc_id}
+
+                grouped[source] = {
+                    "pages": [],
+                    "doc_id": doc_id,
+                    "ragflow_link": ragflow_link,
+                }
             if page is not None and page not in grouped[source]["pages"]:
                 grouped[source]["pages"].append(page)
-
-        # Build ragflow link template if configured
-
-        RAGFLOW_BETA_TOKEN = os.getenv("RAGFLOW_BETA_TOKEN", "")
-        ragflow_link = "{}/document/{}?ext=pdf&prefix=document&auth={}"
 
         for source, info in grouped.items():
             pages = sorted(info["pages"])
             doc_id = info["doc_id"]
+            ragflow_link = info["ragflow_link"]
 
             if pages:
                 page_label = _("Pages") if len(pages) > 1 else _("Page")
@@ -242,12 +310,9 @@ def _format_references(
                 page_text = ""
 
             if doc_id and ragflow_link:
-                link = ragflow_link.format(
-                    settings.ragflow_reference_url,
-                    doc_id,
-                    RAGFLOW_BETA_TOKEN,
-                )
-                parts.append(f"- [{source}]({link}),{page_text}\n")
+                # The link is already complete (built in extract_ragflow_chunks) —
+                # no further templating/formatting needed here.
+                parts.append(f"- [{source}]({ragflow_link}),{page_text}\n")
             else:
                 parts.append(f"- **{source}**,{page_text}\n")
 

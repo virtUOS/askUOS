@@ -69,12 +69,14 @@ class LLMMixin:
                 self_hosted_api_key = os.getenv("API_KEY_SELF_HOSTED_MAIN", "")
             elif model_conf.role == RoleNames.HELPER:
                 self_hosted_api_key = os.getenv("API_KEY_SELF_HOSTED_HELPER", "")
+            elif model_conf.role == RoleNames.SUBAGENT:
+                self_hosted_api_key = os.getenv("API_KEY_SELF_HOSTED_SUBAGENT", "")
             else:
                 raise ValueError("Model Role not supported")
 
             if not self_hosted_api_key:
                 raise ValueError(
-                    "You are trying to connect to a self-hosted model. Provide the respective api key in the environment file: API_KEY_SELF_HOSTED_MAIN, API_KEY_SELF_HOSTED_HELPER"
+                    "You are trying to connect to a self-hosted model. Provide the respective api key in the environment file: API_KEY_SELF_HOSTED_MAIN, API_KEY_SELF_HOSTED_HELPER, API_KEY_SELF_HOSTED_SUBAGENT"
                 )
 
             self.llm = ChatOpenAI(
@@ -116,6 +118,26 @@ class ChatLlmOptional(LLMMixin):
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super(ChatLlmOptional, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self, model_conf: Model):
+        if not self.__dict__:
+            self._build_llm_obj(model_conf)
+
+
+class ChatLlmSubagent(LLMMixin):
+    """
+    Model used for ephemeral MCP subagent tool-calling tasks
+    (GraphNodesMixin.task()). Kept as its own singleton — distinct from
+    ChatLlm — so that configuring a `role: subagent` model actually builds a
+    separate client instance rather than reusing the main model's.
+    """
+
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(ChatLlmSubagent, cls).__new__(cls)
         return cls._instance
 
     def __init__(self, model_conf: Model):
@@ -172,15 +194,20 @@ class _ModelRegistry:
         for m in models:
             if m.role == RoleNames.MAIN:
                 self.chat_llm = ChatLlm(m)
-                self.subagent_llm = ChatLlm(m)
             elif m.role == RoleNames.HELPER:
                 self.llm_optional = ChatLlmOptional(m)
+            elif m.role == RoleNames.SUBAGENT:
+                self.subagent_llm = ChatLlmSubagent(m)
             else:
                 raise ValueError("Model Role not supported")
         if not self.chat_llm:
             raise ValueError("An LLM must be provided")
         if not self.llm_optional:
             self.llm_optional = self.chat_llm
+        if not self.subagent_llm:
+            # No dedicated `role: subagent` model configured — fall back to
+            # the main model, same as before this was configurable.
+            self.subagent_llm = self.chat_llm
 
 
 model_registry = _ModelRegistry()

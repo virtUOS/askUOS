@@ -18,6 +18,7 @@ from langgraph.types import Overwrite
 
 from src.api.dependencies import get_agent
 from src.api.helpers import (
+    StreamingLeakGuard,
     _completion_id,
     _extract_text_content,
     _format_references,
@@ -101,7 +102,7 @@ async def chat_completions(
         -H "Authorization: Bearer sk-askUOS-abc123" \
         -d '{
         "model": "askUOS-agent",
-        "messages": [{"role": "user", "content": "Can I study math? (answer shortly)"}],
+        "messages": [{"role": "user", "content": "According to the examination regulations, can I write a master thesis in english (Biology)? (answer shortly)"}],
         "stream": true,
         "thread_id": "test-123",
         "language": "Deutsch"
@@ -206,6 +207,13 @@ async def chat_completions(
 
             try:
                 ai_answer = ""
+                # Guards against the model leaking a function-call JSON/
+                # pseudo-call blob as its "final answer" text (seen from the
+                # generate-family nodes, which have no tools bound at all for
+                # this call). Only the first ~60 chars are held back to
+                # check; if clean — the overwhelming common case — every
+                # token after that streams live exactly as before.
+                leak_guard = StreamingLeakGuard()
                 async for msg, metadata in agent._graph.astream(
                     input_data,
                     config=config,
@@ -224,11 +232,31 @@ async def chat_completions(
                     ):
                         text = _extract_text_content(msg.content)
                         if text:
-                            ai_answer += text
-                            streamed = True
-                            yield _make_chunk(
-                                completion_id, created, model, content=text
-                            )
+                            to_yield = leak_guard.feed(text)
+                            if to_yield:
+                                streamed = True
+                                yield _make_chunk(
+                                    completion_id, created, model, content=to_yield
+                                )
+
+                tail = leak_guard.finalize()
+                if tail:
+                    streamed = True
+                    yield _make_chunk(completion_id, created, model, content=tail)
+
+                ai_answer = leak_guard.full_answer
+                if leak_guard.leaked:
+                    log_event(
+                        "FUNCTION_CALL_LEAK",
+                        "Detected and suppressed a leaked function-call blob in "
+                        "streamed generate-node output",
+                        endpoint="chat_completions",
+                        query=user_message,
+                        content_preview=ai_answer[:120],
+                    )
+                    ai_answer = error_messages["generic"]
+                    streamed = True
+                    yield _make_chunk(completion_id, created, model, content=ai_answer)
 
                 # Stream references
                 final_state = await agent._graph.aget_state(config)
@@ -284,9 +312,13 @@ async def chat_completions(
 
                     if _is_function_call_json(content):
                         # Check if content is a function call JSON that should not be shown
-                        logger.warning(
-                            f"[FUNCTION_CALL EXPOSED] Function call JSON detected in response. "
-                            f"Query: {user_message}. Content preview: {content[:100]}"
+                        log_event(
+                            "FUNCTION_CALL_LEAK",
+                            "Detected and suppressed a leaked function-call blob in "
+                            "chat_completions direct (no-tool) response",
+                            endpoint="chat_completions_direct",
+                            query=user_message,
+                            content_preview=content[:120],
                         )
                         content = error_messages["generic"]
 
@@ -374,9 +406,13 @@ async def chat_completions(
             )
         # Check if content is a function call JSON that should not be shown
         if _is_function_call_json(content):
-            logger.warning(
-                f"[FUNCTION_CALL EXPOSED] Function call JSON detected in non-streaming response. "
-                f"Query: {user_message}. Content preview: {content[:100]}"
+            log_event(
+                "FUNCTION_CALL_LEAK",
+                "Detected and suppressed a leaked function-call blob in "
+                "non-streaming chat_completions response",
+                endpoint="chat_completions_non_streaming",
+                query=user_message,
+                content_preview=content[:120],
             )
             content = error_messages["generic"]
 
@@ -459,117 +495,6 @@ async def delete_messages(
     )
 
     return {"deleted": True}
-
-
-# TODO: This endpoint need to be updated or deleted. Do not use in production
-@app.post("/chat/stream")
-async def chat_stream(
-    request: ChatRequest,
-    api_key: str = Security(verify_api_key),
-):
-    """
-    Stream endpoint — just raw text
-    Example:
-    curl -X POST http://localhost:8000/chat/stream \
-            -H "Content-Type: application/json"  \
-            -H "Authorization: Bearer sk-askUOS-abc123" \
-            -d '{"message": "Welche Fristen gelten für ein Auslandssemester?", "thread_id": "test-123", "language": "English"}' \
-            --no-buffer
-    """
-    agent = CampusManagementAgent()
-    bind_request_context(thread_id=request.thread_id)
-
-    async def text_generator():
-        config = {
-            "configurable": {"thread_id": request.thread_id},
-            "recursion_limit": settings.application.recursion_limit,
-        }
-
-        input_data = {
-            "messages": [HumanMessage(content=request.message)],
-            "user_initial_query": request.message,
-            "current_date": get_current_date(settings.language.lower()),
-            "visited_links": [],
-            "doc_references": [],
-            "about_application": False,
-            "teaching_degree": False,
-            "rewrite_query": False,
-            "language": request.language,
-        }
-
-        error_messages = _get_error_messages(request.language)
-        # Snapshot previous references so we only return NEW ones
-        prev_state = await agent._graph.aget_state(config)
-        if prev_state.values:
-            prev_links_count = len(prev_state.values.get("visited_links", []))
-            prev_refs_count = len(prev_state.values.get("doc_references", []))
-        else:
-            prev_links_count = 0
-            prev_refs_count = 0
-
-        streamed = False
-
-        async for msg, metadata in agent._graph.astream(
-            input_data,
-            config,
-            stream_mode="messages",
-        ):
-            if (
-                msg.content
-                and not isinstance(msg, HumanMessage)
-                and not isinstance(msg, ToolMessage)
-                and (
-                    metadata["langgraph_node"] == "generate"
-                    or metadata["langgraph_node"] == "generate_application"
-                    or metadata["langgraph_node"] == "generate_teaching_degree_node"
-                )
-            ):
-
-                text = msg.text
-
-                if text:
-                    streamed = True
-                    yield text
-        # ── Graph finished ──
-
-        # Direct response — agent answered without tools
-        if not streamed:
-            state = await agent._graph.aget_state(config)
-            content = _extract_text_content(state.values["messages"][-1].content)
-            if not content:
-                raise ValueError("[API] Agent Node Failed to generate content")
-
-            # Check if content is a function call JSON that should not be shown
-            if _is_function_call_json(content):
-                logger.warning(
-                    f"[FUNCTION_CALL EXPOSED] Function call JSON detected in /chat/stream response. "
-                    f"Query: {request.message}. Content preview: {content[:100]}"
-                )
-                content = error_messages["generic"]
-
-            yield content
-
-        # Append references at the end of the stream
-        final_state = await agent._graph.aget_state(config)
-        values = final_state.values
-        new_links = list(set(values.get("visited_links", [])[prev_links_count:]))
-        new_refs = values.get("doc_references", [])[prev_refs_count:]
-
-        if new_links or new_refs:
-            yield "\n\n---\n\n"
-            if new_links:
-                yield "**Quelle:**\n"
-                for link in new_links:
-                    yield f"- {link}\n"
-            if new_refs:
-                yield "**Documents:**\n"
-                for ref in new_refs:
-                    if isinstance(ref, dict):
-                        yield f"- {ref.get('source', '')}, p. {ref.get('page', '')}\n"
-                    else:
-                        yield f"- {ref}\n"
-
-    return StreamingResponse(text_generator(), media_type="text/plain")
 
 
 # Health check

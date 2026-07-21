@@ -214,3 +214,37 @@ except OSError as e:
         f"({e}); continuing with stdout-only logging.",
         extra={"tag": "LOGGING_FILE_SINK_UNAVAILABLE"},
     )
+
+# ---------------------------------------------------------------------------
+# Optional: mirror the MCP client stack's own internal debug logs (mcp,
+# httpx, httpx_sse, anyio, langchain_mcp_adapters) into the same stdout sink.
+#
+# These are separate logger instances from "chatbot_logger" above (different
+# names, e.g. "mcp.client.sse") and Python's root logger has no handlers
+# configured anywhere in this app, so today their logger.debug(...) calls —
+# "Connecting to SSE endpoint", "SSE connection established", "Received
+# endpoint URL", "Sending client message", "Received server message", etc.,
+# emitted directly by mcp/client/sse.py — go nowhere. That's a real blind
+# spot when an MCP subagent session behaves oddly (e.g. a tool call that
+# stalls or a session that appears to close unexpectedly): there's currently
+# no way to see the actual sequence of SSE/HTTP events on our side to tell
+# whether a response never arrived, arrived but wasn't read in time, or the
+# connection was torn down before a response could arrive at all.
+#
+# Off by default — this is extremely verbose (every SSE event, every HTTP
+# request) and only useful while actively debugging a specific MCP session
+# issue. Enable with MCP_DEBUG_LOGGING=true, reproduce, then read the
+# stdout/file logs for a blow-by-blow of that session.
+if os.getenv("MCP_DEBUG_LOGGING", "false").strip().lower() in ("1", "true", "yes"):
+    for _lib_name in ("mcp", "httpx", "httpx_sse", "anyio", "langchain_mcp_adapters"):
+        _lib_logger = logging.getLogger(_lib_name)
+        _lib_logger.setLevel(logging.DEBUG)
+        _lib_logger.addHandler(QueueHandler(_stdout_queue))
+        # Don't also bubble to root — root has no handlers anyway, but this
+        # keeps behavior explicit/consistent with the app's own logger above.
+        _lib_logger.propagate = False
+    logger.info(
+        "[MCP_DEBUG_LOGGING] Verbose debug logging enabled for mcp/httpx/"
+        "httpx_sse/anyio/langchain_mcp_adapters (MCP_DEBUG_LOGGING=true)",
+        extra={"tag": "MCP_DEBUG_LOGGING_ENABLED"},
+    )

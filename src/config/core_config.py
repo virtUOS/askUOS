@@ -56,7 +56,6 @@ class Settings(BaseSettings):
 
     log_settings: Optional[LogSettings] = None
     parsed_messages: Optional[dict] = None
-    ragflow_reference_url: Optional[str] = None
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
