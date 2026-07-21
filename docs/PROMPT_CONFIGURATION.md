@@ -10,7 +10,7 @@ These are implementation details of the graph's own control flow: a description 
 
 ## 2. General application prompts — configure these for every installation
 
-**Where:** `prompts_example/` (copy to `prompts/` to activate your changes — see `docs/INSTALLATION_GUIDE.md`)
+**Where:** `prompts_example/` (copy to `prompts/` to activate your changes)
 
 This is the bot's actual personality and guardrails: the system prompts that define what it is, what it's allowed to talk about, how it should ask clarifying questions, and how it should use retrieved context — plus a couple of short, always-active tool descriptions. These apply to every installation regardless of which optional tools or MCP integrations are turned on, so **every university adopting askUOS should review and adjust these**, not just leave the shipped University of Osnabrück wording in place.
 
@@ -27,7 +27,7 @@ Rules when editing:
 
 Some prompts belong to one specific optional feature — a standalone tool or an MCP-connected subagent — and are meaningless outside that feature's own configuration block. These live next to the feature they describe in `backend_config.yaml`, not in `prompts/`, and you only need to fill them in if you actually enable that feature:
 
-- **Standalone tools**, e.g. the HISinOne troubleshooting tool:
+- **Standalone tools**, e.g. the troubleshooting tool:
   ```yaml
   graph:
     troubleshooting:
@@ -47,6 +47,14 @@ Some prompts belong to one specific optional feature — a standalone tool or an
   ```
 
 If a tool/agent is disabled (`activate: False` / `enabled: False`), its prompt fields are ignored and don't need to be provided at all.
+
+
+## Best Practices for Customization
+
+1. **Keep the structure**: Maintain the overall structure and format of the prompts
+2. **Preserve tool usage instructions**: The chatbot relies on tools for accurate information
+3. **Update both languages**: Ensure both English and German sections are updated
+4. **Test thoroughly**: After customization, test the chatbot with common queries
 
 ## Quick reference
 

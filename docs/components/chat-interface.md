@@ -10,11 +10,14 @@ graph TB
     Streamlit --> Session[Session State]
     Streamlit --> Cookies[Cookie Controller]
     Streamlit --> Redis[Redis]
-    Streamlit --> Agent[AI Agent]
+    Streamlit --> API[FastAPI Backend]
+    API --> Agent[AI Agent]
     Session --> Messages[Message History]
     Session --> Feedback[User Feedback]
     Redis --> ChatHistory[Chat Persistence]
 ```
+
+The Streamlit app is a thin HTTP client: it calls the FastAPI backend's `/v1/chat/completions` rather than invoking the agent in-process. The AI Agent box is the LangGraph engine.
 
 ## Core Components
 
@@ -28,8 +31,8 @@ graph TB
 
 ## Session Management
 
-- Session state stores user ID, messages, agent instance, and UI state
-- Summarization maintains context in long conversations
+- Session state stores user ID, messages, and UI state
+- Conversation history/context is maintained server-side by the FastAPI backend and the LangGraph checkpointer (Redis-backed), keyed by `thread_id`
 
 ## Response Generation
 

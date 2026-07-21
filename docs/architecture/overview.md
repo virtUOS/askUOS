@@ -7,41 +7,44 @@ ask.UOS uses a multi-layered architecture with modular components, asynchronous 
 ```mermaid
 graph TB
     User[User] --> Frontend[Streamlit Frontend]
-    Frontend --> Backend[Application Backend]
-    Backend --> AI[AI Agent]
-    Backend --> Cache[Redis Cache]
-    Backend --> VectorDB[Milvus Vector DB]
+    Frontend --> API[FastAPI Backend]
+    API --> AI[AI Agent]
+    API --> Cache[Redis Cache]
     AI --> Tools[Tools Layer]
     Tools --> WebSearch[Web Search]
     Tools --> DocRetrieval[Document Retrieval]
-    DocRetrieval --> VectorDB
+    Tools --> MCP[MCP Subagents]
+    DocRetrieval --> VectorDB[Vector Database]
+    MCP --> External[External MCP Servers]
     WebSearch --> Crawler[crawl4ai]
     WebSearch --> SQLite[SQLite]
-    Backend --> Logs[Logging System]
+    API --> Logs[Logging System]
 ```
+
+The Streamlit frontend never talks to the AI agent directly — every request goes through the FastAPI backend's `/v1/chat/completions` streaming endpoint (which therefore OpenAI Compatible). The AI Agent box is the LangGraph engine; the Vector Database box is RAGFlow/Infinity (current) or Milvus (also supported).
 
 ## System Layers
 
-- Presentation: Streamlit web application
-- Application: Business logic and orchestration
-- AI Agent: Decision engine
-- Data: Redis, Milvus, SQLite
+- Presentation: Streamlit web application (thin HTTP client)
+- Application: FastAPI backend — business logic and orchestration
+- AI Agent: LangGraph decision engine, including MCP subagent dispatch
+- Data: Redis, RAGFlow/Infinity (current) or Milvus (also supported), SQLite
 - Infrastructure: Docker Compose
 
 ## Service Architecture
 
-- Web: Frontend application
-- Redis: Caching and sessions
-- Milvus: Vector database
-- etcd: Metadata storage
-- MinIO: Object storage
+- `app`: Streamlit UI + FastAPI backend (same container)
+- `redis`: Caching and sessions
+- `crawl4ai`: Web scraping service
+- RAGFlow/Infinity (or Milvus, if configured): run separately, not part of this app's compose file
+- MCP servers: per-university, externally hosted integrations declared in `backend_config.yaml`
 
 ## Data Flow
 
 - Session data: Redis
-- Vector data: Milvus
+- Vector/document data: RAGFlow/Infinity or Milvus
 - Cache data: Redis
-- Logs: Files
+- Logs: Structured JSON, per-replica files + stdout
 
 
 

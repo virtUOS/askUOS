@@ -6,32 +6,27 @@ ask.UOS uses Docker Compose for orchestrating services in development and produc
 
 ```mermaid
 graph TB
-    subgraph "Docker Compose"
-        Web[web: Streamlit App]
-        Redis[redis: Cache & Sessions]
-        Milvus[standalone: Vector Database]
-        Etcd[etcd: Metadata Store]
-        Minio[minio: Object Storage]
+    subgraph DockerCompose[Docker Compose]
+        App[App]
+        Crawl[Crawl4ai]
+        Redis[Redis]
     end
-    Web --> Redis
-    Web --> Milvus
-    Milvus --> Etcd
-    Milvus --> Minio
+    App --> Crawl
+    App --> Redis
 ```
+
+`App` is the `app` service (Streamlit UI + FastAPI backend, same container). `Crawl4ai` is the `crawl4ai` service (web scraping). `Redis` is the `redis` service (cache and sessions). RAGFlow/Infinity (or Milvus, if configured) run separately — they are not services in this app's `docker-compose.yml`.
 
 ## Service Definitions
 
-- Web: Streamlit application
-- Redis: Caching and sessions
-- Milvus: Vector database
-- etcd: Metadata storage
-- MinIO: Object storage
+- `app`: Streamlit UI + FastAPI backend, same container
+- `crawl4ai`: Web scraping service used by the web search tool
+- `redis`: Caching and sessions
 
 ## Setup Steps
 
+- `cp src/backend_config_example.yaml src/backend_config.yaml` and `cp prompts_example prompts -r`
 - Build and start services with Docker Compose
-- Configure environment variables for API keys and endpoints
-
 
 ---
 

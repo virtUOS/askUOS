@@ -26,10 +26,12 @@ The ask.UOS chatbot uses a **state-based graph architecture** implemented with L
 **Purpose**: Execute external tools and gather information
 
 **Available Tools**:
-- **Document Retrieval**: Vector search in Milvus database
+- **Document Retrieval**: Vector search via RAGFlow/Infinity (current) or Milvus (also supported)
 - **Web Search**: Real-time web scraping and content extraction
+- **Troubleshooting tool**: conditionally enabled via `graph.troubleshooting.activate` in `backend_config.yaml`
+- **`task`**: dispatches to an MCP subagent (see `mcp_agents` in `backend_config.yaml`) — the mechanism for per-university, pluggable integrations (e.g. an exam-regulations retriever)
 
-**Process**: Parse tool calls → Execute with error handling → Format results → Update state
+**Process**: Parse tool calls → Execute with error handling (concurrently, via `asyncio.gather`) → Format results → Update state
 
 ### 3. Judge Node
 
@@ -81,12 +83,12 @@ graph LR
 
 ### Document Retrieval Tool
 
-**Function**: University document search in vector database
+**Function**: University document search via RAGFlow/Infinity (current) or Milvus (also supported)
 
 **Features**:
-- L2 distance similarity search
-- Program-specific filtering
-- Source attribution with page references
+- FAQ/exam-regulations retrieval (exam regulations handled via an MCP subagent, not a hardcoded collection)
+- Milvus alternative: L2 distance similarity search, program-specific filtering
+- Source attribution with page/document references
 
 ### Web Search Tool
 
@@ -106,13 +108,11 @@ graph LR
 ### Memory Handling
 
 - Message history is limited (default: 7 messages)
-- Summarization is triggered when token limits are reached
-- Summaries replace older message segments to maintain context
+- Conversation state is persisted per `thread_id` via a Redis-backed LangGraph checkpointer
 
 ### Context Preservation
 
 - System messages are validated to ensure proper context
-- Summarization maintains continuity in long conversations
 
 ---
 
@@ -120,8 +120,7 @@ graph LR
 
 ### Token Management
 
-- Total token usage is monitored across the conversation
-- Summarization is triggered as limits (token limits) are approached
+- Message history is capped (default: 7 messages) to bound prompt size
 - Context preservation is balanced with performance
 
 ### Caching Strategy
