@@ -1,7 +1,9 @@
 import asyncio
 import os
+import sys
 from typing import List, NamedTuple
 
+sys.path.append("/app")
 from pydantic import BaseModel
 
 from src.chatbot.agents.models import Reference, RetrievalResult
@@ -22,7 +24,7 @@ VECTOR_DB_TYPE = settings.vector_db_settings.type
 async def retrieve_from_infinity_ragflow(
     collection_name: str,
     query: str,
-    extract_reference_url: bool = False,  # creates a url based on the documents name
+    extract_reference_url: bool = False,  # extracts reference url from ragflow document metadata
 ) -> RetrievalResult:
     ref: list[Reference] = []
     results = []
@@ -184,3 +186,12 @@ async def _retriever_his_in_one_tool(
     else:
         logger.error(f"[VECTOR DB]Unsupported vector DB type: {VECTOR_DB_TYPE}")
         raise ValueError(f"[VECTOR DB]Unsupported vector DB type: {VECTOR_DB_TYPE}")
+
+
+if __name__ == "__main__":
+
+    asyncio.run(
+        retrieve_from_infinity_ragflow(
+            "faq", "Erforderlichkeit des Nachweises eines  ...", True
+        )
+    )

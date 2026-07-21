@@ -1,0 +1,9 @@
+# Kurze, einzweckige Prompt-Strings (Tool-Beschreibungen, Feldbeschreibungen,
+# kurze feste Nachrichten). Keiner davon enthält heute {platzhalter} - falls
+# Sie einen hinzufügen, muss die entsprechende Aufrufstelle in
+# graph_node_edges.py angepasst werden, sonst schlägt die Startvalidierung fehl.
+
+description_university_web_search: |
+  nützlich, wenn Sie Fragen zur Universität Osnabrück beantworten müssen. Zum Beispiel Fragen zum
+  zum Bewerbungsverfahren oder zum Studium an der Universität im Allgemeinen. Dieses Tool ist auch nützlich, um aktuelle Bewerbungstermine
+  sowie aktualisierte Termine und Kontaktinformationen. Um dieses Tool erfolgreich zu nutzen, sollten Sie die vorherigen Interaktionen mit dem Nutzer (Chatverlauf) und den Kontext der Konversation berücksichtigen.

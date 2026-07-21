@@ -32,16 +32,21 @@ messages:
     german: |
       Wenn Sie persönliche Unterstützung zum Studium an der Universität benötigen, können Sie die Website des ...  oder ... .
 
-
-graph: 
+# the faq collection needs a metadata field. Name it "url", this link will be shwon to the user so that they can double check the information provided by the chatbot. 
+graph:
   summary_threshold: 70000 # in tokens
   faq:
     activate: True
     collection_name: "faq"
-  examination_regulations: 
-    collection_name: "POs-Test"
+  # This tool is a "standalone tool" (not MCP-based), so its description
+  # lives here in backend_config.yaml rather than in prompts/ -- it's only
+  # needed at all if activate: True. See docs/PROMPT_CONFIGURATION.md.
   troubleshooting:
     collection_name: "troubleshooting"
+    activate: False # set True to enable the troubleshooting tool; description below is then required
+    description: |
+      Describe here what this tool is for and when the agent should use it
+      (e.g. which software/product it can answer technical questions about).
 
 application:
   uni_domain: "https://uni.de/" # Used to identify university-specific links in the answers

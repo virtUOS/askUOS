@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import pdb
 import traceback
 from collections import deque
 from typing import Annotated, ClassVar, Dict, List, Literal, Optional, Union
@@ -34,6 +35,7 @@ from src.chatbot.agents.utils.agent_retriever import (
     retrieve_from_infinity_ragflow,
 )
 from src.chatbot.agents.utils.exceptions import MustContainSystemMessageException
+from src.chatbot.prompt.internal_prompt_text import translate_internal_string
 from src.chatbot.prompt.main import get_system_prompt, translate_prompt
 from src.chatbot.tools.utils.tool_helpers import ReferenceRetriever
 from src.chatbot.tools.utils.tool_schema import (
@@ -341,13 +343,6 @@ class GraphNodesMixin:
 
         # TODO: Tool descriptions are always in german (Translate to english)
         tools = [
-            StructuredTool.from_function(
-                name=ToolNames.TROUBLESHOOTING_TOOL,
-                coroutine=_retriever_his_in_one_tool,
-                description=translate_prompt()["HISinOne_troubleshooting_questions"],
-                args_schema=HisInOneInput,
-                handle_tool_errors=True,
-            ),
             # StructuredTool.from_function(
             #     name=ToolNames.EXAMINATION_REGULATIONS_TOOL,
             #     coroutine=_examination_regulations_tool,
@@ -365,6 +360,16 @@ class GraphNodesMixin:
             ),
         ]
 
+        if settings.graph.troubleshooting.activate:
+            tools.append(
+                StructuredTool.from_function(
+                    name=ToolNames.TROUBLESHOOTING_TOOL,
+                    coroutine=_retriever_his_in_one_tool,
+                    description=settings.graph.troubleshooting.description,
+                    args_schema=HisInOneInput,
+                    handle_tool_errors=True,
+                )
+            )
         # Check the populated registry (not just settings.mcp_agents), since
         # every configured agent could have enabled: False — Literal[()]
         # with zero options would otherwise raise when building the schema.
@@ -514,7 +519,9 @@ class GraphNodesMixin:
             # TODO use reducer to mange messages
             return {
                 "messages": [
-                    HumanMessage(content=translate_prompt(language)["use_tool_msg"])
+                    HumanMessage(
+                        content=translate_internal_string("use_tool_msg", language)
+                    )
                 ],
                 "score_judgement_binary": score.judgement_binary,
             }
@@ -545,14 +552,23 @@ class GraphNodesMixin:
                 and settings.vector_db_settings.type
                 == VectorDBTypes.INFINITY_RAGFLOW  # Infinity RAGFlow
             ):
-                # if the agent is in the rewrite state, try to find answer in FAQs
-                tool_tasks.append(
-                    retrieve_from_infinity_ragflow(
-                        collection_name=settings.graph.faq.collection_name,
-                        query=message.tool_calls[0]["args"].get("query"),
-                        extract_reference_url=True,
+                # message.tool_calls[0] isn't necessarily a query-style tool
+                # call (e.g. the "task" tool used for MCP subagents has
+                # agent_name/task_description args, not "query") -- only
+                # attempt the FAQ shortcut when there's an actual query to
+                # search with, otherwise retrieve_from_infinity_ragflow(...)
+                # gets query=None and blows up building RetrievalResult
+                # (search_query is a required str, not Optional).
+                faq_query = message.tool_calls[0]["args"].get("query")
+                if faq_query:
+                    # if the agent is in the rewrite state, try to find answer in FAQs
+                    tool_tasks.append(
+                        retrieve_from_infinity_ragflow(
+                            collection_name=settings.graph.faq.collection_name,
+                            query=faq_query,
+                            extract_reference_url=True,
+                        )
                     )
-                )
 
         for tool_call in message.tool_calls:
 
@@ -572,9 +588,13 @@ class GraphNodesMixin:
 
             #     tool_tasks.append(_examination_regulations_tool(**tool_call["args"]))
 
-            elif tool_call["name"] == ToolNames.TROUBLESHOOTING_TOOL:
+            elif (
+                tool_call["name"] == ToolNames.TROUBLESHOOTING_TOOL
+                and settings.graph.troubleshooting.activate
+            ):
 
                 tool_tasks.append(_retriever_his_in_one_tool(**tool_call["args"]))
+
             elif tool_call["name"] == ToolNames.TASK:
                 tool_tasks.append(GraphNodesMixin.task(**tool_call["args"]))
 
@@ -627,8 +647,8 @@ class GraphNodesMixin:
         msg = [
             HumanMessage(
                 content=translate_prompt(language)["rewrite_msg_human"].format(
-                    user_query,
-                    state["last_tool_usage"],
+                    user_query=user_query,
+                    tool_history=state["last_tool_usage"],
                 ),
             )
         ]
@@ -696,9 +716,9 @@ class GraphNodesMixin:
         tool_message = state.get("tool_messages", None)
         system_message_generate = SystemMessage(
             content=translate_prompt(language)["system_message_generate"].format(
-                state.get("current_date", ""),
-                state.get("search_query", ""),
-                tool_message,
+                current_date=state.get("current_date", ""),
+                user_query=state.get("search_query", ""),
+                context=tool_message,
             )
         )
         return await self.generate_helper(state, system_message_generate)
@@ -713,9 +733,9 @@ class GraphNodesMixin:
             content=translate_prompt(language)[
                 "system_message_generate_application"
             ].format(
-                state.get("current_date", ""),
-                state.get("search_query", ""),
-                tool_message,
+                current_date=state.get("current_date", ""),
+                user_query=state.get("search_query", ""),
+                context=tool_message,
             )
         )
         return await self.generate_helper(state, system_message_generate)
@@ -736,9 +756,9 @@ class GraphNodesMixin:
             content=translate_prompt(language)[
                 "system_message_generate_teaching_degree"
             ].format(
-                state.get("current_date", ""),
-                state.get("search_query", ""),
-                tool_message,
+                current_date=state.get("current_date", ""),
+                user_query=state.get("search_query", ""),
+                context=tool_message,
             )
         )
         return await self.generate_helper(state, system_message_generate)
@@ -813,7 +833,7 @@ class GraphEdgesMixin:
             """Binary score for document relevance check."""
 
             binary_score: str = Field(
-                description=translate_prompt(language)["grader_binary_score"]
+                description=translate_internal_string("grader_binary_score", language)
             )
             reason: str = Field(
                 description="Back up your decision with a short explanation"

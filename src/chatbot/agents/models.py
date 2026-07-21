@@ -63,7 +63,6 @@ class Reference(BaseModel):
     source: str
     page: int | None = None
     doc_id: str | None = None
-    # TODO Delete once metadata is added to RAGFlow API (user to reference FAQ source)
     url_reference_askuos: str | None = None
 
 

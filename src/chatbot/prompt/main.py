@@ -47,8 +47,8 @@ def get_system_prompt(
 
     prompt_text = translate_prompt(language)
     system_message_text = prompt_text["system_message"].format(
-        current_date,
-        user_input,
+        current_date=current_date,
+        user_query=user_input,
     )
     return [SystemMessage(content=system_message_text)]
 

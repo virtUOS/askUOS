@@ -189,7 +189,9 @@ class ExaminationRegulations(BaseModel):
 
 
 class Troubleshooting(BaseModel):
-    collection_name: str
+    collection_name: Optional[str] = "troubleshooting"
+    activate: bool = False
+    description: str = ""
 
 
 class FaqSettings(BaseModel):
@@ -201,7 +203,6 @@ class GraphConfig(BaseModel):
     # summarize if context is >= summary_threshold
     summary_threshold: int
     faq: FaqSettings
-    examination_regulations: ExaminationRegulations
     troubleshooting: Troubleshooting
 
 

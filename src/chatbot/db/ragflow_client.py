@@ -10,8 +10,6 @@ from pydantic import BaseModel
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
-# TODO delete once metadata is added to RAGFlow API
-FAQ_BASE_URL = "https://uni-osnabrueck.de/"
 NUMBER_CHUNKS_RETRIEVE = 10  # number of chunks to retrieve
 
 
@@ -25,27 +23,29 @@ class Chunk(BaseModel):
     content: str
     content_ltks: str
     dataset_id: str
-    doc_type_kwd: str
+    doc_type_kwd: List
     document_id: str
     document_keyword: str  # documents name
     highlight: Optional[str] = None
     id: str
     image_id: str
     important_keywords: List[str]
+    document_metadata: dict = None
     positions: List[List[Any]]
     similarity: float
     term_similarity: float
     vector_similarity: float
 
-    # TODO delete once metadata is added to RAGFlow API
     @property
     def url_reference_askuos(self) -> str:
         """Generate URL reference."""
-        file_name = os.path.splitext(self.document_keyword.replace("_", "/"))[0]
-        return f"{FAQ_BASE_URL}{file_name}"
-        # post = frontmatter.loads(self.content)
-        # url = post.get("url", "")
-        # return url
+        url = ""
+        if self.document_metadata:
+            url = self.document_metadata.get("url", "")
+            if not url:
+                logger.error(f"[Retrieval] Collection does not have url metadata")
+
+        return url
 
     @property
     def page(self) -> int:
@@ -124,6 +124,7 @@ class RAGFlowSingleton:
                         "document_ids": [],
                         "page_size": page_size,
                         "cross_languages": ["German", "English"],
+                        "include_metadata": "true",
                     },
                 )
             except httpx.ReadTimeout:
@@ -179,7 +180,8 @@ ragflow_object = RAGFlowSingleton()
 
 if __name__ == "__main__":
     # for testing purposes
-    asyncio.run(
-        ragflow_object.run("Credit points computer science", "examination_regulations")
-    )
+    import sys
+
+    sys.path.append("/app")
+    asyncio.run(ragflow_object.run("Credit points computer science", "faq"))
     print()
