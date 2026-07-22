@@ -27,10 +27,17 @@ MAX_MESSAGES_PER_USER = 150  # Limit for the number of messages per user (Redis)
 HUMAN_AVATAR = "/app/ui/static/icons/Icon-User.svg"
 ASSISTANT_AVATAR = "/app/ui/static/icons/Icon-chatbot.svg"
 ROLES = ("assistant", "user")
-# Note: for security reasons, thread endpoints (fastapi-redis user history) is only accessible from localhost
-# if fastapi runs on different container the history access logic needs to be adapted.
+# Thread endpoints (fastapi-redis user history — read/delete any user's
+# conversation history) are gated by their own key (STREAMLIT_HISTORY_API_KEY
+# / HISTORY_API_KEYS on the backend), deliberately separate from the
+# completions key below: a leaked or externally-shared completions key must
+# not also be able to read or wipe conversation history. No localhost-only
+# restriction on either endpoint, so this works whether FastAPI runs in the
+# same container as Streamlit or in its own container(s) behind a reverse
+# proxy.
 API_URL = app_settings.api.api_url
 askUOS_API_KEY = os.getenv("STREAMLIT_API_KEY", "")
+askUOS_HISTORY_API_KEY = os.getenv("STREAMLIT_HISTORY_API_KEY", "")
 
 
 # Apply nest_asyncio to allow nested event loops (Streamlit compatibility)
@@ -72,12 +79,17 @@ class ChatApp:
         return st.session_state["openai_client"]
 
     def get_api_session(self) -> requests.Session:
-        """Return a shared session per user, creating it once."""
+        """Return a shared session per user, creating it once.
+
+        Uses askUOS_HISTORY_API_KEY, not the completions key — this session
+        is only ever used to call /v1/threads/* (get/delete history), which
+        the backend gates with a separate key set on purpose.
+        """
         if "api_session" not in st.session_state:
             session = requests.Session()
             session.headers.update(
                 {
-                    "Authorization": f"Bearer {askUOS_API_KEY}",
+                    "Authorization": f"Bearer {askUOS_HISTORY_API_KEY}",
                 }
             )
             st.session_state.api_session = session

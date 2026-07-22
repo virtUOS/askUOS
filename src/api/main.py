@@ -7,7 +7,6 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Set
 
-from fastapi import Request  # WebSocket,
 from fastapi import Depends, FastAPI, HTTPException, Security, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -58,9 +57,26 @@ async def lifespan(app: FastAPI):
 
 
 # TODO: Refactor key management (should be more robust)
-# Load valid keys
+# Load valid keys.
+#
+# Two deliberately separate scopes, backed by two disjoint env vars:
+# - API_KEYS: gates /v1/chat/completions. These may be handed out broadly
+#   (e.g. to external LibreChat-compatible integrations calling in over the
+#   public internet) — see the deployment plan in bugs_to_fix.md #12.
+# - HISTORY_API_KEYS: gates /v1/threads/* (get_messages/delete_messages,
+#   i.e. reading or wiping any user's conversation history). Kept as a
+#   separate set of secrets on purpose: a completions-only API key must not
+#   also be able to read or delete someone else's chat history just because
+#   it happens to be a valid Bearer token somewhere in this API. There is no
+#   per-user scoping within HISTORY_API_KEYS itself (any key in this set can
+#   still read/delete any thread_id) — this only separates "can chat" from
+#   "can read/wipe history," it doesn't yet scope a key to one user's own
+#   threads.
 _valid_api_keys: Set[str] = set(
     key.strip() for key in os.getenv("API_KEYS", "").split(",") if key.strip()
+)
+_valid_history_api_keys: Set[str] = set(
+    key.strip() for key in os.getenv("HISTORY_API_KEYS", "").split(",") if key.strip()
 )
 
 _security = HTTPBearer()
@@ -69,7 +85,7 @@ _security = HTTPBearer()
 async def verify_api_key(
     credentials: HTTPAuthorizationCredentials = Security(_security),
 ) -> str:
-    """Validate the Bearer token against known API keys."""
+    """Validate the Bearer token for /v1/chat/completions against API_KEYS."""
     if credentials.credentials not in _valid_api_keys:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -78,16 +94,21 @@ async def verify_api_key(
     return credentials.credentials
 
 
+async def verify_history_api_key(
+    credentials: HTTPAuthorizationCredentials = Security(_security),
+) -> str:
+    """Validate the Bearer token for /v1/threads/* against HISTORY_API_KEYS
+    — intentionally a different key set than verify_api_key (see the note
+    above _valid_api_keys)."""
+    if credentials.credentials not in _valid_history_api_keys:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
+    return credentials.credentials
+
+
 app = FastAPI(lifespan=lifespan, title="AksUOS API")
-
-
-@app.middleware("http")
-async def localhost_only(request: Request, call_next):
-    if request.url.path.startswith("/v1/threads"):
-        client_host = request.client.host
-        if client_host not in ("127.0.0.1", "::1", "localhost"):
-            raise HTTPException(status_code=403, detail="Access denied")
-    return await call_next(request)
 
 
 @app.post("/v1/chat/completions")
@@ -456,12 +477,14 @@ async def chat_completions(
     )
 
 
-# NOTE: These endpoints are restricted to localhost only.
-# Streamlit and FastAPI must run in the same container for this to work.
+# Gated by its own key set (HISTORY_API_KEYS via verify_history_api_key),
+# deliberately separate from the /v1/chat/completions key set (API_KEYS) —
+# a completions-only key must not also grant read/delete access to a user's
+# conversation history.
 @app.get("/v1/threads/{thread_id}/messages")
 async def get_messages(
     thread_id: str,
-    api_key: str = Security(verify_api_key),
+    api_key: str = Security(verify_history_api_key),
     agent: CampusManagementAgent = Depends(get_agent),
 ):
     config = {"configurable": {"thread_id": thread_id}}
@@ -474,12 +497,12 @@ async def get_messages(
     return {"messages": messages}
 
 
-# NOTE: These endpoints are restricted to localhost only.
-# Streamlit and FastAPI must run in the same container for this to work.
+# Gated by HISTORY_API_KEYS via verify_history_api_key — see the identical
+# note above get_messages().
 @app.delete("/v1/threads/{thread_id}/messages")
 async def delete_messages(
     thread_id: str,
-    api_key: str = Security(verify_api_key),
+    api_key: str = Security(verify_history_api_key),
     agent: CampusManagementAgent = Depends(get_agent),
 ):
     config = {"configurable": {"thread_id": thread_id}}
