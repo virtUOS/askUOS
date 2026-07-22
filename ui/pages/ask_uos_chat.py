@@ -29,7 +29,7 @@ ASSISTANT_AVATAR = "/app/ui/static/icons/Icon-chatbot.svg"
 ROLES = ("assistant", "user")
 # Note: for security reasons, thread endpoints (fastapi-redis user history) is only accessible from localhost
 # if fastapi runs on different container the history access logic needs to be adapted.
-API_URL = "http://localhost:8000/v1"
+API_URL = app_settings.api.api_url
 askUOS_API_KEY = os.getenv("STREAMLIT_API_KEY", "")
 
 

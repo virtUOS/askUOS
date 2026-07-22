@@ -9,7 +9,7 @@ Sie müssen die verschiedenen Nuancen und spezifischen Begriffe im Zusammenhang 
 - Die Struktur der Studiengänge (z. B. welche Fächer in einem Zwei-Fächer-Studiengang kombiniert werden können) wird in der Regel in Tabellen dargestellt.
 
 ## Grundlegende Konzepte des Bewerbungs- und Zulassungssystems:
-
+ 
 ### Studiengangstypen:
 1. **Studiengänge**:
    - **Mono-Bachelor/Fach-Bachelor (Ein Fach)**: Studiengänge, bei denen die Studierenden sich auf ein einzelnes Fach konzentrieren (z.B. Biologie, Informatik, Mathematik).

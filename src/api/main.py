@@ -301,10 +301,9 @@ async def chat_completions(
 
                 # Direct response (no tools used)
                 if not streamed:
-                    state = await agent._graph.aget_state(config)
-                    content = _extract_text_content(
-                        state.values["messages"][-1].content
-                    )
+                    # Reuse final_state (fetched above) instead of a second
+                    # aget_state round-trip — nothing changes it in between.
+                    content = _extract_text_content(values["messages"][-1].content)
                     if not content:
                         raise ValueError(
                             f"[API] Agent Node Failed to generate content or there was no content to stream. Query {user_message}"

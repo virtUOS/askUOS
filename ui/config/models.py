@@ -1,5 +1,6 @@
-from pydantic import BaseModel
 from typing import Optional
+
+from pydantic import BaseModel
 
 
 class Legal(BaseModel):
@@ -9,6 +10,10 @@ class Legal(BaseModel):
 
     data_protection: str
     imprint: str
+
+
+class ApiConf(BaseModel):
+    api_url: str
 
 
 class UiConfig(BaseModel):

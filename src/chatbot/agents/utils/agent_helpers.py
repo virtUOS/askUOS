@@ -43,21 +43,22 @@ class CustomMemoryCache(InMemoryCache):
 
 
 class LLMMixin:
-    def _build_llm_obj(self, model_conf: Model):
+    def _build_llm_obj(self, model_conf: Model, streaming: bool = True):
+        """Build the LLM client for this role."""
         if model_conf.provider == ProviderNames.GOOGLE:
             self.llm = ChatGoogleGenerativeAI(
                 model=model_conf.model_name,
                 temperature=1.0,
                 max_retries=2,
                 timeout=60,
-                streaming=True,
+                streaming=streaming,
                 callbacks=[StdOutCallbackHandler()],
             )
         elif model_conf.provider == ProviderNames.OPENAI:
             self.llm = ChatOpenAI(
                 model=model_conf.model_name,
                 temperature=0,
-                streaming=True,
+                streaming=streaming,
                 timeout=60,
                 max_retries=2,
                 callbacks=[StdOutCallbackHandler()],
@@ -86,7 +87,7 @@ class LLMMixin:
                 temperature=0,
                 timeout=60,
                 max_retries=2,
-                streaming=True,
+                streaming=streaming,
                 callbacks=[StdOutCallbackHandler()],
             )
 
@@ -131,6 +132,12 @@ class ChatLlmSubagent(LLMMixin):
     (GraphNodesMixin.task()). Kept as its own singleton — distinct from
     ChatLlm — so that configuring a `role: subagent` model actually builds a
     separate client instance rather than reusing the main model's.
+
+    Built with streaming=False: task() only ever consumes the final
+    `.ainvoke()` result dict (never forwards tokens to a client) and wraps
+    the call in `asyncio.wait_for(timeout=...)`. A streaming client here
+    would open a real OpenAI/httpx streaming connection per internal model
+    call that a timeout could abandon mid-flight
     """
 
     _instance = None
@@ -142,7 +149,7 @@ class ChatLlmSubagent(LLMMixin):
 
     def __init__(self, model_conf: Model):
         if not self.__dict__:
-            self._build_llm_obj(model_conf)
+            self._build_llm_obj(model_conf, streaming=False)
 
 
 class ReasoningLlm:

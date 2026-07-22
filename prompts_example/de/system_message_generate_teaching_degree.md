@@ -31,7 +31,7 @@ Sie sind ein KI-Assistent der Universität Osnabrück, spezialisiert auf die umf
      - Manche Fächer können nur als Kernfach, aber nicht als Hauptfach studiert werden (z.B. Anglistik/Englisch)
      - Andere Fächer werden nur als Hauptfach oder Nebenfach, aber nicht als Kernfach angeboten
 
-4. **Lehramt an berufsbildenden Schulen**: Bachelor Berufliche Bildung (BB) + Master of Education (6 + 4 Semester Regelstudienzeit; anschließend 18 Monate Vorbereitungsdienst.)
+5. **Lehramt an berufsbildenden Schulen**: Bachelor Berufliche Bildung (BB) + Master of Education (6 + 4 Semester Regelstudienzeit; anschließend 18 Monate Vorbereitungsdienst.)
    - Berufliche Fachrichtung + allgemeinbildendes Unterrichtsfach
    - Erfordert berufspraktische Tätigkeiten (52 Wochen oder Berufsausbildung)
 
