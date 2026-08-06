@@ -1,5 +1,6 @@
 import asyncio
 import os
+import random
 import sys
 import uuid
 from typing import Optional
@@ -272,6 +273,57 @@ class ChatApp:
             st.session_state.input_key_counter += 1
             st.rerun()  # Rerun to update the chat messages and input field
 
+    # Progress narration codes the backend may emit mid-turn on an otherwise
+    # empty `delta` (see src/chatbot/agents/graph_node_edges.py::_write_status
+    # and src/api/helpers.py::_make_chunk) while agent_node/tool_node/
+    # judge_node/grade_documents/rewrite run -- everything before the final
+    # generate*/generate_application/generate_teaching_degree_node node is
+    # otherwise silent dead time (a single MCP subagent round trip alone can
+    # take 10-40s, see bugs_to_fix.md #28).
+    #
+    # Each status maps to three phrasings (English msgids, translated
+    # through the same gettext catalog as the rest of this page --
+    # locale/de/LC_MESSAGES/base.po -- add a msgid/msgstr pair there for any
+    # new code/phrasing added here), picked at random each time one is shown
+    # (see generate_response_async below) so a user doesn't see the exact
+    # same line on every turn. "consulting_specialist" is deliberately
+    # generic (not "documents"/"regulations") because it covers the "task"
+    # tool, which can dispatch to *any* admin-configured MCP subagent
+    # (mcp_agents in backend_config.yaml) -- not just RAGFlow-style document
+    # retrieval.
+    STATUS_MESSAGES = {
+        "searching_web": [
+            "Let me search the university website for that...",
+            "I'll take a look online for the latest information...",
+            "One moment, checking the web for up-to-date details...",
+        ],
+        "searching_documents": [
+            "Let me check our knowledge base for that...",
+            "I'll look through our documentation for an answer...",
+            "One moment, searching our records for relevant details...",
+        ],
+        "consulting_specialist": [
+            "Let me consult a specialized source for more information...",
+            "I'll check with an additional resource for you...",
+            "One moment, reaching out to a specialized tool for details...",
+        ],
+        "checking_response": [
+            "Let me double-check whether I should look something up first...",
+            "I'll make sure I don't need to search for more information...",
+            "One moment, verifying my answer is complete...",
+        ],
+        "checking_documents": [
+            "Let me check if what I found actually answers your question...",
+            "I'll make sure the information I gathered is relevant...",
+            "One moment, reviewing what I found before answering...",
+        ],
+        "refining_search": [
+            "Let me search again with different terms...",
+            "I'll try a new search to find the right information...",
+            "One moment, adjusting my search to find a better answer...",
+        ],
+    }
+
     async def generate_response_async(self, prompt: str):
         """Generate a response from the assistant based on user prompt, using astream."""
 
@@ -298,6 +350,20 @@ class ChatApp:
 
                     async for chunk in stream:
                         delta = chunk.choices[0].delta
+                        # Non-standard field the backend adds to an
+                        # otherwise-empty delta -- the openai SDK's pydantic
+                        # models allow unknown extra fields (ConfigDict
+                        # extra="allow"), so this is present and readable via
+                        # getattr even though it's not in the SDK's own type
+                        # stubs.
+                        status = getattr(delta, "status", None)
+                        if status and not response:
+                            variants = self.STATUS_MESSAGES.get(status)
+                            if variants:
+                                status_text = random.choice(variants)
+                                message_placeholder.markdown(
+                                    f"*{session_state['_'](status_text)}*"
+                                )
                         if delta.content:
                             response += delta.content
                             message_placeholder.markdown(response)

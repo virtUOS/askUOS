@@ -124,3 +124,57 @@ msgstr "Beim Laden vorheriger Nachrichten ist ein Fehler aufgetreten. Falls das 
 
 msgid "Are you sure you want to delete the chat history? This action cannot be undone."
 msgstr "Sind Sie sicher, dass Sie den Chatverlauf löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden."
+
+msgid "Let me search the university website for that..."
+msgstr "Ich schaue mal auf der Uni-Webseite nach..."
+
+msgid "I'll take a look online for the latest information..."
+msgstr "Ich sehe mich online nach den aktuellsten Informationen um..."
+
+msgid "One moment, checking the web for up-to-date details..."
+msgstr "Einen Moment, ich prüfe aktuelle Informationen im Netz..."
+
+msgid "Let me check our knowledge base for that..."
+msgstr "Ich schaue mal in unserer Wissensdatenbank nach..."
+
+msgid "I'll look through our documentation for an answer..."
+msgstr "Ich durchsuche unsere Dokumentation nach einer Antwort..."
+
+msgid "One moment, searching our records for relevant details..."
+msgstr "Einen Moment, ich durchsuche unsere Unterlagen nach relevanten Details..."
+
+msgid "Let me consult a specialized source for more information..."
+msgstr "Ich frage mal eine spezialisierte Quelle..."
+
+msgid "I'll check with an additional resource for you..."
+msgstr "Ich prüfe das bei einer zusätzlichen Quelle für Sie..."
+
+msgid "One moment, reaching out to a specialized tool for details..."
+msgstr "Einen Moment, ich hole Details von einem spezialisierten Tool..."
+
+msgid "Let me double-check whether I should look something up first..."
+msgstr "Ich prüfe kurz, ob ich vorher noch etwas nachschlagen sollte..."
+
+msgid "I'll make sure I don't need to search for more information..."
+msgstr "Ich stelle sicher, dass ich nicht noch weiter suchen muss..."
+
+msgid "One moment, verifying my answer is complete..."
+msgstr "Einen Moment, ich prüfe, ob meine Antwort vollständig ist..."
+
+msgid "Let me check if what I found actually answers your question..."
+msgstr "Ich prüfe, ob das Gefundene Ihre Frage wirklich beantwortet..."
+
+msgid "I'll make sure the information I gathered is relevant..."
+msgstr "Ich stelle sicher, dass die gesammelten Informationen relevant sind..."
+
+msgid "One moment, reviewing what I found before answering..."
+msgstr "Einen Moment, ich sehe mir die Ergebnisse an, bevor ich antworte..."
+
+msgid "Let me search again with different terms..."
+msgstr "Ich suche noch einmal mit anderen Begriffen..."
+
+msgid "I'll try a new search to find the right information..."
+msgstr "Ich versuche eine neue Suche, um die richtigen Informationen zu finden..."
+
+msgid "One moment, adjusting my search to find a better answer..."
+msgstr "Einen Moment, ich passe meine Suche an, um eine bessere Antwort zu finden..."

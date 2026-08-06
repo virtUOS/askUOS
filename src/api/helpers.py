@@ -161,13 +161,26 @@ def _make_chunk(
     content: str = None,
     finish_reason: str = None,
     role: str = None,
+    status: str = None,
 ) -> str:
-    """Build a single SSE chunk in OpenAI format."""
+    """Build a single SSE chunk in OpenAI format.
+
+    `status` is an additive, non-standard field on `delta` used to narrate
+    graph progress while a turn is in flight (see
+    graph_node_edges.py::_write_status and stream_generator's "custom"
+    branch in main.py) -- it's only ever sent on its own chunk, never
+    alongside `content`. Any OpenAI-compatible client that only reads
+    `delta.content`/`delta.role` (e.g. LibreChat) will just see an
+    otherwise-empty delta and ignore it, the same as it already ignores the
+    role-announcement chunk sent at the start of every turn.
+    """
     delta = {}
     if role:
         delta["role"] = role
     if content:
         delta["content"] = content
+    if status:
+        delta["status"] = status
 
     chunk = {
         "id": completion_id,

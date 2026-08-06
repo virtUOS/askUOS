@@ -21,6 +21,7 @@ from langchain_core.messages import (
 )
 from langchain_core.prompts import PromptTemplate
 from langchain_mcp_adapters.tools import load_mcp_tools
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import RemoveMessage, add_messages
 from pydantic import BaseModel, Field, create_model
@@ -79,6 +80,32 @@ def add_lists(existing: list, new: list) -> list:
 def add(left, right):
     """Reducer"""
     return left + right
+
+
+# Status codes narrated to the client while a turn is in flight, keyed to
+# frontend i18n strings (ui-react/src/i18n.ts: chat.status.<code>). Only the
+# generate*/generate_application/generate_teaching_degree_node nodes ever
+# stream real answer content (see api/main.py's stream_generator) -- every
+# other node (agent_node's tool decision, tool_node's web crawl/MCP subagent
+# calls, judge_node, grade_documents, rewrite) is otherwise silent dead time,
+# even though tool_node alone can take 10-40s (see the RAGFlow subagent
+# round-trip measurement in bugs_to_fix.md #28). This narrates progress
+# through those nodes without changing what's asked of the model or how much
+# context it sees.
+def _write_status(status: str) -> None:
+    """Emit a lightweight progress event via LangGraph's "custom" stream
+    mode. Safe to call unconditionally from any node: get_stream_writer()
+    returns a no-op writer when the graph isn't being run with "custom" in
+    stream_mode (e.g. the non-streaming /v1/chat/completions path, or the
+    __main__ smoke test in graph.py) -- a failure here must never affect the
+    actual turn, only the optional narration of it.
+    """
+    try:
+        get_stream_writer()(
+            {"status": status}
+        )  # the status is used in the frontend to serve the right message. See ask_uos_chat.py
+    except Exception as e:
+        logger.debug(f"[STATUS] Failed to emit status update '{status}': {e}")
 
 
 class State(TypedDict):
@@ -471,7 +498,7 @@ class GraphNodesMixin:
                 description="Back up your decision with a short explanation"
             )
 
-        llm_with_str_output = self._llm.with_structured_output(JudgementResult)
+        llm_with_str_output = self._llm_optional.with_structured_output(JudgementResult)
         prompt = PromptTemplate(
             template="""
                Your role is to evaluate whether an agent's choice not to utilize a tool was justifiable in a given interaction. 
@@ -500,6 +527,7 @@ class GraphNodesMixin:
         )
 
         chain = prompt | llm_with_str_output
+        _write_status("checking_response")
         score = await chain.ainvoke(
             {"question": state["user_initial_query"], "context": state["messages"][-1]}
         )
@@ -544,6 +572,22 @@ class GraphNodesMixin:
 
         # Read accumulated visited_links from State (not self)
         visited_links_so_far = state.get("visited_links", [])
+
+        # Narrate what's about to happen -- this is the single biggest
+        # silent-latency gap in a turn (web crawling / MCP subagent round
+        # trips), see _write_status above. ToolNames.TASK is kept as its own
+        # generic status (not lumped in with the vector-DB-backed
+        # troubleshooting tool) because it can dispatch to *any*
+        # admin-configured MCP subagent (mcp_agents in backend_config.yaml)
+        # -- not just document/RAGFlow-style retrieval -- so its narration
+        # can't assume the word "documents" is accurate.
+        tool_names_called = {tc["name"] for tc in message.tool_calls}
+        if ToolNames.SEARCH_WEB_TOOL in tool_names_called:
+            _write_status("searching_web")
+        if ToolNames.TROUBLESHOOTING_TOOL in tool_names_called:
+            _write_status("searching_documents")
+        if ToolNames.TASK in tool_names_called:
+            _write_status("consulting_specialist")
 
         # TODO: FAQ support only available in RAGFLOW. Needs to be done with Milvus
         if settings.graph.faq.activate:
@@ -633,6 +677,11 @@ class GraphNodesMixin:
         """
         language = state.get("language", "Deutsch")
         user_query = state["user_initial_query"]
+
+        # Rewrite itself is near-instant (no LLM call), but it loops back to
+        # agent_node and re-runs the whole chain -- this status bridges that
+        # gap so a second lap doesn't just look like the first one stalling.
+        _write_status("refining_search")
 
         # Structured event so rewrite frequency/patterns (e.g. "which queries
         # keep getting rewritten") can be analyzed later, not just observed
@@ -842,12 +891,13 @@ class GraphEdgesMixin:
             #     description="From the retrieved documents, which paragraphs are relevant to answer the user query? Extract all relevant paragraphs from the retrieved documents."
             # )
 
-        llm_with_str_output = self._llm.with_structured_output(GradeResult)
+        llm_with_str_output = self._llm_optional.with_structured_output(GradeResult)
         prompt = PromptTemplate(
             template=translate_prompt(language)["grading_llm"],
             input_variables=["context", "question"],
         )
         chain = prompt | llm_with_str_output
+        _write_status("checking_documents")
         scored_result = await chain.ainvoke(
             {
                 "question": f'{state["user_initial_query"]}, {tool_query}',

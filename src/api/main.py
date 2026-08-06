@@ -253,11 +253,35 @@ async def chat_completions(
                 # check; if clean — the overwhelming common case — every
                 # token after that streams live exactly as before.
                 leak_guard = StreamingLeakGuard()
-                async for msg, metadata in agent._graph.astream(
+                # "custom" carries progress narration emitted via
+                # get_stream_writer() from graph nodes (see
+                # graph_node_edges.py::_write_status) — agent_node's tool
+                # decision, tool_node's web crawl/MCP subagent calls,
+                # judge_node, grade_documents, and rewrite are otherwise
+                # silent dead time, since only the generate*/
+                # generate_application/generate_teaching_degree_node nodes
+                # ever stream real answer content below. With stream_mode as
+                # a list, each item is (mode_name, payload) instead of the
+                # bare (msg, metadata) tuple stream_mode="messages" alone
+                # would yield.
+                async for stream_mode_name, payload in agent._graph.astream(
                     input_data,
                     config=config,
-                    stream_mode="messages",
+                    stream_mode=["messages", "custom"],
                 ):
+                    if stream_mode_name == "custom":
+                        # Not answer content — bypasses the leak guard
+                        # entirely and is never saved to chat history.
+                        status = (
+                            payload.get("status") if isinstance(payload, dict) else None
+                        )
+                        if status:
+                            yield _make_chunk(
+                                completion_id, created, model, status=status
+                            )
+                        continue
+
+                    msg, metadata = payload
                     if (
                         msg.content
                         and not isinstance(msg, HumanMessage)
