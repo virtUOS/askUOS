@@ -6,6 +6,12 @@ legal:
 
 ui:
   page_title: "ask.UOS" #app name
+  # Optional. Defaults shown below — either mount your own icon files over
+  # these exact paths with the same filenames (see note further down), or
+  # point these at wherever you've actually placed your custom icons.
+  # human_avatar_path: "/app/ui/static/icons/Icon-User.svg"
+  # assistant_avatar_path: "/app/ui/static/icons/Icon-chatbot.svg"
+  # favicon_path: "/app/ui/static/icons/Icon-chatbot.png"
 
 
 start_page:

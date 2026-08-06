@@ -33,7 +33,6 @@ class Settings(BaseSettings):
 
     This class is a singleton that holds various configuration settings for the application.
     It inherits from `BaseSettings` and uses Pydantic for data validation and settings management.
-
     """
 
     _instance: ClassVar[Optional["Settings"]] = None

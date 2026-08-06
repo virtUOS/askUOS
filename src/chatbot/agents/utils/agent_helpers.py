@@ -50,7 +50,7 @@ class LLMMixin:
                 model=model_conf.model_name,
                 temperature=1.0,
                 max_retries=2,
-                timeout=60,
+                timeout=model_conf.timeout,
                 streaming=streaming,
                 callbacks=[StdOutCallbackHandler()],
             )
@@ -59,7 +59,7 @@ class LLMMixin:
                 model=model_conf.model_name,
                 temperature=0,
                 streaming=streaming,
-                timeout=60,
+                timeout=model_conf.timeout,
                 max_retries=2,
                 callbacks=[StdOutCallbackHandler()],
             )
@@ -85,7 +85,7 @@ class LLMMixin:
                 base_url=model_conf.base_url,
                 api_key=self_hosted_api_key,
                 temperature=0,
-                timeout=60,
+                timeout=model_conf.timeout,
                 max_retries=2,
                 streaming=streaming,
                 callbacks=[StdOutCallbackHandler()],

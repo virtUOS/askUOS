@@ -10,8 +10,6 @@ from pydantic import BaseModel
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
 
-NUMBER_CHUNKS_RETRIEVE = 10  # number of chunks to retrieve
-
 
 class RetrievedDocs(BaseModel):
     count: int
@@ -74,6 +72,20 @@ class RAGFlowSingleton:
                     cls._instance.base_url = (
                         settings.vector_db_settings.settings.base_url
                     )
+                    # RAGFlowSettings.chunk_size (backend_config.yaml) — how
+                    # many chunks retrieve_chunks() asks for per request when
+                    # the caller doesn't specify page_size explicitly.
+                    cls._instance.chunk_size = (
+                        settings.vector_db_settings.settings.chunk_size
+                    )
+                    # RAGFlowSettings connect/read/write/pool timeouts
+                    # (backend_config.yaml)
+                    # baked into every _get_client() call.
+                    ragflow_settings = settings.vector_db_settings.settings
+                    cls._instance.connect_timeout = ragflow_settings.connect_timeout
+                    cls._instance.read_timeout = ragflow_settings.read_timeout
+                    cls._instance.write_timeout = ragflow_settings.write_timeout
+                    cls._instance.pool_timeout = ragflow_settings.pool_timeout
         return cls._instance
 
     # TODO: Use a singleton with pooling. This is a quick fix.
@@ -83,10 +95,10 @@ class RAGFlowSingleton:
         return httpx.AsyncClient(
             headers={"Authorization": f"Bearer {self.api_key}"},
             timeout=httpx.Timeout(
-                connect=15.0,  # Time to establish connection
-                read=60.0,  # Time to receive response (RAG can be slow)
-                write=15.0,  # Time to send request body
-                pool=5.0,  # Time waiting for connection from pool
+                connect=self.connect_timeout,
+                read=self.read_timeout,
+                write=self.write_timeout,
+                pool=self.pool_timeout,
             ),
         )
 
@@ -112,8 +124,11 @@ class RAGFlowSingleton:
             )
 
     async def retrieve_chunks(
-        self, query: str, db_id: str, page_size: int = NUMBER_CHUNKS_RETRIEVE
+        self, query: str, db_id: str, page_size: Optional[int] = None
     ):
+        # Falls back to the configured RAGFlowSettings.chunk_size
+        # (backend_config.yaml)
+        page_size = page_size if page_size is not None else self.chunk_size
         async with self._get_client() as client:
             try:
                 resp = await client.post(

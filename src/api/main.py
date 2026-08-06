@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from typing import Set
 
 from fastapi import Depends, FastAPI, HTTPException, Security, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, ToolMessage
@@ -62,7 +63,7 @@ async def lifespan(app: FastAPI):
 # Two deliberately separate scopes, backed by two disjoint env vars:
 # - API_KEYS: gates /v1/chat/completions. These may be handed out broadly
 #   (e.g. to external LibreChat-compatible integrations calling in over the
-#   public internet) — see the deployment plan in bugs_to_fix.md #12.
+#   public internet)
 # - HISTORY_API_KEYS: gates /v1/threads/* (get_messages/delete_messages,
 #   i.e. reading or wiping any user's conversation history). Kept as a
 #   separate set of secrets on purpose: a completions-only API key must not
@@ -108,7 +109,24 @@ async def verify_history_api_key(
     return credentials.credentials
 
 
-app = FastAPI(lifespan=lifespan, title="AksUOS API")
+app = FastAPI(lifespan=lifespan, title="askUOS API")
+
+# CORS is only relevant for browser-based clients calling this API
+# cross-origin (e.g. ui-react running on its own dev server/port, or a chat
+# widget embedded on a different domain) — server-to-server callers (curl,
+# another backend, an external LibreChat-compatible integration) are never
+# affected by CORS, since it's a browser-only enforcement mechanism. No
+# middleware is added at all unless at least one origin is configured via
+# application.cors_allowed_origins in backend_config.yaml, so this is a
+# no-op for deployments that don't need it.
+if settings.application.cors_allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.application.cors_allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 @app.post("/v1/chat/completions")

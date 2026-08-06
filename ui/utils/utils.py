@@ -1,9 +1,10 @@
 import streamlit as st
 from streamlit import session_state
+
 from src.chatbot_log.chatbot_logger import logger
 from ui.config.app_config import app_settings
-from ui.utils.language import translate
 from ui.config.models import IframePageInfo
+from ui.utils.language import get_translator
 
 
 def initialize_session_sate() -> None:
@@ -12,7 +13,11 @@ def initialize_session_sate() -> None:
     """
     # Initialization
     defaults = {
-        "_": translate(),
+        # Driven by ui_config.yml's configured `language` default, so a
+        # university setting language: "English" actually sees English text
+        # on first load instead of always getting German until the language
+        # radio button is manually toggled.
+        "_": get_translator(app_settings.language),
         "show_warning": True,
         "user_feedback_faces": None,
         "user_feedback_form": {},
@@ -40,7 +45,7 @@ def setup_page() -> None:
     """Set up the Streamlit page configuration."""
     st.set_page_config(
         page_title=app_settings.ui.page_title,
-        page_icon="/app/ui/static/icons/Icon-chatbot.png",
+        page_icon=app_settings.ui.favicon_path,
         layout="centered",
         initial_sidebar_state="collapsed",
     )

@@ -30,8 +30,9 @@ APPLICATION_CONTEXT_URLS = [
 ]
 
 SEARCH_URL = os.getenv("SEARCH_URL")
-# TODO Increase the number of websites to visit once cache is improved
-MAX_NUM_LINKS = 6
+# Max number of web pages visited per search (crawl_settings.max_links in
+# backend_config.yaml) — previously a hardcoded constant.
+MAX_NUM_LINKS = settings.crawl_settings.max_links
 
 # TODO Change cache mechanism to enabled (in config.yml)
 CRAWL_API_URL = settings.crawl_settings.base_url

@@ -22,10 +22,8 @@ from ui.utils.utils import (
     setup_page,
 )
 
-# max number of messages after which a summary is generated
-MAX_MESSAGES_PER_USER = 150  # Limit for the number of messages per user (Redis)
-HUMAN_AVATAR = "/app/ui/static/icons/Icon-User.svg"
-ASSISTANT_AVATAR = "/app/ui/static/icons/Icon-chatbot.svg"
+HUMAN_AVATAR = app_settings.ui.human_avatar_path
+ASSISTANT_AVATAR = app_settings.ui.assistant_avatar_path
 ROLES = ("assistant", "user")
 # Thread endpoints (fastapi-redis user history — read/delete any user's
 # conversation history) are gated by their own key (STREAMLIT_HISTORY_API_KEY
@@ -265,7 +263,7 @@ class ChatApp:
             # history.add_user_message(prompt)
             # st.session_state["messages"].append(HumanMessage(content=prompt))
 
-            with st.chat_message(ROLES[1], avatar="/app/ui/static/icons/Icon-User.svg"):
+            with st.chat_message(ROLES[1], avatar=HUMAN_AVATAR):
                 st.write(prompt)
                 # if history.messages[-1].type != ROLES[0]:  # "ai"
             self._run_async(self.generate_response_async(prompt))
@@ -281,7 +279,7 @@ class ChatApp:
         user_id = self.get_user_id()
         language = session_state.get("selected_language", "Deutsch")
 
-        with st.chat_message(ROLES[0], avatar="/app/ui/static/icons/Icon-chatbot.svg"):
+        with st.chat_message(ROLES[0], avatar=ASSISTANT_AVATAR):
             with st.spinner(session_state["_"]("Generating response...")):
                 message_placeholder = st.empty()
                 response = ""
@@ -407,14 +405,18 @@ class ChatApp:
 
         if "delete" in st.query_params:
             st.query_params.delete = "false"
-        message = session_state["_"](
-            "Are you sure you want to delete the chat history? This action cannot be undone."
+        # Config-driven (ChatPageConfig.delete_message_dialog_box_*) instead
+        # of the gettext locale catalog, so a university can customize this
+        # text the same way it already customizes the welcome/greeting
+        # messages. Uses the per-session selected_language (not the shared
+        # app_settings.language global) so concurrent users on different
+        # languages each see their own session's text.
+        message = (
+            app_settings.chat_page.delete_message_dialog_box_german
+            if session_state.get("selected_language", app_settings.language)
+            == "Deutsch"
+            else app_settings.chat_page.delete_message_dialog_box_english
         )
-        # message = (
-        #     app_settings.chat_page.delete_message_dialog_box_german
-        #     if app_settings.language == "Deutsch"
-        #     else app_settings.chat_page.delete_message_dialog_box_english
-        # )
         st.markdown(message)
         if st.button(
             session_state["_"]("Delete"),

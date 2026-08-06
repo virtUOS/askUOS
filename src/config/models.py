@@ -69,6 +69,10 @@ class RedisService(Service):
     ttl_graph_cache: int = (
         120  # how long messages are cached. Msgs older than this value won't be shown to the user
     )
+    # Connection pool timeout, in seconds — how long to wait for a
+    # connection from the pool / for the connection itself. Was previously
+    # a hardcoded timeout=15 in RedisClient.initialize().
+    connection_timeout: int = 15
 
     def build_redis_url(self) -> str:
         """Build Redis connection URL from service settings"""
@@ -90,6 +94,10 @@ class Model(BaseModel):
     role: RoleNames
     model_name: str
     base_url: Optional[str] = None
+    # LLM client request timeout, in seconds. Was previously a hardcoded
+    # timeout=60 at every _build_llm_obj call site regardless of role or
+    # provider; now overridable per model entry in backend_config.yaml.
+    timeout: int = 60
 
     @model_validator(mode="after")
     def validate_base_url_for_self_hosted(self):
@@ -121,6 +129,17 @@ class ApplicationConfig(BaseModel):
     # still starts — that agent will simply fail gracefully at request time
     # (see GraphNodesMixin.task) instead of blocking deployment.
     fail_on_mcp_unreachable: bool = False
+    # Origins allowed to call this API directly from browser-based JS
+    # (CORS). Empty by default: no CORSMiddleware is added at all unless at
+    # least one origin is configured here, so nothing changes for
+    # deployments that don't need this. Only relevant for browser clients
+    # calling this API cross-origin (e.g. ui-react running on its own dev
+    # server/port, or a chat widget embedded on a different domain) — NOT
+    # needed for server-to-server callers (curl, another backend, an
+    # external LibreChat-compatible integration), since CORS is a
+    # browser-only enforcement mechanism that never applies to direct HTTP
+    # client calls.
+    cors_allowed_origins: list[str] = Field(default_factory=list)
 
 
 class EmbeddingConnectionSettings(BaseModel):
@@ -165,6 +184,13 @@ class RAGFlowSettings(BaseModel):
 
     base_url: str
     chunk_size: int = 10  # Number of chunks to retrieve per request
+    # HTTP timeouts (seconds) for the RAGFlow client (RAGFlowSingleton in
+    # ragflow_client.py). Previously hardcoded constants at every
+    # _get_client() call.
+    connect_timeout: float = 15.0  # Time to establish connection
+    read_timeout: float = 60.0  # Time to receive response (RAG can be slow)
+    write_timeout: float = 15.0  # Time to send request body
+    pool_timeout: float = 5.0  # Time waiting for connection from pool
 
 
 class VectorDBConfig(BaseModel):
@@ -182,6 +208,8 @@ class CrawlSettings(BaseModel):
     base_url: str
     crawl_payload: dict  # TODO : requires special validation, use the crawl4ai schema
     ttl_redis: int
+    # Max number of web pages visited per search_web_tool call.
+    max_links: int = 6
 
 
 class ExaminationRegulations(BaseModel):

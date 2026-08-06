@@ -34,7 +34,7 @@ class RedisClient:
                     port=settings.redis.port,
                     username=settings.redis.username,
                     password=settings.redis.password,
-                    timeout=15,
+                    timeout=settings.redis.connection_timeout,
                     decode_responses=True,
                     max_connections=50,
                 )
