@@ -1,6 +1,5 @@
 langchain===0.3.26
 langchain-community===0.3.27
-langchain-ollama===0.3.5
 langchain_experimental===0.3.4
 langchain-openai===0.3.28
 langchain-redis===0.2.3
@@ -9,7 +8,6 @@ langgraph===0.5.3
 pydantic-settings===2.10.1
 pypdf===4.0.1
 PyPDF2===3.0.1
-fastembed===0.2.1
 streamlit===1.47.0
 streamlit-cookies-controller===0.0.4
 ipython
@@ -19,11 +17,11 @@ pymilvus===2.5.12
 redis
 nest_asyncio
 python-frontmatter # for extraction from matadata from md files
+numpy
 # matplotlib
 # milvus-cli
 # pandas
 # seaborn
-# numpy
 # ragas
 
 

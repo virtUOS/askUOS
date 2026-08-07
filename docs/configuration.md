@@ -12,7 +12,7 @@ ask.UOS uses YAML files, environment variables, and runtime settings managed thr
 
 - Model, application, and database settings are validated at startup
 - MCP agents (`mcp_agents`) support per-agent recursion limit, timeout, enabled flag, and an optional startup connectivity check (`fail_on_mcp_unreachable`)
-- Embedding configuration supports Ollama and Fastembed
+- Embedding configuration uses a self-hosted, OpenAI-compatible endpoint (e.g. BGE-M3 served behind LiteLLM), the same pattern as the self-hosted chat models
 
 ## Loading and Updating
 

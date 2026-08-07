@@ -75,6 +75,8 @@ OPENAI_API_KEY=""
 # If models are hosted locally
 API_KEY_SELF_HOSTED_MAIN=""
 API_KEY_SELF_HOSTED_HELPER=""
+API_KEY_SELF_HOSTED_SUBAGENT=""
+API_KEY_SELF_HOSTED_EMBEDDING=""
 
 #============#
 # RAGFlow    #

@@ -5,8 +5,6 @@ from typing import ClassVar, List, Literal, Optional, Tuple, Type, Union
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from pydantic import BaseModel, Field, model_validator
 
-EmbeddingType = Literal["FastEmbed", "Ollama"]
-
 
 class MsgName(str, Enum):
     further_help = "further_help"
@@ -142,26 +140,12 @@ class ApplicationConfig(BaseModel):
     cors_allowed_origins: list[str] = Field(default_factory=list)
 
 
-class EmbeddingConnectionSettings(BaseModel):
-    """Settings for Ollama embeddings"""
-
-    model_name: str = (
-        "intfloat/multilingual-e5-large"  # e.g., "llama2", "mistral", "intfloat/multilingual-e5-large"
-    )
-    base_url: Optional[str] = "http://localhost:11434"
-    headers: Optional[dict] = None
-
-
 class EmbeddingSettings(BaseModel):
-    """Settings for text embedding"""
+    """Settings for the self-hosted embedding model (OpenAI-compatible endpoint, e.g. behind LiteLLM)."""
 
-    type: EmbeddingType = "FastEmbed"
-    connection_settings: EmbeddingConnectionSettings
-    chunk_size: int = (
-        1800  # Size of each chunk in characters (Only crawler uses a text splitter)
-    )
-    chunk_overlap: int = 50
-    batch_size: int = 256
+    model_name: str
+    base_url: str
+    timeout: int = 60
 
 
 class LogSettings(BaseModel):
@@ -232,6 +216,21 @@ class GraphConfig(BaseModel):
     summary_threshold: int
     faq: FaqSettings
     troubleshooting: Troubleshooting
+    # Skip grade_documents' LLM relevance call entirely when this turn's tool
+    # results came only from high-trust structured sources (RAGFlow/FAQ).
+    skip_grading_for_high_trust_sources: bool = False
+    # Embedding-similarity pre-filter thresholds for grade_documents, used on
+    # the remaining (non-high-trust) path. None disables the pre-filter.
+    # Similarity >= high routes straight to generate; <= low routes straight
+    # to rewrite; anything in between still falls through to the LLM grader.
+    embedding_prefilter_high_threshold: Optional[float] = None
+    embedding_prefilter_low_threshold: Optional[float] = None
+    # Max input context (in tokens) of the embedding model configured under
+    # `embedding:` (e.g. BGE-M3 supports up to 8192). grade_documents converts
+    # this into a character budget via a rough chars-per-token estimate (see
+    # _EMBEDDING_CHARS_PER_TOKEN_ESTIMATE in graph_node_edges.py) since exact
+    # tokenization isn't available for the self-hosted embedding model.
+    embedding_prefilter_max_context_tokens: int = 8192
 
 
 class Message(BaseModel):

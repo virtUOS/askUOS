@@ -43,6 +43,17 @@ graph:
   # This tool is a "standalone tool" (not MCP-based), so its description
   # lives here in backend_config.yaml rather than in prompts/ -- it's only
   # needed at all if activate: True. See docs/PROMPT_CONFIGURATION.md.
+  skip_grading_for_high_trust_sources: True
+  # Max input context (in tokens) of the embedding model below -- used to
+  # size how much of the retrieved documents get embedded for
+  # grade_documents' similarity pre-filter. Lower this if a smaller
+  # embedding model is configured.
+  embedding_prefilter_max_context_tokens: 8192
+  # Optional. Embedding-similarity pre-filter thresholds for grade_documents
+  # (applies to the remaining, non-high-trust path). Unset disables the
+  # pre-filter; requires the top-level `embedding:` block to be configured.
+  embedding_prefilter_high_threshold: 0.6
+  embedding_prefilter_low_threshold: 0.01
   troubleshooting:
     collection_name: "troubleshooting"
     activate: False # set True to enable the troubleshooting tool; description below is then required
@@ -62,19 +73,13 @@ application:
   # cors_allowed_origins:
   #   - "https://your-frontend.example.edu"
 
-# Only needed if using Milvus vector db
+# Only needed if using Milvus vector db (or grade_documents' embedding
+# pre-filter). Self-hosted, OpenAI-compatible endpoint -- API key must be
+# provided via API_KEY_SELF_HOSTED_EMBEDDING in the env file.
 embedding:
-  # Text embedding configuration
-  type: "Ollama"
-  connection_settings: {
-    model_name: "nomic-embed-text",
-    base_url : "https://my-ollama-instance.de",
-    headers: {
-      "Authorization": "API-KEY"
-    }
-  }
-  chunk_size: 3500 # Make sure this is not higher than the context window of the model
-  chunk_overlap: 50
+  model_name: "BAAI/bge-m3"
+  base_url: "https://my-litellm-instance.de"
+  timeout: 3
 
 vector_db_settings:
   # Vector database configuration
@@ -88,15 +93,6 @@ vector_db_settings:
     # write_timeout: 15.0   # Time to send request body
     # pool_timeout: 5.0     # Time waiting for connection from pool
 
-
-# Only needed if using Milvus vector db (choose either ollama or fastembed)
-# embedding:
-#   # Text embedding configuration
-#   type: "FastEmbed"
-#   connection_settings: {
-#     model_name: "intfloat/multilingual-e5-large",
-
-#   }
 
 # Required. Web crawler configuration (crawl4ai), used by the web search tool.
 crawl_settings:

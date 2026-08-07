@@ -14,16 +14,15 @@ from typing import List, Optional
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_core.documents.base import Document
 from langchain_core.vectorstores import VectorStore
 from pydantic import DirectoryPath, FilePath, validate_call
 from tqdm import tqdm
 
+from src.chatbot.agents.utils.agent_helpers import model_registry
 from src.chatbot.db.milvus_client import get_milvus_client
 
 # Configurations
-EMBEDDING_MODEL = "intfloat/multilingual-e5-large"
 DEFAULT_DATA_DIR = "./data/documents"
 DEFAULT_COLLECTION_NAME = "examination_regulations"
 CHUNK_SIZE = 1000
@@ -32,8 +31,10 @@ CHUNK_OVERLAP = 0
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize embeddings
-embeddings = FastEmbedEmbeddings(model_name=EMBEDDING_MODEL)
+# Same embedding client used at query time (agent_retriever.py) -- ingestion
+# and retrieval must embed with the same model or similarity search is
+# comparing vectors from two different spaces.
+embeddings = model_registry.embedding_llm.embeddings
 
 
 URI = os.getenv("MILVUS_URL")

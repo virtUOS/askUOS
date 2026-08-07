@@ -8,6 +8,7 @@ from collections import deque
 from typing import Annotated, ClassVar, Dict, List, Literal, Optional, Union
 from urllib.parse import urlparse
 
+import numpy as np
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 from langchain.messages import RemoveMessage
@@ -31,6 +32,7 @@ from src.chatbot.agents.models import Reference, RetrievalResult, RetrievalToolT
 from src.chatbot.agents.subagents.main import subagents_registry
 from src.chatbot.agents.utils.agent_helpers import model_registry
 from src.chatbot.agents.utils.agent_retriever import (
+    NOT_FOUND_MESSAGE,
     _examination_regulations_tool,
     _retriever_his_in_one_tool,
     retrieve_from_infinity_ragflow,
@@ -80,6 +82,29 @@ def add_lists(existing: list, new: list) -> list:
 def add(left, right):
     """Reducer"""
     return left + right
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    a, b = np.asarray(a), np.asarray(b)
+    denom = np.linalg.norm(a) * np.linalg.norm(b)
+    if denom == 0:
+        return 0.0
+    return float(np.dot(a, b) / denom)
+
+
+# Rough chars-per-token estimate used to convert
+# settings.graph.embedding_prefilter_max_context_tokens into a character
+# budget for grade_documents' embedding pre-filter -- exact tokenization
+# isn't available for the self-hosted embedding model. Deliberately generous
+# (real text, especially German, often tokenizes denser than this); the hard
+# cap below bounds the result regardless.
+_EMBEDDING_CHARS_PER_TOKEN_ESTIMATE = 4
+# Hard ceiling on how much text gets embedded in one grade_documents
+# pre-filter call, independent of the configured model's nominal context
+# window. Not exposed as a config value -- a bigger blob doesn't sharpen
+# relevance (it just dilutes the resulting vector further) and costs latency
+# on the self-hosted endpoint, so this bounds it even for very large windows.
+_EMBEDDING_MAX_CHARS_CAP = 24000
 
 
 # Status codes narrated to the client while a turn is in flight, keyed to
@@ -135,6 +160,10 @@ class State(TypedDict):
         bool
     ]  # To determine which node generates the answer  (!!!set to False when invoking graph)
     tool_messages: Optional[str]
+    # True when every one of this turn's tool results came from a
+    # high-trust structured source (RAGFlow/FAQ) -- lets grade_documents
+    # skip its LLM relevance call. See _extract_tool_info.
+    all_high_trust_source: Optional[bool]
     last_tool_usage: Optional[dict]
     rewrite_query: bool  # Flag to indicate if the query should be rewritten (!!!set to False when invoking graph)
     # ---- Per-request references----
@@ -151,6 +180,12 @@ class GraphNodesMixin:
         search_query = []
         new_links = []
         new_doc_refs = []
+        # Tracks whether every successful result this turn came from a
+        # high-trust structured source (RAGFlow/FAQ), so grade_documents can
+        # skip its LLM relevance call for those turns. Any exception in the
+        # batch (a partial tool failure) or any non-high-trust result (web
+        # search, unknown) forces this False.
+        all_high_trust = bool(retrieval_result)
 
         if retrieval_result:
             for result in retrieval_result:
@@ -158,7 +193,22 @@ class GraphNodesMixin:
 
                 if isinstance(result, Exception):
                     logger.error(f"Tool call failed: {result}")
+                    all_high_trust = False
                     continue
+
+                # retrieve_from_infinity_ragflow (the FAQ shortcut) returns a
+                # normal, source_name-tagged RetrievalResult even when RAGFlow
+                # found nothing -- result_text is just NOT_FOUND_MESSAGE. Without
+                # this check that placeholder gets classified high-trust and
+                # skip_grading_for_high_trust_sources sends "no info" straight
+                # to generate instead of letting the LLM grader route to rewrite.
+                is_high_trust = result.result_text != NOT_FOUND_MESSAGE and (
+                    result.source_name == settings.graph.faq.collection_name
+                    or result.retrieval_tool == RetrievalToolType.RAGFLOW.value
+                )
+                if not is_high_trust:
+                    all_high_trust = False
+
                 if result.source_name == settings.graph.faq.collection_name:
                     unique_refs = {
                         item.url_reference_askuos for item in result.reference
@@ -178,13 +228,24 @@ class GraphNodesMixin:
                 outputs_txt += result.result_text + "\n\n"
                 search_query.append(result.search_query)
 
-            return outputs_txt, search_query, new_links, new_doc_refs
-        return "No content found", search_query, new_links, new_doc_refs
+            return outputs_txt, search_query, new_links, new_doc_refs, all_high_trust
+        return "No content found", search_query, new_links, new_doc_refs, all_high_trust
 
     @staticmethod
     def extract_ragflow_chunks(
         chunks: list, url_reference: str = None, query: str = None
     ):
+        if not chunks:
+            # A well-formed RAGFlow response with zero matching chunks --
+            # not malformed, just nothing relevant. Route it through the
+            # same "no info" path as the other empty-result cases above
+            # (fewer than 2 tool messages / empty text) instead of falling
+            # into the loop below, where `retrieved_item` would never get
+            # bound and the trailing `retrieved_item["dataset_name"]` would
+            # raise a NameError that gets misreported as a generic tool
+            # failure.
+            return GraphNodesMixin._no_info_result(query)
+
         DOCUMENT_SEPARATOR = "\n\n"
         results = []
         ref = []
@@ -647,8 +708,8 @@ class GraphNodesMixin:
             *tool_tasks, return_exceptions=True
         )
 
-        outputs_txt, search_query, new_links, new_doc_refs = self._extract_tool_info(
-            retrieval_results
+        outputs_txt, search_query, new_links, new_doc_refs, all_high_trust_source = (
+            self._extract_tool_info(retrieval_results)
         )
         # TODO Sometines the agent calls several tools and the tokens surpass the defined context window. Do summarization here.
         last_tool_usage = state["messages"][-1].additional_kwargs
@@ -657,6 +718,7 @@ class GraphNodesMixin:
         return {
             "messages": [RemoveMessage(id=last_msg.id)],
             "tool_messages": outputs_txt,
+            "all_high_trust_source": all_high_trust_source,
             "last_tool_usage": last_tool_usage,  # last ai message with previous tool usage
             "search_query": search_query,
             "about_application": about_application,
@@ -855,6 +917,14 @@ class GraphEdgesMixin:
             return "agent_node"
         return END
 
+    def _next_generate_node(self, state: State) -> str:
+        """Which generate* node a "documents are relevant" decision routes to."""
+        if state.get("teaching_degree", False):
+            return "generate_teaching_degree_node"
+        elif state.get("about_application", False):
+            return "generate_application"
+        return "generate"
+
     async def grade_documents(self, state: State) -> Literal["generate", "rewrite"]:
         """Evaluate if retrieved documents are relevant to the query.
 
@@ -876,7 +946,85 @@ class GraphEdgesMixin:
             )
             return "rewrite"
 
+        # Skip the LLM relevance call entirely when this turn's tool results
+        # came only from high-trust structured sources (RAGFlow/FAQ) -- see
+        # _extract_tool_info. Deliberately no _write_status call here: the
+        # next node starts streaming immediately, there's nothing to narrate.
+        if settings.graph.skip_grading_for_high_trust_sources and state.get(
+            "all_high_trust_source", False
+        ):
+            next_node = self._next_generate_node(state)
+            log_event(
+                "GRADE_DOCUMENTS",
+                "Skipped grading for high-trust structured source",
+                node="grade_documents",
+                decision=next_node,
+                reason="high_trust_source",
+            )
+            return next_node
+
         tool_query = " ".join(state["search_query"])
+
+        # Cheap similarity pre-filter ahead of the LLM grading call, only for
+        # the noisier (non-high-trust) path above. Only short-circuits at
+        # confident extremes -- the ambiguous middle still falls through to
+        # the LLM grader below, unchanged.
+        if settings.graph.embedding_prefilter_high_threshold is not None:
+            query_coro = model_registry.embedding_llm.embeddings.aembed_query(
+                f'{state["user_initial_query"]}, {tool_query}'
+            )
+            max_chars = min(
+                settings.graph.embedding_prefilter_max_context_tokens
+                * _EMBEDDING_CHARS_PER_TOKEN_ESTIMATE,
+                _EMBEDDING_MAX_CHARS_CAP,
+            )
+            doc_coro = model_registry.embedding_llm.embeddings.aembed_query(
+                tool_messages[:max_chars]
+            )
+            embeddings = await asyncio.gather(
+                query_coro, doc_coro, return_exceptions=True
+            )
+            # Check for exceptions before using results
+            if any(isinstance(e, Exception) for e in embeddings):
+                error = next((e for e in embeddings if isinstance(e, Exception)), None)
+                log_event(
+                    "GRADE_DOCUMENTS",
+                    "Embedding pre-filter failed; falling through to LLM grader",
+                    level=logging.ERROR,
+                    node="grade_documents",
+                    error=str(error),
+                )
+
+            else:
+                similarity = _cosine_similarity(embeddings[0], embeddings[1])
+                if similarity >= settings.graph.embedding_prefilter_high_threshold:
+                    next_node = self._next_generate_node(state)
+                    log_event(
+                        "GRADE_DOCUMENTS",
+                        "Skipped grading: embedding pre-filter judged clearly relevant",
+                        node="grade_documents",
+                        decision=next_node,
+                        reason=f"embedding_prefilter_high:{similarity:.3f}",
+                    )
+                    return next_node
+                if similarity <= settings.graph.embedding_prefilter_low_threshold:
+                    log_event(
+                        "GRADE_DOCUMENTS",
+                        "Skipped grading: embedding pre-filter judged clearly irrelevant",
+                        node="grade_documents",
+                        decision="rewrite",
+                        reason=f"embedding_prefilter_low:{similarity:.3f}",
+                    )
+                    return "rewrite"
+
+                log_event(
+                    "GRADE_DOCUMENTS",
+                    "Embedding pre-filter inconclusive; falling through to LLM grader",
+                    node="grade_documents",
+                    reason=f"embedding_prefilter_ambiguous:{similarity:.3f}",
+                )
+
+        # Ambiguous -- fall through to the LLM grader below, unchanged.
 
         class GradeResult(BaseModel):
             """Binary score for document relevance check."""
@@ -910,12 +1058,7 @@ class GraphEdgesMixin:
             if score in ["yes", "ja"]:
                 # TODO Further process the relevant paragraphs
                 # self._clean_tool_message = scored_result.relevant_paragraphs
-                if state.get("teaching_degree", False):
-                    next_node = "generate_teaching_degree_node"
-                elif state.get("about_application", False):
-                    next_node = "generate_application"
-                else:
-                    next_node = "generate"
+                next_node = self._next_generate_node(state)
 
                 log_event(
                     "GRADE_DOCUMENTS",
@@ -930,6 +1073,7 @@ class GraphEdgesMixin:
                 log_event(
                     "GRADE_DOCUMENTS",
                     "Documents graded not relevant; routing to rewrite",
+                    logging.DEBUG,
                     node="grade_documents",
                     decision="rewrite",
                     reason=scored_result.reason,

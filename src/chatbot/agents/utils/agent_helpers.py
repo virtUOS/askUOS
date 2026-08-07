@@ -4,16 +4,15 @@ import threading
 from typing import Any
 
 sys.path.append("/app")
-from langchain_community.cache import SQLiteCache
 from langchain_core.caches import InMemoryCache
 from langchain_core.callbacks import StdOutCallbackHandler
 from langchain_core.globals import set_llm_cache
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
-from src.config.models import Model, ProviderNames, RoleNames
+from src.config.models import EmbeddingSettings, Model, ProviderNames, RoleNames
 
 
 # TODO the cached AI answer should contained the sources of the information.
@@ -152,6 +151,36 @@ class ChatLlmSubagent(LLMMixin):
             self._build_llm_obj(model_conf, streaming=False)
 
 
+class EmbeddingMixin:
+    def _build_embedding_obj(self, embedding_conf: EmbeddingSettings):
+        """Build the embedding client"""
+        api_key = os.getenv("API_KEY_SELF_HOSTED_EMBEDDING", "")
+        if not api_key:
+            raise ValueError(
+                "You are trying to connect to a self-hosted embedding model. "
+                "Provide API_KEY_SELF_HOSTED_EMBEDDING in the environment file."
+            )
+        self.embeddings = OpenAIEmbeddings(
+            model=embedding_conf.model_name,
+            base_url=embedding_conf.base_url,
+            api_key=api_key,
+            timeout=embedding_conf.timeout,
+        )
+
+
+class ChatEmbedding(EmbeddingMixin):
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(ChatEmbedding, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self, embedding_conf: EmbeddingSettings):
+        if not self.__dict__:
+            self._build_embedding_obj(embedding_conf)
+
+
 class ReasoningLlm:
     _instance = None
 
@@ -198,6 +227,7 @@ class _ModelRegistry:
         self.chat_llm = None
         self.llm_optional = None
         self.subagent_llm = None
+        self.embedding_llm = None
         for m in models:
             if m.role == RoleNames.MAIN:
                 self.chat_llm = ChatLlm(m)
@@ -215,6 +245,10 @@ class _ModelRegistry:
             # No dedicated `role: subagent` model configured — fall back to
             # the main model, same as before this was configurable.
             self.subagent_llm = self.chat_llm
+        # Embeddings aren't role-multiplexed like the chat models above —
+        # there's only ever one embedding model, configured separately.
+        if settings.embedding:
+            self.embedding_llm = ChatEmbedding(settings.embedding)
 
 
 model_registry = _ModelRegistry()
