@@ -10,7 +10,7 @@ from pydantic_settings import (
 
 from src.chatbot_log.chatbot_logger import logger
 
-from .models import ChatPageConfig, Legal, StartPageConfig, UiConfig
+from .models import ApiConf, ChatPageConfig, Legal, StartPageConfig, UiConfig
 
 
 class AppSettings(BaseSettings):
@@ -26,6 +26,7 @@ class AppSettings(BaseSettings):
 
     language: Literal["Deutsch", "English"]
     ui: UiConfig
+    api: ApiConf
     start_page: StartPageConfig
     chat_page: ChatPageConfig
     legal: Optional[Legal] = (

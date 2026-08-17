@@ -189,3 +189,4 @@ ansible_export/
 config.yaml
 ui_config.yml
 backend_config.yaml
+/prompts/

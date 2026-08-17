@@ -12,9 +12,6 @@ This guide explains how to deploy the askUOS chatbot using Docker Compose. Caddy
 - [UI Configuration (`ui_config.yml`)](#ui-configuration-ui_configyml)
 - [Streamlit Configuration (`config.toml`)](#streamlit-configuration-configtoml)
 - [Prompts Configuration (`prompt_text.py`)](#prompts-configuration-prompt_textpy)
-  - [Adapting Prompts for Your University](#adapting-prompts-for-your-university)
-  - [Mounting the Prompts File](#mounting-the-prompts-file)
-  - [Best Practices for Customization](#best-practices-for-customization)
 - [Docker Compose Configuration](#docker-compose-configuration)
 - [Caddy Configuration (`Caddyfile`) - Optional](#caddy-configuration-caddyfile---optional)
   - [Using a Different Reverse Proxy](#using-a-different-reverse-proxy)
@@ -78,6 +75,8 @@ OPENAI_API_KEY=""
 # If models are hosted locally
 API_KEY_SELF_HOSTED_MAIN=""
 API_KEY_SELF_HOSTED_HELPER=""
+API_KEY_SELF_HOSTED_SUBAGENT=""
+API_KEY_SELF_HOSTED_EMBEDDING=""
 
 #============#
 # RAGFlow    #
@@ -172,66 +171,8 @@ gatherUsageStats = false
 
 ## Prompts Configuration (`prompt_text.py`)
 
-The prompt configuration file ([`src/chatbot/prompt/prompt_text.py`](../src/chatbot/prompt/prompt_text.py)) contains pyhton dictionaries (`prompt_text_english` and `prompt_text_deutsch`) that specifiy the system messages and instructions that define the chatbot's behavior, personality, and knowledge scope. **This file must be mounted to the container (`container_name: ask_uos`) during installation** at the path `/app/src/chatbot/prompt/prompt_text.py`.
+Copy `prompts_example/` to `prompts/` to customize the bot's wording — see [Prompt Configuration](PROMPT_CONFIGURATION.md)
 
-### Adapting Prompts for Your University
-
-When deploying askUOS at a different university, you must customize the prompts to reflect your institution's specific information. Copy and modify this file: [`src/chatbot/prompt/prompt_text.py`](../src/chatbot/prompt/prompt_text.py).
-
-Here are the key areas to modify:
-
-#### 1. University Name and Identity
-- **What to change**: Replace "Osnabrück University" with your university's name
-- **Example**: `# AI Assistant of [Your University Name]`
-
-#### 2. Tool Descriptions and Names
-- **Location**: Lines (around) 12-14, 193-212 (English), 366-368, 551-574 (German)
-- **What to change**:
-  - Update tool names to match your university's systems (e.g., replace "HISinOne" with your application portal name)
-  - Update tool descriptions to reflect your university's software and processes
-  - Modify the `custom_university_web_search` description to point to your university's website
-
-#### 3. University-Specific Processes
-- **Location**: Lines 77-186 (application process), 272-352 (teaching degrees)
-- **What to change**:
-  - Update admission requirements and procedures
-  - Modify degree program structures (Bachelor/Master types)
-  - Adjust application deadlines and processes
-  - Update examination regulations references
-
-#### 4. University-Specific Terminology
-- **Location**: Throughout the file
-- **What to change**:
-  - Replace German-specific terms (e.g., "Zulassungsbeschränkungen", "NC-Fächer") with your local terminology
-  - Update program names and combinations
-  - Modify any culturally-specific references
-
-#### 5. Links and Resources
-- **Location**: Line (around) 174 (FAQ link)
-- **What to change**: Replace with your university's FAQ page and other relevant resources
-
-#### 6. Supported Languages
-- **What to change**: Update language settings based on your university's primary languages
-
-### Mounting the Prompts File
-
-Before mounting the file to the container make sure that the python script is correct, e.g, pay close attention to the script syntax: this file should contain valid python dictionaries.
-
-Add the following volume mount to your `docker-compose.yml`:
-
-```yaml
-volumes:
-  - ./prompt_text.py:/app/src/chatbot/prompt/prompt_text.py
-```
-
-This ensures your customized prompts are used instead of the default ones.
-
-### Best Practices for Customization
-
-1. **Keep the structure**: Maintain the overall structure and format of the prompts
-2. **Preserve tool usage instructions**: The chatbot relies on tools for accurate information
-3. **Update both languages**: Ensure both English and German sections are updated
-4. **Test thoroughly**: After customization, test the chatbot with common queries
 
 ---
 
@@ -347,4 +288,9 @@ image: ghcr.io/virtuos/askuos:previous-version
 ## Next Steps
 
 - Explore architecture in [Architecture Overview](architecture/overview.md)
+
+
+
+
+
 

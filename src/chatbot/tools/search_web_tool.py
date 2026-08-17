@@ -11,13 +11,13 @@ import dotenv
 import nest_asyncio
 import redis.asyncio as redis
 
-from src.chatbot.agents.models import RetrievalResult, ScrapeResult
+from src.chatbot.agents.models import RetrievalResult, RetrievalToolType, ScrapeResult
 from src.chatbot.agents.utils.agent_helpers import model_registry
 from src.chatbot.db.redis_pool import redis_client
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
 from src.chatbot.tools.utils.tool_helpers import decode_string
 from src.chatbot.utils.helpers import compute_search_num_tokens
-from src.chatbot_log.chatbot_logger import logger
+from src.chatbot_log.chatbot_logger import log_event, logger
 from src.config.core_config import settings
 
 # colorama.init(strip=True)
@@ -30,8 +30,9 @@ APPLICATION_CONTEXT_URLS = [
 ]
 
 SEARCH_URL = os.getenv("SEARCH_URL")
-# TODO Increase the number of websites to visit once cache is improved
-MAX_NUM_LINKS = 6
+# Max number of web pages visited per search (crawl_settings.max_links in
+# backend_config.yaml) — previously a hardcoded constant.
+MAX_NUM_LINKS = settings.crawl_settings.max_links
 
 # TODO Change cache mechanism to enabled (in config.yml)
 CRAWL_API_URL = settings.crawl_settings.base_url
@@ -60,13 +61,10 @@ async def generate_summary(text: str, query: str) -> str:
     
     """
 
-    # TODO :BUG CANNOT CHANGE GLOBAL VARIABLE, MY RAISE A RACE CONDITION
-    settings.llm_summarization_mode = True
-
     messages = [("human", reduce_template_string)]
     # TODO: Allthough is very unlikely, make sure that the messages length is not greater than llm context window
     try:
-        response = model_registry.llm_optional.llm.invoke(messages)
+        response = await model_registry.llm_optional.llm.ainvoke(messages)
         summary = response.content
     except:
         logger.error(f"[WEB-SEARCH-SUMMARY] Error while summarizing web content")
@@ -146,14 +144,14 @@ async def crawl_urls_via_api(
 async def extract_url_redis(
     url: str, cache_key: str, client: redis.Redis
 ) -> ScrapeResult | str:
-
-    # Try to get from cache
+    # No per-URL logging here on purpose — this runs once per URL per tool
+    # call (up to MAX_NUM_LINKS), and a debug line per URL adds noise without
+    # adding insight. visit_urls_extract logs one aggregated hit/miss/error
+    # count for the whole batch instead.
     cached_content = await client.get(cache_key)
     if cached_content:
-        logger.debug("[REDIS] CACHE HIT – key=%s (url=%s)", cache_key, url)
         return ScrapeResult.from_json(cached_content)
 
-    logger.debug("[REDIS] CACHE MISS – key=%s (url=%s)", cache_key, url)
     return url
 
 
@@ -232,15 +230,34 @@ async def visit_urls_extract(
         # ------------------------------------------------------------------
         # Process cache results
         # ------------------------------------------------------------------
+        cache_hits = 0
+        cache_misses = 0
+        cache_errors = 0
         for c in task_url_cache_result:
             if isinstance(c, str):
+                cache_misses += 1
                 filtered_urls.append(c)
             elif isinstance(c, ScrapeResult):
+                cache_hits += 1
                 contents.append(
                     c.formatted_markdown
                 )  # ← use cached content immediately
             elif isinstance(c, Exception):
+                cache_errors += 1
                 logger.error(f"[REDIS] Error accessing cache: {c}")
+
+        # One aggregated event per tool call instead of one debug line per
+        # URL — same information (and a hit-rate that's actually easy to
+        # trend over time), far less noise.
+        log_event(
+            "SEARCH_CACHE",
+            "Checked URL cache for search results",
+            node="visit_urls_extract",
+            urls_checked=len(urls),
+            cache_hits=cache_hits,
+            cache_misses=cache_misses,
+            cache_errors=cache_errors,
+        )
 
         if filtered_urls:
             scraping_result = await crawl_urls_via_api(filtered_urls, session=session)
@@ -291,7 +308,6 @@ async def async_search(**kwargs) -> Tuple[str, List]:
     try:
 
         client = redis_client.client
-        logger.debug("[REDIS] Async client created: %s", client)
         query = kwargs.get("query", "")
         query_url = decode_string(query)
         url = SEARCH_URL + query_url
@@ -302,10 +318,22 @@ async def async_search(**kwargs) -> Tuple[str, List]:
         cache_key = f"{__name__}:async_search:{url}"
         cached_content = await client.get(cache_key)
         if cached_content:
-            logger.debug("[REDIS] Retrieved cached searched results (urls)")
+            log_event(
+                "SEARCH_CACHE",
+                "Query-level cache hit",
+                node="async_search",
+                query=query,
+                cache="hit",
+            )
             return RetrievalResult.from_json(cached_content)
 
-        logger.debug("[SEARCH] Cache miss – proceeding with live search")
+        log_event(
+            "SEARCH_CACHE",
+            "Query-level cache miss; proceeding with live search",
+            node="async_search",
+            query=query,
+            cache="miss",
+        )
 
         visited_urls, contents = await visit_urls_extract(
             url=url,
@@ -328,7 +356,10 @@ async def async_search(**kwargs) -> Tuple[str, List]:
             )
 
         retrieved = RetrievalResult(
-            result_text=final_output, reference=visited_urls, search_query=query
+            result_text=final_output,
+            reference=visited_urls,
+            search_query=query,
+            retrieval_tool=RetrievalToolType.WEB_SEARCH,
         )
         # -------------------------- cache store ---------------------------
         if len(final_output) > 20:

@@ -16,6 +16,16 @@ headers = {
     "Authorization": f"Bearer {askUOS_API_KEY}",
 }
 
+# /v1/threads/* (history read/delete) is gated by a separate key set
+# (HISTORY_API_KEYS) than /v1/chat/completions (API_KEYS) — see
+# src/api/main.py's verify_history_api_key. Needs its own header here too,
+# or verify_history() below will get a 401 once the two scopes are
+# genuinely different secrets.
+HISTORY_API_KEY = os.getenv("STREAMLIT_HISTORY_API_KEY", "")
+history_headers = {
+    "Authorization": f"Bearer {HISTORY_API_KEY}",
+}
+
 # Each user gets a different set of queries to make history more interesting
 USER_QUERIES = [
     [
@@ -114,7 +124,7 @@ def verify_history(result: UserResult):
     try:
         response = requests.get(
             f"{API_URL}/v1/threads/{result.thread_id}/messages",
-            headers=headers,
+            headers=history_headers,
             timeout=10,
         )
         response.raise_for_status()

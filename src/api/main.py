@@ -7,8 +7,8 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Set
 
-from fastapi import Request  # WebSocket,
 from fastapi import Depends, FastAPI, HTTPException, Security, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, ToolMessage
@@ -18,20 +18,22 @@ from langgraph.types import Overwrite
 
 from src.api.dependencies import get_agent
 from src.api.helpers import (
+    StreamingLeakGuard,
     _completion_id,
     _extract_text_content,
     _format_references,
+    _is_function_call_json,
     _make_chunk,
     _make_completion,
-    _is_function_call_json,
 )
 from src.api.models import ChatCompletionRequest, ChatRequest, Message
 from src.api.translatations import _get_error_messages
 from src.chatbot.agents.graph import CampusManagementAgent
+from src.chatbot.agents.subagents.main import subagents_registry
 from src.chatbot.db.redis_pool import redis_client
 from src.chatbot.prompt.prompt_date import get_current_date
 from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
-from src.chatbot_log.chatbot_logger import logger
+from src.chatbot_log.chatbot_logger import bind_request_context, log_event, logger
 from src.config.core_config import settings
 from src.config.models import Languages
 
@@ -40,6 +42,11 @@ from src.config.models import Languages
 async def lifespan(app: FastAPI):
     # TODO: Move intizialization of singletons and settings here
     await redis_client.initialize()
+
+    # Initialize agents if mcps were provided !! subagents must be initialized first
+    if settings.mcp_agents:
+        # await subagents_registry.create_subagents()
+        await subagents_registry.create_mcp_clients()
     # Startup: eagerly initialize the singleton so the first request isn't slow
     agent = CampusManagementAgent()
     await agent._ensure_async_initialized()
@@ -51,9 +58,26 @@ async def lifespan(app: FastAPI):
 
 
 # TODO: Refactor key management (should be more robust)
-# Load valid keys
+# Load valid keys.
+#
+# Two deliberately separate scopes, backed by two disjoint env vars:
+# - API_KEYS: gates /v1/chat/completions. These may be handed out broadly
+#   (e.g. to external LibreChat-compatible integrations calling in over the
+#   public internet)
+# - HISTORY_API_KEYS: gates /v1/threads/* (get_messages/delete_messages,
+#   i.e. reading or wiping any user's conversation history). Kept as a
+#   separate set of secrets on purpose: a completions-only API key must not
+#   also be able to read or delete someone else's chat history just because
+#   it happens to be a valid Bearer token somewhere in this API. There is no
+#   per-user scoping within HISTORY_API_KEYS itself (any key in this set can
+#   still read/delete any thread_id) — this only separates "can chat" from
+#   "can read/wipe history," it doesn't yet scope a key to one user's own
+#   threads.
 _valid_api_keys: Set[str] = set(
     key.strip() for key in os.getenv("API_KEYS", "").split(",") if key.strip()
+)
+_valid_history_api_keys: Set[str] = set(
+    key.strip() for key in os.getenv("HISTORY_API_KEYS", "").split(",") if key.strip()
 )
 
 _security = HTTPBearer()
@@ -62,7 +86,7 @@ _security = HTTPBearer()
 async def verify_api_key(
     credentials: HTTPAuthorizationCredentials = Security(_security),
 ) -> str:
-    """Validate the Bearer token against known API keys."""
+    """Validate the Bearer token for /v1/chat/completions against API_KEYS."""
     if credentials.credentials not in _valid_api_keys:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -71,16 +95,38 @@ async def verify_api_key(
     return credentials.credentials
 
 
-app = FastAPI(lifespan=lifespan, title="AksUOS API")
+async def verify_history_api_key(
+    credentials: HTTPAuthorizationCredentials = Security(_security),
+) -> str:
+    """Validate the Bearer token for /v1/threads/* against HISTORY_API_KEYS
+    — intentionally a different key set than verify_api_key (see the note
+    above _valid_api_keys)."""
+    if credentials.credentials not in _valid_history_api_keys:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
+    return credentials.credentials
 
 
-@app.middleware("http")
-async def localhost_only(request: Request, call_next):
-    if request.url.path.startswith("/v1/threads"):
-        client_host = request.client.host
-        if client_host not in ("127.0.0.1", "::1", "localhost"):
-            raise HTTPException(status_code=403, detail="Access denied")
-    return await call_next(request)
+app = FastAPI(lifespan=lifespan, title="askUOS API")
+
+# CORS is only relevant for browser-based clients calling this API
+# cross-origin (e.g. ui-react running on its own dev server/port, or a chat
+# widget embedded on a different domain) — server-to-server callers (curl,
+# another backend, an external LibreChat-compatible integration) are never
+# affected by CORS, since it's a browser-only enforcement mechanism. No
+# middleware is added at all unless at least one origin is configured via
+# application.cors_allowed_origins in backend_config.yaml, so this is a
+# no-op for deployments that don't need it.
+if settings.application.cors_allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.application.cors_allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 @app.post("/v1/chat/completions")
@@ -95,7 +141,7 @@ async def chat_completions(
         -H "Authorization: Bearer sk-askUOS-abc123" \
         -d '{
         "model": "askUOS-agent",
-        "messages": [{"role": "user", "content": "Can I study math? (answer shortly)"}],
+        "messages": [{"role": "user", "content": "According to the examination regulations, can I write a master thesis in english (Biology)? (answer shortly)"}],
         "stream": true,
         "thread_id": "test-123",
         "language": "Deutsch"
@@ -116,6 +162,13 @@ async def chat_completions(
     error_messages = _get_error_messages(language)
     # Fresh thread_id if non provided (this means that the client sends all chat history e.g., Librechat)
     thread_id = request.thread_id if request.thread_id else str(uuid.uuid4())
+
+    # Bind thread_id so every log line for this request — across main.py and
+    # the graph nodes — carries it automatically, without passing it through
+    # every call site by hand. request_id is bound below once completion_id
+    # is known.
+    bind_request_context(thread_id=thread_id)
+    turn_start = time.monotonic()
 
     config = {
         "configurable": {"thread_id": thread_id},
@@ -152,6 +205,7 @@ async def chat_completions(
     completion_id = _completion_id()
     created = int(time.time())
     model = request.model
+    bind_request_context(request_id=completion_id)
 
     # Snapshot previous references
     prev_state = await agent._graph.aget_state(config)
@@ -183,17 +237,51 @@ async def chat_completions(
 
         async def stream_generator():
             streamed = False
+            error = None
+            ai_answer = ""
+            refs_text = ""
 
             # Role chunk (first chunk announces the role)
             yield _make_chunk(completion_id, created, model, role="assistant")
 
             try:
                 ai_answer = ""
-                async for msg, metadata in agent._graph.astream(
+                # Guards against the model leaking a function-call JSON/
+                # pseudo-call blob as its "final answer" text (seen from the
+                # generate-family nodes, which have no tools bound at all for
+                # this call). Only the first ~60 chars are held back to
+                # check; if clean — the overwhelming common case — every
+                # token after that streams live exactly as before.
+                leak_guard = StreamingLeakGuard()
+                # "custom" carries progress narration emitted via
+                # get_stream_writer() from graph nodes (see
+                # graph_node_edges.py::_write_status) — agent_node's tool
+                # decision, tool_node's web crawl/MCP subagent calls,
+                # judge_node, grade_documents, and rewrite are otherwise
+                # silent dead time, since only the generate*/
+                # generate_application/generate_teaching_degree_node nodes
+                # ever stream real answer content below. With stream_mode as
+                # a list, each item is (mode_name, payload) instead of the
+                # bare (msg, metadata) tuple stream_mode="messages" alone
+                # would yield.
+                async for stream_mode_name, payload in agent._graph.astream(
                     input_data,
                     config=config,
-                    stream_mode="messages",
+                    stream_mode=["messages", "custom"],
                 ):
+                    if stream_mode_name == "custom":
+                        # Not answer content — bypasses the leak guard
+                        # entirely and is never saved to chat history.
+                        status = (
+                            payload.get("status") if isinstance(payload, dict) else None
+                        )
+                        if status:
+                            yield _make_chunk(
+                                completion_id, created, model, status=status
+                            )
+                        continue
+
+                    msg, metadata = payload
                     if (
                         msg.content
                         and not isinstance(msg, HumanMessage)
@@ -206,12 +294,32 @@ async def chat_completions(
                         )
                     ):
                         text = _extract_text_content(msg.content)
-                        ai_answer += text
                         if text:
-                            streamed = True
-                            yield _make_chunk(
-                                completion_id, created, model, content=text
-                            )
+                            to_yield = leak_guard.feed(text)
+                            if to_yield:
+                                streamed = True
+                                yield _make_chunk(
+                                    completion_id, created, model, content=to_yield
+                                )
+
+                tail = leak_guard.finalize()
+                if tail:
+                    streamed = True
+                    yield _make_chunk(completion_id, created, model, content=tail)
+
+                ai_answer = leak_guard.full_answer
+                if leak_guard.leaked:
+                    log_event(
+                        "FUNCTION_CALL_LEAK",
+                        "Detected and suppressed a leaked function-call blob in "
+                        "streamed generate-node output",
+                        endpoint="chat_completions",
+                        query=user_message,
+                        content_preview=ai_answer[:120],
+                    )
+                    ai_answer = error_messages["generic"]
+                    streamed = True
+                    yield _make_chunk(completion_id, created, model, content=ai_answer)
 
                 # Stream references
                 final_state = await agent._graph.aget_state(config)
@@ -221,41 +329,70 @@ async def chat_completions(
                 )
                 new_refs = values.get("doc_references", [])[prev_refs_count:]
                 refs_text = _format_references(new_links, new_refs, language)
-                if refs_text:
+                # if both answer and sources exist
+                if refs_text and ai_answer:
                     yield _make_chunk(completion_id, created, model, content=refs_text)
 
                     content_ref = ai_answer + refs_text
                     await _save_to_chat_history(content_ref)
-                else:
-                    if streamed:
-                        await _save_to_chat_history(ai_answer)
+                    streamed = True
+                    if len(ai_answer) < 5:
+                        logger.warning(
+                            f"[AI-ANSWER-TOO-SHORT] AI answer too short: Answer: {ai_answer}"
+                        )
+                # if an answer could not be generated but some sources were found
+                elif refs_text and not ai_answer:
+                    _only_ref_content = (
+                        error_messages["generic_with_references"] + refs_text
+                    )
+                    yield _make_chunk(
+                        completion_id, created, model, content=_only_ref_content
+                    )
+                    content_ref = _only_ref_content + refs_text
+                    await _save_to_chat_history(content_ref)
+                    streamed = True
+                    logger.warning(
+                        "[ONLY_REFERENCE_ANSWER] Failed to provide an answer. Only sources were provided"
+                    )
+                # if an answer was generated without references
+                elif streamed and ai_answer:
+                    await _save_to_chat_history(ai_answer)
+                    if len(ai_answer) < 5:
+                        logger.warning(
+                            f"[AI-ANSWER-TOO-SHORT] AI answer too short: Answer: {ai_answer}"
+                        )
 
                 # Direct response (no tools used)
                 if not streamed:
-                    state = await agent._graph.aget_state(config)
-                    content = _extract_text_content(
-                        state.values["messages"][-1].content
-                    )
+                    # Reuse final_state (fetched above) instead of a second
+                    # aget_state round-trip — nothing changes it in between.
+                    content = _extract_text_content(values["messages"][-1].content)
                     if not content:
                         raise ValueError(
-                            f"[API] Agent Node Failed to generate content. Query {user_message}"
+                            f"[API] Agent Node Failed to generate content or there was no content to stream. Query {user_message}"
                         )
 
                     if _is_function_call_json(content):
                         # Check if content is a function call JSON that should not be shown
-                        logger.warning(
-                            f"[FUNCTION_CALL EXPOSED] Function call JSON detected in response. "
-                            f"Query: {user_message}. Content preview: {content[:100]}"
+                        log_event(
+                            "FUNCTION_CALL_LEAK",
+                            "Detected and suppressed a leaked function-call blob in "
+                            "chat_completions direct (no-tool) response",
+                            endpoint="chat_completions_direct",
+                            query=user_message,
+                            content_preview=content[:120],
                         )
                         content = error_messages["generic"]
 
                     yield _make_chunk(completion_id, created, model, content=content)
+                    ai_answer = content
                     await _save_to_chat_history(content)
 
             except GraphRecursionError:
-                logger.warning(
-                    f"[NOT-ANSWERED] Recursion limit reached. Query: {user_message}"
-                )
+                # No separate warning log here — the TURN_COMPLETED event
+                # below already records error="recursion" for every such
+                # turn, so a free-text line would just duplicate that.
+                error = "recursion"
                 content = error_messages["recursion"]
                 yield _make_chunk(
                     completion_id,
@@ -266,10 +403,10 @@ async def chat_completions(
                 await _save_to_chat_history(content)
 
             except ProgrammableSearchException:
-                logger.error(
-                    f"[SEARCH-ERROR] Search tool failed. Query: {user_message}"
-                )
-                content = (error_messages["search_error"],)
+                # Same as above — TURN_COMPLETED already records
+                # error="search_error"; no need to log it a second time.
+                error = "search_error"
+                content = error_messages["search_error"]
                 yield _make_chunk(
                     completion_id,
                     created,
@@ -279,6 +416,7 @@ async def chat_completions(
                 await _save_to_chat_history(content)
 
             except Exception as e:
+                error = "unexpected_error"
                 logger.exception(f"[ERROR] Unexpected error processing query: {e}")
                 content = error_messages["generic"]
                 yield _make_chunk(
@@ -293,6 +431,20 @@ async def chat_completions(
             yield _make_chunk(completion_id, created, model, finish_reason="stop")
             yield "data: [DONE]\n\n"
 
+            # One canonical, structured event per completed turn — covers
+            # most "what happened for this user's question" analysis without
+            # having to reconstruct it from scattered debug lines.
+            log_event(
+                "TURN_COMPLETED",
+                "Chat turn completed",
+                query=user_message,
+                language=str(language),
+                has_references=refs_text or "",
+                ai_answer=ai_answer,
+                error=error,
+                latency_ms=round((time.monotonic() - turn_start) * 1000, 1),
+            )
+
         return StreamingResponse(
             stream_generator(),
             media_type="text/event-stream",
@@ -305,6 +457,7 @@ async def chat_completions(
 
     # ─── Non-streaming ─────────────────────────────────
 
+    error = None
     try:
         result = await agent._graph.ainvoke(input_data, config=config)
         content = _extract_text_content(result["messages"][-1].content)
@@ -315,9 +468,13 @@ async def chat_completions(
             )
         # Check if content is a function call JSON that should not be shown
         if _is_function_call_json(content):
-            logger.warning(
-                f"[FUNCTION_CALL EXPOSED] Function call JSON detected in non-streaming response. "
-                f"Query: {user_message}. Content preview: {content[:100]}"
+            log_event(
+                "FUNCTION_CALL_LEAK",
+                "Detected and suppressed a leaked function-call blob in "
+                "non-streaming chat_completions response",
+                endpoint="chat_completions_non_streaming",
+                query=user_message,
+                content_preview=content[:120],
             )
             content = error_messages["generic"]
 
@@ -325,30 +482,51 @@ async def chat_completions(
         new_refs = result.get("doc_references", [])[prev_refs_count:]
         refs_text = _format_references(new_links, new_refs, language)
     except GraphRecursionError:
-        logger.warning(f"[NOT-ANSWERED] Recursion limit reached. Query: {user_message}")
+        # No separate warning log here — the TURN_COMPLETED event below
+        # already records error="recursion" for every such turn, so a
+        # free-text line would just duplicate that.
+        error = "recursion"
         content = error_messages["recursion"]
         refs_text = ""
 
     except ProgrammableSearchException:
-        logger.error(f"[SEARCH-ERROR] Search tool failed. Query: {user_message}")
+        # Same as above — TURN_COMPLETED already records
+        # error="search_error"; no need to log it a second time.
+        error = "search_error"
         content = error_messages["search_error"]
         refs_text = ""
 
     except Exception as e:
+        error = "unexpected_error"
         logger.exception(f"[ERROR] Unexpected error processing query: {e}")
         content = error_messages["generic"]
         refs_text = ""
+
+    log_event(
+        "TURN_COMPLETED",
+        "Chat turn completed",
+        query=user_message,
+        language=str(language),
+        streaming=False,
+        has_references=bool(refs_text),
+        ai_answer=content or "",
+        error=error,
+        latency_ms=round((time.monotonic() - turn_start) * 1000, 1),
+    )
+
     return JSONResponse(
         _make_completion(completion_id, created, model, content, refs_text)
     )
 
 
-# NOTE: These endpoints are restricted to localhost only.
-# Streamlit and FastAPI must run in the same container for this to work.
+# Gated by its own key set (HISTORY_API_KEYS via verify_history_api_key),
+# deliberately separate from the /v1/chat/completions key set (API_KEYS) —
+# a completions-only key must not also grant read/delete access to a user's
+# conversation history.
 @app.get("/v1/threads/{thread_id}/messages")
 async def get_messages(
     thread_id: str,
-    api_key: str = Security(verify_api_key),
+    api_key: str = Security(verify_history_api_key),
     agent: CampusManagementAgent = Depends(get_agent),
 ):
     config = {"configurable": {"thread_id": thread_id}}
@@ -361,12 +539,12 @@ async def get_messages(
     return {"messages": messages}
 
 
-# NOTE: These endpoints are restricted to localhost only.
-# Streamlit and FastAPI must run in the same container for this to work.
+# Gated by HISTORY_API_KEYS via verify_history_api_key — see the identical
+# note above get_messages().
 @app.delete("/v1/threads/{thread_id}/messages")
 async def delete_messages(
     thread_id: str,
-    api_key: str = Security(verify_api_key),
+    api_key: str = Security(verify_history_api_key),
     agent: CampusManagementAgent = Depends(get_agent),
 ):
     config = {"configurable": {"thread_id": thread_id}}
@@ -381,116 +559,6 @@ async def delete_messages(
     )
 
     return {"deleted": True}
-
-
-# TODO: This endpoint need to be updated or deleted. Do not use in production
-@app.post("/chat/stream")
-async def chat_stream(
-    request: ChatRequest,
-    api_key: str = Security(verify_api_key),
-):
-    """
-    Stream endpoint — just raw text
-    Example:
-    curl -X POST http://localhost:8000/chat/stream \
-            -H "Content-Type: application/json"  \
-            -H "Authorization: Bearer sk-askUOS-abc123" \
-            -d '{"message": "Welche Fristen gelten für ein Auslandssemester?", "thread_id": "test-123", "language": "English"}' \
-            --no-buffer
-    """
-    agent = CampusManagementAgent()
-
-    async def text_generator():
-        config = {
-            "configurable": {"thread_id": request.thread_id},
-            "recursion_limit": settings.application.recursion_limit,
-        }
-
-        input_data = {
-            "messages": [HumanMessage(content=request.message)],
-            "user_initial_query": request.message,
-            "current_date": get_current_date(settings.language.lower()),
-            "visited_links": [],
-            "doc_references": [],
-            "about_application": False,
-            "teaching_degree": False,
-            "rewrite_query": False,
-            "language": request.language,
-        }
-
-        error_messages = _get_error_messages(request.language)
-        # Snapshot previous references so we only return NEW ones
-        prev_state = await agent._graph.aget_state(config)
-        if prev_state.values:
-            prev_links_count = len(prev_state.values.get("visited_links", []))
-            prev_refs_count = len(prev_state.values.get("doc_references", []))
-        else:
-            prev_links_count = 0
-            prev_refs_count = 0
-
-        streamed = False
-
-        async for msg, metadata in agent._graph.astream(
-            input_data,
-            config,
-            stream_mode="messages",
-        ):
-            if (
-                msg.content
-                and not isinstance(msg, HumanMessage)
-                and not isinstance(msg, ToolMessage)
-                and (
-                    metadata["langgraph_node"] == "generate"
-                    or metadata["langgraph_node"] == "generate_application"
-                    or metadata["langgraph_node"] == "generate_teaching_degree_node"
-                )
-            ):
-
-                text = msg.text
-
-                if text:
-                    streamed = True
-                    yield text
-        # ── Graph finished ──
-
-        # Direct response — agent answered without tools
-        if not streamed:
-            state = await agent._graph.aget_state(config)
-            content = _extract_text_content(state.values["messages"][-1].content)
-            if not content:
-                raise ValueError("[API] Agent Node Failed to generate content")
-
-            # Check if content is a function call JSON that should not be shown
-            if _is_function_call_json(content):
-                logger.warning(
-                    f"[FUNCTION_CALL EXPOSED] Function call JSON detected in /chat/stream response. "
-                    f"Query: {request.message}. Content preview: {content[:100]}"
-                )
-                content = error_messages["generic"]
-
-            yield content
-
-        # Append references at the end of the stream
-        final_state = await agent._graph.aget_state(config)
-        values = final_state.values
-        new_links = list(set(values.get("visited_links", [])[prev_links_count:]))
-        new_refs = values.get("doc_references", [])[prev_refs_count:]
-
-        if new_links or new_refs:
-            yield "\n\n---\n\n"
-            if new_links:
-                yield "**Quelle:**\n"
-                for link in new_links:
-                    yield f"- {link}\n"
-            if new_refs:
-                yield "**Documents:**\n"
-                for ref in new_refs:
-                    if isinstance(ref, dict):
-                        yield f"- {ref.get('source', '')}, p. {ref.get('page', '')}\n"
-                    else:
-                        yield f"- {ref}\n"
-
-    return StreamingResponse(text_generator(), media_type="text/plain")
 
 
 # Health check

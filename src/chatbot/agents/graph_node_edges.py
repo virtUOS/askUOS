@@ -1,33 +1,56 @@
 import asyncio
+import json
+import logging
+import os
+import pdb
+import traceback
 from collections import deque
 from typing import Annotated, ClassVar, Dict, List, Literal, Optional, Union
+from urllib.parse import urlparse
 
+import numpy as np
+from langchain.agents import create_agent
+from langchain.agents.structured_output import ToolStrategy
 from langchain.messages import RemoveMessage
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_classic.tools import StructuredTool
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.prompts import PromptTemplate
+from langchain_mcp_adapters.tools import load_mcp_tools
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import RemoveMessage, add_messages
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, create_model
 from typing_extensions import TypedDict
 
-from src.chatbot.agents.models import Reference, RetrievalResult
+from src.chatbot.agents.models import Reference, RetrievalResult, RetrievalToolType
+from src.chatbot.agents.subagents.main import subagents_registry
+from src.chatbot.agents.utils.agent_helpers import model_registry
 from src.chatbot.agents.utils.agent_retriever import (
+    NOT_FOUND_MESSAGE,
     _examination_regulations_tool,
     _retriever_his_in_one_tool,
     retrieve_from_infinity_ragflow,
 )
 from src.chatbot.agents.utils.exceptions import MustContainSystemMessageException
+from src.chatbot.prompt.internal_prompt_text import translate_internal_string
 from src.chatbot.prompt.main import get_system_prompt, translate_prompt
 from src.chatbot.tools.utils.tool_helpers import ReferenceRetriever
 from src.chatbot.tools.utils.tool_schema import (
+    AgentRetrievedResult,
     HisInOneInput,
     RetrieverInput,
     SearchInputWeb,
+    TaskInput,
 )
-from src.config.models import ToolNames
-from src.chatbot_log.chatbot_logger import logger
+from src.chatbot_log.chatbot_logger import log_event, logger
 from src.config.core_config import settings
-from src.config.models import VectorDBTypes
+from src.config.models import ToolNames, VectorDBTypes
 
 # Importat when it comes to models with restricted context window
 MESSAGE_HISTORY_LIMIT = 7
@@ -36,12 +59,19 @@ MESSAGE_HISTORY_LIMIT = 7
 # TODO Verify if this step is necessary
 def _sanitize_ai_message(message: AIMessage) -> AIMessage:
     """Strip non-serializable metadata."""
-    return AIMessage(
-        content=message.content,
-        tool_calls=message.tool_calls or [],
-        additional_kwargs=message.additional_kwargs or {},
-        id=message.id,
-    )
+    try:
+        return AIMessage(
+            content=message.content,
+            tool_calls=message.tool_calls or [],
+            additional_kwargs=message.additional_kwargs or {},
+            id=message.id,
+        )
+    except Exception as e:
+
+        logger.error(
+            f"[LLM-OPERATION] Model answer could not be mapped to AIMessage: {e}"
+        )
+        raise
 
 
 def add_lists(existing: list, new: list) -> list:
@@ -52,6 +82,55 @@ def add_lists(existing: list, new: list) -> list:
 def add(left, right):
     """Reducer"""
     return left + right
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    a, b = np.asarray(a), np.asarray(b)
+    denom = np.linalg.norm(a) * np.linalg.norm(b)
+    if denom == 0:
+        return 0.0
+    return float(np.dot(a, b) / denom)
+
+
+# Rough chars-per-token estimate used to convert
+# settings.graph.embedding_prefilter_max_context_tokens into a character
+# budget for grade_documents' embedding pre-filter -- exact tokenization
+# isn't available for the self-hosted embedding model. Deliberately generous
+# (real text, especially German, often tokenizes denser than this); the hard
+# cap below bounds the result regardless.
+_EMBEDDING_CHARS_PER_TOKEN_ESTIMATE = 4
+# Hard ceiling on how much text gets embedded in one grade_documents
+# pre-filter call, independent of the configured model's nominal context
+# window. Not exposed as a config value -- a bigger blob doesn't sharpen
+# relevance (it just dilutes the resulting vector further) and costs latency
+# on the self-hosted endpoint, so this bounds it even for very large windows.
+_EMBEDDING_MAX_CHARS_CAP = 24000
+
+
+# Status codes narrated to the client while a turn is in flight, keyed to
+# frontend i18n strings (ui-react/src/i18n.ts: chat.status.<code>). Only the
+# generate*/generate_application/generate_teaching_degree_node nodes ever
+# stream real answer content (see api/main.py's stream_generator) -- every
+# other node (agent_node's tool decision, tool_node's web crawl/MCP subagent
+# calls, judge_node, grade_documents, rewrite) is otherwise silent dead time,
+# even though tool_node alone can take 10-40s (see the RAGFlow subagent
+# round-trip measurement in bugs_to_fix.md #28). This narrates progress
+# through those nodes without changing what's asked of the model or how much
+# context it sees.
+def _write_status(status: str) -> None:
+    """Emit a lightweight progress event via LangGraph's "custom" stream
+    mode. Safe to call unconditionally from any node: get_stream_writer()
+    returns a no-op writer when the graph isn't being run with "custom" in
+    stream_mode (e.g. the non-streaming /v1/chat/completions path, or the
+    __main__ smoke test in graph.py) -- a failure here must never affect the
+    actual turn, only the optional narration of it.
+    """
+    try:
+        get_stream_writer()(
+            {"status": status}
+        )  # the status is used in the frontend to serve the right message. See ask_uos_chat.py
+    except Exception as e:
+        logger.debug(f"[STATUS] Failed to emit status update '{status}': {e}")
 
 
 class State(TypedDict):
@@ -81,6 +160,10 @@ class State(TypedDict):
         bool
     ]  # To determine which node generates the answer  (!!!set to False when invoking graph)
     tool_messages: Optional[str]
+    # True when every one of this turn's tool results came from a
+    # high-trust structured source (RAGFlow/FAQ) -- lets grade_documents
+    # skip its LLM relevance call. See _extract_tool_info.
+    all_high_trust_source: Optional[bool]
     last_tool_usage: Optional[dict]
     rewrite_query: bool  # Flag to indicate if the query should be rewritten (!!!set to False when invoking graph)
     # ---- Per-request references----
@@ -97,28 +180,244 @@ class GraphNodesMixin:
         search_query = []
         new_links = []
         new_doc_refs = []
+        # Tracks whether every successful result this turn came from a
+        # high-trust structured source (RAGFlow/FAQ), so grade_documents can
+        # skip its LLM relevance call for those turns. Any exception in the
+        # batch (a partial tool failure) or any non-high-trust result (web
+        # search, unknown) forces this False.
+        all_high_trust = bool(retrieval_result)
 
-        for result in retrieval_result:
-            if isinstance(result, Exception):
-                logger.error(f"Tool call failed: {result}")
-                continue
-            if result.source_name == settings.graph.faq.collection_name:
-                unique_refs = {item.url_reference_askuos for item in result.reference}
-                new_links.extend(unique_refs)
-            elif result.source_name in (
-                settings.graph.examination_regulations.collection_name,
-                settings.graph.troubleshooting.collection_name,
-            ):
-                new_doc_refs.extend(result.reference)
+        if retrieval_result:
+            for result in retrieval_result:
+                # For general mcps, this should return a doc_reference markdown link
 
-            # web search
-            else:
-                new_links.extend(result.reference)
+                if isinstance(result, Exception):
+                    logger.error(f"Tool call failed: {result}")
+                    all_high_trust = False
+                    continue
 
-            outputs_txt += result.result_text + "\n\n"
-            search_query.append(result.search_query)
+                # retrieve_from_infinity_ragflow (the FAQ shortcut) returns a
+                # normal, source_name-tagged RetrievalResult even when RAGFlow
+                # found nothing -- result_text is just NOT_FOUND_MESSAGE. Without
+                # this check that placeholder gets classified high-trust and
+                # skip_grading_for_high_trust_sources sends "no info" straight
+                # to generate instead of letting the LLM grader route to rewrite.
+                is_high_trust = result.result_text != NOT_FOUND_MESSAGE and (
+                    result.source_name == settings.graph.faq.collection_name
+                    or result.retrieval_tool == RetrievalToolType.RAGFLOW.value
+                )
+                if not is_high_trust:
+                    all_high_trust = False
 
-        return outputs_txt, search_query, new_links, new_doc_refs
+                if result.source_name == settings.graph.faq.collection_name:
+                    unique_refs = {
+                        item.url_reference_askuos for item in result.reference
+                    }
+                    new_links.extend(unique_refs)
+                elif result.retrieval_tool == RetrievalToolType.RAGFLOW.value:
+
+                    new_doc_refs.extend(result.reference)
+
+                # web search
+                elif result.retrieval_tool == RetrievalToolType.WEB_SEARCH.value:
+                    new_links.extend(result.reference)
+
+                elif result.retrieval_tool == RetrievalToolType.UNKNOWN.value:
+                    pass
+
+                outputs_txt += result.result_text + "\n\n"
+                search_query.append(result.search_query)
+
+            return outputs_txt, search_query, new_links, new_doc_refs, all_high_trust
+        return "No content found", search_query, new_links, new_doc_refs, all_high_trust
+
+    @staticmethod
+    def extract_ragflow_chunks(
+        chunks: list, url_reference: str = None, query: str = None
+    ):
+        if not chunks:
+            # A well-formed RAGFlow response with zero matching chunks --
+            # not malformed, just nothing relevant. Route it through the
+            # same "no info" path as the other empty-result cases above
+            # (fewer than 2 tool messages / empty text) instead of falling
+            # into the loop below, where `retrieved_item` would never get
+            # bound and the trailing `retrieved_item["dataset_name"]` would
+            # raise a NameError that gets misreported as a generic tool
+            # failure.
+            return GraphNodesMixin._no_info_result(query)
+
+        DOCUMENT_SEPARATOR = "\n\n"
+        results = []
+        ref = []
+
+        for retrieved_item in chunks:
+            source = retrieved_item["document_keyword"]
+            page = (
+                retrieved_item["positions"][0][0] if retrieved_item["positions"] else 0
+            )
+
+            RAGFLOW_BETA_TOKEN = os.getenv("RAGFLOW_BETA_TOKEN", "")
+            ragflow_link = "{}/document/{}?ext=pdf&prefix=document&auth={}"
+            ref.append(
+                Reference(
+                    source=source,
+                    page=page,
+                    doc_id=retrieved_item["document_id"],
+                    url_reference_askuos=ragflow_link.format(
+                        url_reference,
+                        retrieved_item["document_id"],
+                        RAGFLOW_BETA_TOKEN,
+                    ),  # references are done in fastapi
+                )
+            )
+            results.append(f"Source: {source} \nText: {retrieved_item['content']}")
+        # Frontend endpoint https://ragflow.de/document/541adbd59f694d86277375f17b9b4306?ext=pdf&prefix=document&auth=beta_token
+        # Backed endpoint https://ragflow.de/api/v1/documents/doc_id/preview
+        return RetrievalResult(
+            result_text=DOCUMENT_SEPARATOR.join(results),
+            reference=ref,
+            source_name=retrieved_item["dataset_name"],
+            search_query=query,
+            retrieval_tool=RetrievalToolType.RAGFLOW,
+        )
+
+    @staticmethod
+    def _no_info_result(task_description: str) -> RetrievalResult:
+
+        return RetrievalResult(
+            result_text="No information retrieved that could answer/solve the user's query",
+            search_query=task_description,
+            retrieval_tool=RetrievalToolType.UNKNOWN,
+        )
+
+    @staticmethod
+    def _describe_exception(e: BaseException, _depth: int = 0) -> str:
+        """Render an exception for logging, unwrapping ExceptionGroup/
+        TaskGroup wrappers so the *actual* underlying failure is visible.
+
+        The MCP client session (anyio/asyncio TaskGroup under the hood)
+        wraps any real failure (connection refused, DNS failure, auth
+        rejected, bad transport, etc.) in a generic
+        "unhandled errors in a TaskGroup (N sub-exception(s))" message with
+        no detail of its own — str(e) on that wrapper is useless for
+        diagnosing what actually went wrong. Both the builtin
+        ExceptionGroup (py311+) and the `exceptiongroup` backport expose the
+        real failures via `.exceptions`, so we recurse into that instead of
+        relying on isinstance checks tied to a specific Python version.
+        """
+        sub_exceptions = getattr(e, "exceptions", None)
+        if sub_exceptions:
+            if _depth > 5:  # defensive: avoid runaway recursion on odd input
+                return f"{type(e).__name__} (too deeply nested to unwrap further)"
+            return " | ".join(
+                GraphNodesMixin._describe_exception(sub, _depth + 1)
+                for sub in sub_exceptions
+            )
+
+        description = f"{type(e).__name__}: {e}"
+        cause = e.__cause__ or (e.__context__ if not e.__suppress_context__ else None)
+        if cause is not None and cause is not e:
+            description += (
+                f" (caused by {GraphNodesMixin._describe_exception(cause, _depth + 1)})"
+            )
+        return description
+
+    @staticmethod
+    async def task(agent_name: str, task_description: str):
+        """Launch an ephemeral subagent for a task."""
+        CLIENTS: dict = subagents_registry.clients
+        client = CLIENTS[agent_name]
+        agent_extras = subagents_registry.extras[agent_name]
+
+        try:
+            async with client.session(agent_name) as session:
+                tools: StructuredTool = await load_mcp_tools(session)
+                agent = create_agent(
+                    model=model_registry.subagent_llm.llm,
+                    tools=tools,
+                    response_format=ToolStrategy(AgentRetrievedResult),
+                    system_prompt=agent_extras["prompt"],
+                )
+
+                # TODO The subagents should ONLY return the tool messages that are needed to answer the users questions. The tool messages should not be modified by the subagent.
+                invoke_coro = agent.ainvoke(
+                    {"messages": [{"role": "user", "content": task_description}]},
+                    config={"recursion_limit": agent_extras["recursion_limit"]},
+                )
+                timeout_seconds = agent_extras.get("timeout_seconds")
+                if timeout_seconds:
+                    result = await asyncio.wait_for(
+                        invoke_coro, timeout=timeout_seconds
+                    )
+                else:
+                    result = await invoke_coro
+
+                if not result["structured_response"].information_found:
+                    return GraphNodesMixin._no_info_result(task_description)
+
+                # e.g., ragflow mcp returns json string that need to be loaded into json
+                # TODO consider just getting the result of the last tool call??
+                tool_messages: list[dict] = [
+                    msg.content[-1]
+                    for msg in result["messages"]
+                    if isinstance(msg, ToolMessage)
+                ]
+
+                if agent_extras["is_ragflow"]:
+                    # NOTE: this assumes the ragflow chunk payload is the
+                    # second-to-last tool message. Fragile if the subagent
+                    # calls a different number/order of tools than expected
+                    # (see bugs_to_fix.md #23) — guarded here just enough to
+                    # avoid an IndexError, not to fully fix the assumption.
+                    # The last tool message -1 is the structured output, message -2 is the actual tool message.
+                    if len(tool_messages) < 2:
+                        logger.error(
+                            "[RAGFLOW] Expected at least 2 tool messages to extract "
+                            f"chunk information, got {len(tool_messages)}"
+                        )
+                        return GraphNodesMixin._no_info_result(task_description)
+
+                    text = tool_messages[-2].get("text", "")
+                    if not text:
+                        logger.error(
+                            "[RAGFLOW] Chunk information could not be extracted"
+                        )
+                        return GraphNodesMixin._no_info_result(task_description)
+                    chunks: dict = json.loads(text)
+
+                    return GraphNodesMixin.extract_ragflow_chunks(
+                        chunks=chunks["chunks"],
+                        url_reference=agent_extras["reference_url"],
+                        query=task_description,
+                    )
+                else:
+                    combined_text = "\n\n".join(
+                        msg.get("text", "")
+                        for msg in tool_messages
+                        if isinstance(msg, dict)
+                    )
+                    return RetrievalResult(
+                        result_text=combined_text,
+                        search_query=task_description,
+                        retrieval_tool=RetrievalToolType.UNKNOWN,
+                    )
+
+        except Exception as e:
+            log_event(
+                "SUBAGENT_ERROR",
+                "Subagent call failed; returning graceful fallback",
+                level=logging.ERROR,
+                agent_name=agent_name,
+                task_description=task_description,
+                error=GraphNodesMixin._describe_exception(e),
+                # Full traceback too (truncated defensively) — the
+                # unwrapped `error` field above names the real exception
+                # type/message, but the traceback pinpoints exactly where
+                # it happened, which matters for TaskGroup-wrapped MCP
+                # session failures that don't otherwise say much.
+                traceback=traceback.format_exc()[-4000:],
+            )
+            return GraphNodesMixin._no_info_result(task_description)
 
     @staticmethod
     def create_tools() -> List:
@@ -127,26 +426,19 @@ class GraphNodesMixin:
         Returns:
             List[BaseTool]: Configured tools for the agent
         """
-        from langchain_classic.tools import StructuredTool
 
         from src.chatbot.tools.search_web_tool import async_search
 
         # TODO: Tool descriptions are always in german (Translate to english)
-        return [
-            StructuredTool.from_function(
-                name=ToolNames.TROUBLESHOOTING_TOOL,
-                coroutine=_retriever_his_in_one_tool,
-                description=translate_prompt()["HISinOne_troubleshooting_questions"],
-                args_schema=HisInOneInput,
-                handle_tool_errors=True,
-            ),
-            StructuredTool.from_function(
-                name=ToolNames.EXAMINATION_REGULATIONS_TOOL,
-                coroutine=_examination_regulations_tool,
-                description=translate_prompt()["examination_regulations"],
-                args_schema=RetrieverInput,
-                handle_tool_errors=True,
-            ),
+        tools = [
+            # StructuredTool.from_function(
+            #     name=ToolNames.EXAMINATION_REGULATIONS_TOOL,
+            #     coroutine=_examination_regulations_tool,
+            #     description=translate_prompt()["examination_regulations"],
+            #     args_schema=RetrieverInput,
+            #     handle_tool_errors=True,
+            # ),
+            # TODO: Make serarch available through mcp
             StructuredTool.from_function(
                 name=ToolNames.SEARCH_WEB_TOOL,
                 coroutine=async_search,
@@ -155,6 +447,45 @@ class GraphNodesMixin:
                 handle_tool_errors=True,
             ),
         ]
+
+        if settings.graph.troubleshooting.activate:
+            tools.append(
+                StructuredTool.from_function(
+                    name=ToolNames.TROUBLESHOOTING_TOOL,
+                    coroutine=_retriever_his_in_one_tool,
+                    description=settings.graph.troubleshooting.description,
+                    args_schema=HisInOneInput,
+                    handle_tool_errors=True,
+                )
+            )
+        # Check the populated registry (not just settings.mcp_agents), since
+        # every configured agent could have enabled: False — Literal[()]
+        # with zero options would otherwise raise when building the schema.
+        if subagents_registry.agent_names:
+
+            class _TaskInput(TaskInput):
+
+                _TaskInput = create_model(
+                    "TaskInput",
+                    agent_name=(
+                        Literal[tuple(subagents_registry.agent_names)],
+                        Field(..., description="Agent name"),
+                    ),
+                    task_description=(str, Field(..., description="Task description")),
+                    __base__=TaskInput,
+                )
+
+            tools.append(
+                StructuredTool.from_function(
+                    name=ToolNames.TASK,
+                    coroutine=GraphNodesMixin.task,
+                    description=subagents_registry.description,
+                    args_schema=_TaskInput,
+                    handle_tool_errors=True,
+                )
+            )
+
+        return tools
 
     @staticmethod
     def filter_messages(messages: List[BaseMessage], k: int) -> List[BaseMessage]:
@@ -173,7 +504,7 @@ class GraphNodesMixin:
 
         return messages[-k:]
 
-    def agent_node(self, state: State) -> Dict:
+    async def agent_node(self, state: State) -> Dict:
         """Decide course of action.
 
         Args:
@@ -196,13 +527,18 @@ class GraphNodesMixin:
         # Prepend system message ONLY for the LLM call — never persisted to state
         # The first message in the conversation must be a SystemMessage.
         llm_messages = system_prompt + filtered_messages
-        response = self._llm_with_tools.invoke(llm_messages)
+        try:
+            response = await self._llm_with_tools.ainvoke(llm_messages)
+        except Exception as e:
+            # node failure.
+            logger.error(f"[LLM-OPERATION] LLM called failed: {e}")
+            raise
         return {
             "messages": [_sanitize_ai_message(response)],
             "search_query": [],
         }
 
-    def judge_node(self, state: State) -> Dict:
+    async def judge_node(self, state: State) -> Dict:
         """Evaluate if agent's decision to not use tools was appropriate.
 
         Args:
@@ -212,7 +548,6 @@ class GraphNodesMixin:
             Dict: Updated state with judgement result
         """
         language = state.get("language", "Deutsch")
-        logger.debug("[LANGGRAPH][JUDGE NODE] Evaluating agent's decision to use tools")
 
         class JudgementResult(BaseModel):
             """Result of agent's tool usage judgement."""
@@ -224,7 +559,7 @@ class GraphNodesMixin:
                 description="Back up your decision with a short explanation"
             )
 
-        llm_with_str_output = self._llm.with_structured_output(JudgementResult)
+        llm_with_str_output = self._llm_optional.with_structured_output(JudgementResult)
         prompt = PromptTemplate(
             template="""
                Your role is to evaluate whether an agent's choice not to utilize a tool was justifiable in a given interaction. 
@@ -253,18 +588,29 @@ class GraphNodesMixin:
         )
 
         chain = prompt | llm_with_str_output
-        score = chain.invoke(
+        _write_status("checking_response")
+        score = await chain.ainvoke(
             {"question": state["user_initial_query"], "context": state["messages"][-1]}
         )
 
+        # Structured decision event: queryable later on decision/reason (e.g.
+        # "how often does the agent skip tools when it shouldn't"), instead
+        # of only being visible as free text when the decision was "no".
+        log_event(
+            "JUDGE_NODE",
+            "Evaluated agent's decision to not use a tool",
+            node="judge_node",
+            decision=score.judgement_binary,
+            reason=score.reason,
+        )
+
         if score.judgement_binary.lower() == "no":
-            logger.debug(
-                f"[LANGGRAPH][JUGE NODE] The agent should have used a tool. Reason: {score.reason}"
-            )
             # TODO use reducer to mange messages
             return {
                 "messages": [
-                    HumanMessage(content=translate_prompt(language)["use_tool_msg"])
+                    HumanMessage(
+                        content=translate_internal_string("use_tool_msg", language)
+                    )
                 ],
                 "score_judgement_binary": score.judgement_binary,
             }
@@ -288,6 +634,22 @@ class GraphNodesMixin:
         # Read accumulated visited_links from State (not self)
         visited_links_so_far = state.get("visited_links", [])
 
+        # Narrate what's about to happen -- this is the single biggest
+        # silent-latency gap in a turn (web crawling / MCP subagent round
+        # trips), see _write_status above. ToolNames.TASK is kept as its own
+        # generic status (not lumped in with the vector-DB-backed
+        # troubleshooting tool) because it can dispatch to *any*
+        # admin-configured MCP subagent (mcp_agents in backend_config.yaml)
+        # -- not just document/RAGFlow-style retrieval -- so its narration
+        # can't assume the word "documents" is accurate.
+        tool_names_called = {tc["name"] for tc in message.tool_calls}
+        if ToolNames.SEARCH_WEB_TOOL in tool_names_called:
+            _write_status("searching_web")
+        if ToolNames.TROUBLESHOOTING_TOOL in tool_names_called:
+            _write_status("searching_documents")
+        if ToolNames.TASK in tool_names_called:
+            _write_status("consulting_specialist")
+
         # TODO: FAQ support only available in RAGFLOW. Needs to be done with Milvus
         if settings.graph.faq.activate:
             if (
@@ -295,14 +657,23 @@ class GraphNodesMixin:
                 and settings.vector_db_settings.type
                 == VectorDBTypes.INFINITY_RAGFLOW  # Infinity RAGFlow
             ):
-                # if the agent is in the rewrite state, try to find answer in FAQs
-                tool_tasks.append(
-                    retrieve_from_infinity_ragflow(
-                        collection_name=settings.graph.faq.collection_name,
-                        query=message.tool_calls[0]["args"].get("query"),
-                        extract_reference_url=True,
+                # message.tool_calls[0] isn't necessarily a query-style tool
+                # call (e.g. the "task" tool used for MCP subagents has
+                # agent_name/task_description args, not "query") -- only
+                # attempt the FAQ shortcut when there's an actual query to
+                # search with, otherwise retrieve_from_infinity_ragflow(...)
+                # gets query=None and blows up building RetrievalResult
+                # (search_query is a required str, not Optional).
+                faq_query = message.tool_calls[0]["args"].get("query")
+                if faq_query:
+                    # if the agent is in the rewrite state, try to find answer in FAQs
+                    tool_tasks.append(
+                        retrieve_from_infinity_ragflow(
+                            collection_name=settings.graph.faq.collection_name,
+                            query=faq_query,
+                            extract_reference_url=True,
+                        )
                     )
-                )
 
         for tool_call in message.tool_calls:
 
@@ -318,29 +689,36 @@ class GraphNodesMixin:
                 tool_tasks.append(async_search(**tool_call["args"]))
 
             # TODO: Unify all vector db based tools. They all should return the same format (text,(source, page))
-            elif tool_call["name"] == ToolNames.EXAMINATION_REGULATIONS_TOOL:
+            # elif tool_call["name"] == ToolNames.EXAMINATION_REGULATIONS_TOOL:
 
-                tool_tasks.append(_examination_regulations_tool(**tool_call["args"]))
+            #     tool_tasks.append(_examination_regulations_tool(**tool_call["args"]))
 
-            elif tool_call["name"] == ToolNames.TROUBLESHOOTING_TOOL:
+            elif (
+                tool_call["name"] == ToolNames.TROUBLESHOOTING_TOOL
+                and settings.graph.troubleshooting.activate
+            ):
 
                 tool_tasks.append(_retriever_his_in_one_tool(**tool_call["args"]))
 
+            elif tool_call["name"] == ToolNames.TASK:
+                tool_tasks.append(GraphNodesMixin.task(**tool_call["args"]))
+
         # Call tools
-        retrieval_results: RetrievalResult = await asyncio.gather(
+        retrieval_results: list[RetrievalResult] = await asyncio.gather(
             *tool_tasks, return_exceptions=True
         )
-        outputs_txt, search_query, new_links, new_doc_refs = self._extract_tool_info(
-            retrieval_results
+
+        outputs_txt, search_query, new_links, new_doc_refs, all_high_trust_source = (
+            self._extract_tool_info(retrieval_results)
         )
         # TODO Sometines the agent calls several tools and the tokens surpass the defined context window. Do summarization here.
-
         last_tool_usage = state["messages"][-1].additional_kwargs
         # Remove last ai message, otherwise it will be shown to the user (generated in agent node)
         last_msg = state["messages"][-1]
         return {
             "messages": [RemoveMessage(id=last_msg.id)],
             "tool_messages": outputs_txt,
+            "all_high_trust_source": all_high_trust_source,
             "last_tool_usage": last_tool_usage,  # last ai message with previous tool usage
             "search_query": search_query,
             "about_application": about_application,
@@ -362,11 +740,26 @@ class GraphNodesMixin:
         language = state.get("language", "Deutsch")
         user_query = state["user_initial_query"]
 
+        # Rewrite itself is near-instant (no LLM call), but it loops back to
+        # agent_node and re-runs the whole chain -- this status bridges that
+        # gap so a second lap doesn't just look like the first one stalling.
+        _write_status("refining_search")
+
+        # Structured event so rewrite frequency/patterns (e.g. "which queries
+        # keep getting rewritten") can be analyzed later, not just observed
+        # live in the moment.
+        log_event(
+            "REWRITE",
+            "Instructing agent to rephrase the question",
+            node="rewrite",
+            original_query=user_query,
+        )
+
         msg = [
             HumanMessage(
                 content=translate_prompt(language)["rewrite_msg_human"].format(
-                    user_query,
-                    state["last_tool_usage"],
+                    user_query=user_query,
+                    tool_history=state["last_tool_usage"],
                 ),
             )
         ]
@@ -376,7 +769,7 @@ class GraphNodesMixin:
             "rewrite_query": True,
         }
 
-    def generate_helper(self, state, system_message_generate):
+    async def generate_helper(self, state, system_message_generate):
 
         messages_history = state.get("messages", [])
         if not messages_history:
@@ -408,13 +801,19 @@ class GraphNodesMixin:
             raise MustContainSystemMessageException(
                 "The first message in the conversation must be a SystemMessage."
             )
-        response: AIMessage = self._llm.invoke(list(message_deque))
+        try:
+            response: AIMessage = await self._llm.ainvoke(list(message_deque))
+        except Exception as e:
+            logger.error(f"[LLM-OPERATION] LLM called failed: {e}")
+            raise
+
+        logger.debug("[LANGGRAPH] Answer Generated... Sending to API...")
 
         return {
             "messages": [_sanitize_ai_message(response)],
         }
 
-    def generate(self, state: State) -> Dict:
+    async def generate(self, state: State) -> Dict:
         """Generate final answer based on retrieved documents.
 
         Args:
@@ -428,14 +827,14 @@ class GraphNodesMixin:
         tool_message = state.get("tool_messages", None)
         system_message_generate = SystemMessage(
             content=translate_prompt(language)["system_message_generate"].format(
-                state.get("current_date", ""),
-                state.get("search_query", ""),
-                tool_message,
+                current_date=state.get("current_date", ""),
+                user_query=state.get("search_query", ""),
+                context=tool_message,
             )
         )
-        return self.generate_helper(state, system_message_generate)
+        return await self.generate_helper(state, system_message_generate)
 
-    def generate_application(self, state: State) -> Dict:
+    async def generate_application(self, state: State) -> Dict:
 
         logger.debug(["[LANGGRAPH][GENERATE APPLICATION NODE] Generating answer"])
         # tool_message = self._clean_tool_message or state.get("tool_messages", None)
@@ -445,14 +844,14 @@ class GraphNodesMixin:
             content=translate_prompt(language)[
                 "system_message_generate_application"
             ].format(
-                state.get("current_date", ""),
-                state.get("search_query", ""),
-                tool_message,
+                current_date=state.get("current_date", ""),
+                user_query=state.get("search_query", ""),
+                context=tool_message,
             )
         )
-        return self.generate_helper(state, system_message_generate)
+        return await self.generate_helper(state, system_message_generate)
 
-    def generate_teaching_degree_node(self, state: State) -> Dict:
+    async def generate_teaching_degree_node(self, state: State) -> Dict:
         """Generate answer for teaching degree related queries.
 
         Args:
@@ -468,12 +867,12 @@ class GraphNodesMixin:
             content=translate_prompt(language)[
                 "system_message_generate_teaching_degree"
             ].format(
-                state.get("current_date", ""),
-                state.get("search_query", ""),
-                tool_message,
+                current_date=state.get("current_date", ""),
+                user_query=state.get("search_query", ""),
+                context=tool_message,
             )
         )
-        return self.generate_helper(state, system_message_generate)
+        return await self.generate_helper(state, system_message_generate)
 
 
 class GraphEdgesMixin:
@@ -518,7 +917,15 @@ class GraphEdgesMixin:
             return "agent_node"
         return END
 
-    def grade_documents(self, state: State) -> Literal["generate", "rewrite"]:
+    def _next_generate_node(self, state: State) -> str:
+        """Which generate* node a "documents are relevant" decision routes to."""
+        if state.get("teaching_degree", False):
+            return "generate_teaching_degree_node"
+        elif state.get("about_application", False):
+            return "generate_application"
+        return "generate"
+
+    async def grade_documents(self, state: State) -> Literal["generate", "rewrite"]:
         """Evaluate if retrieved documents are relevant to the query.
 
         Args:
@@ -530,16 +937,100 @@ class GraphEdgesMixin:
         language = state.get("language", "Deutsch")
         tool_messages = state.get("tool_messages", "")
         if len(tool_messages) < 10:
-            logger.debug("[LANGGRAPH] GRADE DOCUMENTS EDGE: No tool messages found")
+            log_event(
+                "GRADE_DOCUMENTS",
+                "No tool messages found; routing to rewrite",
+                node="grade_documents",
+                decision="rewrite",
+                reason="no_tool_messages",
+            )
             return "rewrite"
 
+        # Skip the LLM relevance call entirely when this turn's tool results
+        # came only from high-trust structured sources (RAGFlow/FAQ) -- see
+        # _extract_tool_info. Deliberately no _write_status call here: the
+        # next node starts streaming immediately, there's nothing to narrate.
+        if settings.graph.skip_grading_for_high_trust_sources and state.get(
+            "all_high_trust_source", False
+        ):
+            next_node = self._next_generate_node(state)
+            log_event(
+                "GRADE_DOCUMENTS",
+                "Skipped grading for high-trust structured source",
+                node="grade_documents",
+                decision=next_node,
+                reason="high_trust_source",
+            )
+            return next_node
+
         tool_query = " ".join(state["search_query"])
+
+        # Cheap similarity pre-filter ahead of the LLM grading call, only for
+        # the noisier (non-high-trust) path above. Only short-circuits at
+        # confident extremes -- the ambiguous middle still falls through to
+        # the LLM grader below, unchanged.
+        if settings.graph.embedding_prefilter_high_threshold is not None:
+            query_coro = model_registry.embedding_llm.embeddings.aembed_query(
+                f'{state["user_initial_query"]}, {tool_query}'
+            )
+            max_chars = min(
+                settings.graph.embedding_prefilter_max_context_tokens
+                * _EMBEDDING_CHARS_PER_TOKEN_ESTIMATE,
+                _EMBEDDING_MAX_CHARS_CAP,
+            )
+            doc_coro = model_registry.embedding_llm.embeddings.aembed_query(
+                tool_messages[:max_chars]
+            )
+            embeddings = await asyncio.gather(
+                query_coro, doc_coro, return_exceptions=True
+            )
+            # Check for exceptions before using results
+            if any(isinstance(e, Exception) for e in embeddings):
+                error = next((e for e in embeddings if isinstance(e, Exception)), None)
+                log_event(
+                    "GRADE_DOCUMENTS",
+                    "Embedding pre-filter failed; falling through to LLM grader",
+                    level=logging.ERROR,
+                    node="grade_documents",
+                    error=str(error),
+                )
+
+            else:
+                similarity = _cosine_similarity(embeddings[0], embeddings[1])
+                if similarity >= settings.graph.embedding_prefilter_high_threshold:
+                    next_node = self._next_generate_node(state)
+                    log_event(
+                        "GRADE_DOCUMENTS",
+                        "Skipped grading: embedding pre-filter judged clearly relevant",
+                        node="grade_documents",
+                        decision=next_node,
+                        reason=f"embedding_prefilter_high:{similarity:.3f}",
+                    )
+                    return next_node
+                if similarity <= settings.graph.embedding_prefilter_low_threshold:
+                    log_event(
+                        "GRADE_DOCUMENTS",
+                        "Skipped grading: embedding pre-filter judged clearly irrelevant",
+                        node="grade_documents",
+                        decision="rewrite",
+                        reason=f"embedding_prefilter_low:{similarity:.3f}",
+                    )
+                    return "rewrite"
+
+                log_event(
+                    "GRADE_DOCUMENTS",
+                    "Embedding pre-filter inconclusive; falling through to LLM grader",
+                    node="grade_documents",
+                    reason=f"embedding_prefilter_ambiguous:{similarity:.3f}",
+                )
+
+        # Ambiguous -- fall through to the LLM grader below, unchanged.
 
         class GradeResult(BaseModel):
             """Binary score for document relevance check."""
 
             binary_score: str = Field(
-                description=translate_prompt(language)["grader_binary_score"]
+                description=translate_internal_string("grader_binary_score", language)
             )
             reason: str = Field(
                 description="Back up your decision with a short explanation"
@@ -548,13 +1039,14 @@ class GraphEdgesMixin:
             #     description="From the retrieved documents, which paragraphs are relevant to answer the user query? Extract all relevant paragraphs from the retrieved documents."
             # )
 
-        llm_with_str_output = self._llm.with_structured_output(GradeResult)
+        llm_with_str_output = self._llm_optional.with_structured_output(GradeResult)
         prompt = PromptTemplate(
             template=translate_prompt(language)["grading_llm"],
             input_variables=["context", "question"],
         )
         chain = prompt | llm_with_str_output
-        scored_result = chain.invoke(
+        _write_status("checking_documents")
+        scored_result = await chain.ainvoke(
             {
                 "question": f'{state["user_initial_query"]}, {tool_query}',
                 "context": tool_messages,
@@ -562,25 +1054,29 @@ class GraphEdgesMixin:
         )
 
         try:
-            # score = scored_result.binary_score.lower()
             score = scored_result.binary_score.lower()
-            if score.lower() in ["yes", "ja"]:
+            if score in ["yes", "ja"]:
                 # TODO Further process the relevant paragraphs
                 # self._clean_tool_message = scored_result.relevant_paragraphs
-                logger.debug(
-                    f"[LANGGRAPH][GRADE DOCUMENTS EDGE] DECISION: DOCS RELEVANT. Reason: {scored_result.reason}"
-                )
-                if state.get("teaching_degree", False):
-                    return "generate_teaching_degree_node"
+                next_node = self._next_generate_node(state)
 
-                elif state.get("about_application", False):
-                    return "generate_application"
-                else:
-                    return "generate"
+                log_event(
+                    "GRADE_DOCUMENTS",
+                    "Documents graded relevant",
+                    node="grade_documents",
+                    decision=next_node,
+                    reason=scored_result.reason,
+                )
+                return next_node
 
             else:
-                logger.debug(
-                    f"[LANGGRAPH][GRADE DOCUMENTS EDGE] DECISION: DOCS NOT RELEVANT. Reason: {scored_result.reason}"
+                log_event(
+                    "GRADE_DOCUMENTS",
+                    "Documents graded not relevant; routing to rewrite",
+                    logging.DEBUG,
+                    node="grade_documents",
+                    decision="rewrite",
+                    reason=scored_result.reason,
                 )
                 return "rewrite"
         except Exception as e:

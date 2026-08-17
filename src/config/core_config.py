@@ -1,4 +1,4 @@
-from typing import ClassVar, Literal, Optional, Tuple, Type, Any
+from typing import Any, ClassVar, Literal, Optional, Tuple, Type
 
 from pydantic import Field
 from pydantic_settings import (
@@ -16,13 +16,14 @@ from .models import (
     EmbeddingSettings,
     GraphConfig,
     LogSettings,
+    MCPAgentConf,
+    Message,
     MilvusSettings,
     Model,
     RAGFlowSettings,
     RedisService,
     SearchConfig,
     VectorDBConfig,
-    Message,
 )
 
 
@@ -32,7 +33,6 @@ class Settings(BaseSettings):
 
     This class is a singleton that holds various configuration settings for the application.
     It inherits from `BaseSettings` and uses Pydantic for data validation and settings management.
-
     """
 
     _instance: ClassVar[Optional["Settings"]] = None
@@ -47,16 +47,12 @@ class Settings(BaseSettings):
     graph: GraphConfig
     crawl_settings: CrawlSettings
     messages: Optional[list[Message]] = None
+    mcp_agents: Optional[list[MCPAgentConf]] = None
 
     model_config = SettingsConfigDict(yaml_file="./src/backend_config.yaml")
     # TODO move this a global object/context
     time_request_sent: Optional[float] = None
-    # TODO remove (these are used for testing)
-    # final_output_tokens: list = []
-    # final_search_tokens: list = []
-    # TODO move to a global object/context
-    # if the llm summarization mode is active the summarization result will be not sent to the user
-    llm_summarization_mode: bool = False
+
     log_settings: Optional[LogSettings] = None
     parsed_messages: Optional[dict] = None
 

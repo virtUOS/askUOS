@@ -6,61 +6,28 @@ ask.UOS uses Docker Compose for orchestrating services in production deployments
 
 ```mermaid
 graph TB
-    subgraph "Docker Compose"
-        App[app: FastAPI + Streamlit]
-        Redis[redis: Cache & Sessions]
-        Crawl4ai[crawl4ai: Web Scraping]
-        Caddy[caddy: Reverse Proxy]
-        Promtail[promtail: Log Collection]
-        Loki[loki: Log Storage]
-        Cadvisor[cadvisor: Container Metrics]
+    subgraph DockerCompose[Docker Compose]
+        App[App]
+        Crawl[Crawl4ai]
+        Redis[Redis]
     end
+    App --> Crawl
     App --> Redis
-    App --> Crawl4ai
-    Caddy --> App
-    Promtail --> Loki
-    Cadvisor --> App
-    Cadvisor --> Redis
-    Cadvisor --> Crawl4ai
 ```
+
+`App` is the `app` service (Streamlit UI + FastAPI backend, same container). `Crawl4ai` is the `crawl4ai` service (web scraping). `Redis` is the `redis` service (cache and sessions). RAGFlow/Infinity (or Milvus, if configured) run separately — they are not services in this app's `docker-compose.yml`.
 
 ## Service Definitions
 
-### Core Services
+- `app`: Streamlit UI + FastAPI backend, same container
+- `crawl4ai`: Web scraping service used by the web search tool
+- `redis`: Caching and sessions
 
-- **app**: Main application container running both FastAPI (port 8000) and Streamlit (port 8501)
-  - Image: `ghcr.io/virtuos/askuos:1.0.1`
-  - Uses `.env.prod` for environment configuration
-  - Health check on Streamlit endpoint
-  
-- **redis**: Redis cache server for caching and session management
-  - Configured with maxmemory policy (allkeys-lru)
-  - Persistent data storage in `redis-data` volume
-  
-- **crawl4ai**: Web scraping service using unclecode/crawl4ai image
-  - Exposes port 11235
+## Setup Steps
 
-### Optional Services
+- `cp src/backend_config_example.yaml src/backend_config.yaml` and `cp prompts_example prompts -r`
+- Build and start services with Docker Compose
 
-- **caddy**: Reverse proxy for HTTPS support
-  - Requires Caddyfile configuration
-  - Exposes ports 80 and 443
-  
-- **node_exporter**: System metrics exporter for Prometheus
-  - Exposes host system metrics
-  
-- **promtail**: Log collection agent for Loki
-  - Collects logs from Docker containers
-  - Requires promtail-config.yml
-  
-- **loki**: Log aggregation and storage service
-  - Stores logs from promtail
-  
-- **cadvisor**: Container resource monitoring
-  - Exposes container metrics on port 8080
-
-
-
-
+---
 
 **Next**: [Configuration →](/docs/configuration.md)

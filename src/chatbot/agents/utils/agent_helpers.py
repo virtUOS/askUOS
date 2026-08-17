@@ -4,16 +4,15 @@ import threading
 from typing import Any
 
 sys.path.append("/app")
-from langchain_community.cache import SQLiteCache
 from langchain_core.caches import InMemoryCache
 from langchain_core.callbacks import StdOutCallbackHandler
 from langchain_core.globals import set_llm_cache
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from src.chatbot_log.chatbot_logger import logger
 from src.config.core_config import settings
-from src.config.models import Model, ProviderNames, RoleNames
+from src.config.models import EmbeddingSettings, Model, ProviderNames, RoleNames
 
 
 # TODO the cached AI answer should contained the sources of the information.
@@ -43,20 +42,24 @@ class CustomMemoryCache(InMemoryCache):
 
 
 class LLMMixin:
-    def _build_llm_obj(self, model_conf: Model):
+    def _build_llm_obj(self, model_conf: Model, streaming: bool = True):
+        """Build the LLM client for this role."""
         if model_conf.provider == ProviderNames.GOOGLE:
             self.llm = ChatGoogleGenerativeAI(
                 model=model_conf.model_name,
                 temperature=1.0,
                 max_retries=2,
-                streaming=True,
+                timeout=model_conf.timeout,
+                streaming=streaming,
                 callbacks=[StdOutCallbackHandler()],
             )
         elif model_conf.provider == ProviderNames.OPENAI:
             self.llm = ChatOpenAI(
                 model=model_conf.model_name,
                 temperature=0,
-                streaming=True,
+                streaming=streaming,
+                timeout=model_conf.timeout,
+                max_retries=2,
                 callbacks=[StdOutCallbackHandler()],
             )
         elif (
@@ -66,12 +69,14 @@ class LLMMixin:
                 self_hosted_api_key = os.getenv("API_KEY_SELF_HOSTED_MAIN", "")
             elif model_conf.role == RoleNames.HELPER:
                 self_hosted_api_key = os.getenv("API_KEY_SELF_HOSTED_HELPER", "")
+            elif model_conf.role == RoleNames.SUBAGENT:
+                self_hosted_api_key = os.getenv("API_KEY_SELF_HOSTED_SUBAGENT", "")
             else:
                 raise ValueError("Model Role not supported")
 
             if not self_hosted_api_key:
                 raise ValueError(
-                    "You are trying to connect to a self-hosted model. Provide the respective api key in the environment file: API_KEY_SELF_HOSTED_MAIN, API_KEY_SELF_HOSTED_HELPER"
+                    "You are trying to connect to a self-hosted model. Provide the respective api key in the environment file: API_KEY_SELF_HOSTED_MAIN, API_KEY_SELF_HOSTED_HELPER, API_KEY_SELF_HOSTED_SUBAGENT"
                 )
 
             self.llm = ChatOpenAI(
@@ -79,7 +84,9 @@ class LLMMixin:
                 base_url=model_conf.base_url,
                 api_key=self_hosted_api_key,
                 temperature=0,
-                streaming=True,
+                timeout=model_conf.timeout,
+                max_retries=2,
+                streaming=streaming,
                 callbacks=[StdOutCallbackHandler()],
             )
 
@@ -116,6 +123,62 @@ class ChatLlmOptional(LLMMixin):
     def __init__(self, model_conf: Model):
         if not self.__dict__:
             self._build_llm_obj(model_conf)
+
+
+class ChatLlmSubagent(LLMMixin):
+    """
+    Model used for ephemeral MCP subagent tool-calling tasks
+    (GraphNodesMixin.task()). Kept as its own singleton — distinct from
+    ChatLlm — so that configuring a `role: subagent` model actually builds a
+    separate client instance rather than reusing the main model's.
+
+    Built with streaming=False: task() only ever consumes the final
+    `.ainvoke()` result dict (never forwards tokens to a client) and wraps
+    the call in `asyncio.wait_for(timeout=...)`. A streaming client here
+    would open a real OpenAI/httpx streaming connection per internal model
+    call that a timeout could abandon mid-flight
+    """
+
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(ChatLlmSubagent, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self, model_conf: Model):
+        if not self.__dict__:
+            self._build_llm_obj(model_conf, streaming=False)
+
+
+class EmbeddingMixin:
+    def _build_embedding_obj(self, embedding_conf: EmbeddingSettings):
+        """Build the embedding client"""
+        api_key = os.getenv("API_KEY_SELF_HOSTED_EMBEDDING", "")
+        if not api_key:
+            raise ValueError(
+                "You are trying to connect to a self-hosted embedding model. "
+                "Provide API_KEY_SELF_HOSTED_EMBEDDING in the environment file."
+            )
+        self.embeddings = OpenAIEmbeddings(
+            model=embedding_conf.model_name,
+            base_url=embedding_conf.base_url,
+            api_key=api_key,
+            timeout=embedding_conf.timeout,
+        )
+
+
+class ChatEmbedding(EmbeddingMixin):
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(ChatEmbedding, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self, embedding_conf: EmbeddingSettings):
+        if not self.__dict__:
+            self._build_embedding_obj(embedding_conf)
 
 
 class ReasoningLlm:
@@ -163,17 +226,29 @@ class _ModelRegistry:
         models = settings.models
         self.chat_llm = None
         self.llm_optional = None
+        self.subagent_llm = None
+        self.embedding_llm = None
         for m in models:
             if m.role == RoleNames.MAIN:
                 self.chat_llm = ChatLlm(m)
             elif m.role == RoleNames.HELPER:
                 self.llm_optional = ChatLlmOptional(m)
+            elif m.role == RoleNames.SUBAGENT:
+                self.subagent_llm = ChatLlmSubagent(m)
             else:
                 raise ValueError("Model Role not supported")
         if not self.chat_llm:
             raise ValueError("An LLM must be provided")
         if not self.llm_optional:
             self.llm_optional = self.chat_llm
+        if not self.subagent_llm:
+            # No dedicated `role: subagent` model configured — fall back to
+            # the main model, same as before this was configurable.
+            self.subagent_llm = self.chat_llm
+        # Embeddings aren't role-multiplexed like the chat models above —
+        # there's only ever one embedding model, configured separately.
+        if settings.embedding:
+            self.embedding_llm = ChatEmbedding(settings.embedding)
 
 
 model_registry = _ModelRegistry()

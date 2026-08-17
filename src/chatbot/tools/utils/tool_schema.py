@@ -29,6 +29,29 @@ class RetrieverInput(BaseModel):
     )
 
 
+class TaskInput(BaseModel):
+    agent_name: str
+    task_description: str
+
+
+class AgentRetrievedResult(BaseModel):
+    # TODO Replace judge node?
+    information_found: bool = Field(
+        description=(
+            "Whether the retrieved information actually helps answer the "
+            "specific request you were given -- not merely whether the tools "
+            "returned some text. If a tool returned content but it is off-topic, "
+            "about the wrong program/subject, or generic boilerplate that does "
+            "not address what was asked, set this to False so the caller retries "
+            "with a different query instead of treating unrelated content as a "
+            "usable answer."
+        )
+    )
+    chunk_information: list[str] = Field(
+        description="Unchanged COMPLETE chunks (Piece of information) needed to answer the user's query/solve the user's request"
+    )
+
+
 class HisInOneInput(BaseModel):
     """Input to the retriever for the HISinOne tool."""
 

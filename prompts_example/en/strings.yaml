@@ -1,0 +1,9 @@
+# Short, single-purpose prompt strings (tool descriptions, field descriptions,
+# small fixed messages). No {placeholders} in any of these today — if you add
+# one, the corresponding call site in graph_node_edges.py must be updated to
+# pass it as a keyword argument, or startup validation will reject the file.
+
+description_university_web_search: |
+  Useful for when you need to answer questions about the University of Osnabruek. For example questions about
+  the application process or studying at the university in general. This tool is also useful to access updated application dates
+  and updated dates and contact information. To use this tool successfully, take into account the previous interactions with the user (chat history) and the context of the conversation.

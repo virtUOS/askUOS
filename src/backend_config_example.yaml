@@ -1,0 +1,126 @@
+models:
+
+  - provider: "google" # ["openai", "google", "self-hosted"]
+    role: "main" # ["main", "helper", "subagent"] # main: model used for agentic tasks and generatiom. Helper: used for summary generation and tasks that do not require reasoning (easy tasks). Subagent: used for ephemeral MCP subagent tool-calling tasks (see mcp_agents below)
+    model_name: "gemini-3-flash-preview"
+    # timeout: 60 # Optional. LLM client request timeout in seconds (default: 60)
+
+  - provider: "google" # ["openai", "google", "self-hosted"]
+    role: "helper" # ["main", "helper", "subagent"]
+    model_name: "gemini-2.5-flash-lite"
+
+  # Optional. If omitted, MCP subagents (mcp_agents below) reuse the "main"
+  # model above. Configure this only if you want subagent tool-calling tasks
+  # to use a different (e.g. cheaper/faster) model than the main conversation.
+  # - provider: "openai" # ["openai", "google", "self-hosted"]
+  #   role: "subagent" # ["main", "helper", "subagent"]
+  #   model_name: "gpt-4.1-mini"
+
+language: "Deutsch"  # Literal["Deutch", "English"].
+
+redis:
+  host: "redis"
+  port: "6379"
+  username: ""
+  password: ""
+  ttl_graph_cache: 120 # how long messages are cached. Msgs older than this value won't be shown to the user
+  connection_timeout: 15 # Optional. Seconds to wait for a Redis connection from the pool (default: 15)
+
+# General system messages are in the locale. (Optional)
+messages:
+  - msg_name: "further_help" # Literal["further_help"]
+    english: |
+      If you need personal assistance regarding studying at the university, you can visit this wesbsite ...  or ... .
+    german: |
+      Wenn Sie persönliche Unterstützung zum Studium an der Universität benötigen, können Sie die Website des ...  oder ... .
+
+# the faq collection needs a metadata field. Name it "url", this link will be shwon to the user so that they can double check the information provided by the chatbot. 
+graph:
+  summary_threshold: 70000 # in tokens
+  faq:
+    activate: True
+    collection_name: "faq"
+  # This tool is a "standalone tool" (not MCP-based), so its description
+  # lives here in backend_config.yaml rather than in prompts/ -- it's only
+  # needed at all if activate: True. See docs/PROMPT_CONFIGURATION.md.
+  skip_grading_for_high_trust_sources: True
+  # Max input context (in tokens) of the embedding model below -- used to
+  # size how much of the retrieved documents get embedded for
+  # grade_documents' similarity pre-filter. Lower this if a smaller
+  # embedding model is configured.
+  embedding_prefilter_max_context_tokens: 8192
+  # Optional. Embedding-similarity pre-filter thresholds for grade_documents
+  # (applies to the remaining, non-high-trust path). Unset disables the
+  # pre-filter; requires the top-level `embedding:` block to be configured.
+  embedding_prefilter_high_threshold: 0.6
+  embedding_prefilter_low_threshold: 0.01
+  troubleshooting:
+    collection_name: "troubleshooting"
+    activate: False # set True to enable the troubleshooting tool; description below is then required
+    description: |
+      Describe here what this tool is for and when the agent should use it
+      (e.g. which software/product it can answer technical questions about).
+
+application:
+  debug: True
+  tracing: False
+  recursion_limit: 8 # default is 12 https://langchain-ai.github.io/langgraph/how-tos/recursion-limit/
+  # Optional. Origins allowed to call this API directly from browser-based
+  # JS (CORS) -- e.g. a standalone React/JS frontend, or a chat widget
+  # embedded on another domain. Leave empty (default) if the only caller is
+  # the bundled Streamlit UI or a server-to-server integration; CORS is a
+  # browser-only mechanism and doesn't apply to those.
+  # cors_allowed_origins:
+  #   - "https://your-frontend.example.edu"
+
+# Only needed if using Milvus vector db (or grade_documents' embedding
+# pre-filter). Self-hosted, OpenAI-compatible endpoint -- API key must be
+# provided via API_KEY_SELF_HOSTED_EMBEDDING in the env file.
+embedding:
+  model_name: "BAAI/bge-m3"
+  base_url: "https://my-litellm-instance.de"
+  timeout: 3
+
+vector_db_settings:
+  # Vector database configuration
+  type: "Infinity-RAGFlow"
+  settings:
+    base_url: "https://ragflow.de"
+    chunk_size: 10
+    # Optional RAGFlow client timeouts, in seconds (defaults shown below).
+    # connect_timeout: 15.0 # Time to establish connection
+    # read_timeout: 60.0    # Time to receive response (RAG can be slow)
+    # write_timeout: 15.0   # Time to send request body
+    # pool_timeout: 5.0     # Time waiting for connection from pool
+
+
+# Required. Web crawler configuration (crawl4ai), used by the web search tool.
+crawl_settings:
+  base_url: "http://crawl4ai:11235/crawl" # crawl4ai service, as wired in docker-compose.yml
+  ttl_redis: 172800 # 48h default TTL (how long a page is cached before it's crawled again)
+  max_links: 6 # Optional. Max number of web pages visited per search (default: 6)
+  crawl_payload: # doc: https://www.postman.com/pixelao/pixel-public-workspace/documentation/c26yn3l/crawl4ai-api
+    browser_config:
+      type: "BrowserConfig"
+      params:
+        headless: true
+    crawler_config:
+      type: "CrawlerRunConfig"
+      params:
+        stream: false
+        cache_mode:
+          type: "CacheMode"
+          params: "enabled"
+        check_cache_freshness: true
+        cache_validation_timeout: 10.0
+        word_count_threshold: 100
+        target_elements:
+          - "main"
+          - "div#content"
+        scan_full_page: true
+
+# Optional. If set up, implement e.g., cron job to run /app/src/chatbot_log/log_cleanup.py
+log_settings:
+  delete_logs_days: 90 # Number of days to keep logs before deletion
+
+  

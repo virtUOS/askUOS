@@ -17,6 +17,17 @@ def translate():
     return _
 
 
+def get_translator(language: str):
+    """Return the active gettext translator function for `language`
+    ("Deutsch" -> the German catalog via translate(), anything else ->
+    the English passthrough gettext.gettext).
+
+    """
+    if language == "Deutsch":
+        return translate()
+    return gettext.gettext
+
+
 def initialize_language() -> None:
     """
     Initializes the language selection for the application.
@@ -37,14 +48,14 @@ def initialize_language() -> None:
         if st.session_state["chosen_language"] == "Deutsch":
             set_language(language="de")
             st.session_state["selected_language"] = "Deutsch"
-            session_state["_"] = translate()
+            session_state["_"] = get_translator("Deutsch")
             app_settings.language = "Deutsch"
 
         elif st.session_state["chosen_language"] == "English":
             set_language(language="en")
             st.session_state["selected_language"] = "English"
             app_settings.language = "English"
-            session_state["_"] = gettext.gettext
+            session_state["_"] = get_translator("English")
 
     # If no language is chosen yet set it to German
     if "selected_language" not in st.session_state or "lang" not in st.query_params:

@@ -1,7 +1,7 @@
 import asyncio
 import os
+import random
 import sys
-import time
 import uuid
 from typing import Optional
 
@@ -12,25 +12,31 @@ import streamlit as st
 from openai import AsyncOpenAI
 from streamlit import session_state
 from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
-from ui.config.models import IframePageInfo
-from src.chatbot_log.chatbot_logger import logger
+
+from src.chatbot_log.chatbot_logger import log_event, logger
 from ui.config.app_config import app_settings
+from ui.config.models import IframePageInfo
 from ui.utils.utils import (
+    bot_called_from,
     initialize_session_sate,
     load_css,
     setup_page,
-    bot_called_from,
 )
 
-# max number of messages after which a summary is generated
-MAX_MESSAGES_PER_USER = 150  # Limit for the number of messages per user (Redis)
-HUMAN_AVATAR = "/app/ui/static/icons/Icon-User.svg"
-ASSISTANT_AVATAR = "/app/ui/static/icons/Icon-chatbot.svg"
+HUMAN_AVATAR = app_settings.ui.human_avatar_path
+ASSISTANT_AVATAR = app_settings.ui.assistant_avatar_path
 ROLES = ("assistant", "user")
-# Note: for security reasons, thread endpoints (fastapi-redis user history) is only accessible from localhost
-# if fastapi runs on different container the history access logic needs to be adapted.
-API_URL = "http://localhost:8000/v1"
+# Thread endpoints (fastapi-redis user history — read/delete any user's
+# conversation history) are gated by their own key (STREAMLIT_HISTORY_API_KEY
+# / HISTORY_API_KEYS on the backend), deliberately separate from the
+# completions key below: a leaked or externally-shared completions key must
+# not also be able to read or wipe conversation history. No localhost-only
+# restriction on either endpoint, so this works whether FastAPI runs in the
+# same container as Streamlit or in its own container(s) behind a reverse
+# proxy.
+API_URL = app_settings.api.api_url
 askUOS_API_KEY = os.getenv("STREAMLIT_API_KEY", "")
+askUOS_HISTORY_API_KEY = os.getenv("STREAMLIT_HISTORY_API_KEY", "")
 
 
 # Apply nest_asyncio to allow nested event loops (Streamlit compatibility)
@@ -72,12 +78,17 @@ class ChatApp:
         return st.session_state["openai_client"]
 
     def get_api_session(self) -> requests.Session:
-        """Return a shared session per user, creating it once."""
+        """Return a shared session per user, creating it once.
+
+        Uses askUOS_HISTORY_API_KEY, not the completions key — this session
+        is only ever used to call /v1/threads/* (get/delete history), which
+        the backend gates with a separate key set on purpose.
+        """
         if "api_session" not in st.session_state:
             session = requests.Session()
             session.headers.update(
                 {
-                    "Authorization": f"Bearer {askUOS_API_KEY}",
+                    "Authorization": f"Bearer {askUOS_HISTORY_API_KEY}",
                 }
             )
             st.session_state.api_session = session
@@ -253,7 +264,7 @@ class ChatApp:
             # history.add_user_message(prompt)
             # st.session_state["messages"].append(HumanMessage(content=prompt))
 
-            with st.chat_message(ROLES[1], avatar="/app/ui/static/icons/Icon-User.svg"):
+            with st.chat_message(ROLES[1], avatar=HUMAN_AVATAR):
                 st.write(prompt)
                 # if history.messages[-1].type != ROLES[0]:  # "ai"
             self._run_async(self.generate_response_async(prompt))
@@ -262,6 +273,57 @@ class ChatApp:
             st.session_state.input_key_counter += 1
             st.rerun()  # Rerun to update the chat messages and input field
 
+    # Progress narration codes the backend may emit mid-turn on an otherwise
+    # empty `delta` (see src/chatbot/agents/graph_node_edges.py::_write_status
+    # and src/api/helpers.py::_make_chunk) while agent_node/tool_node/
+    # judge_node/grade_documents/rewrite run -- everything before the final
+    # generate*/generate_application/generate_teaching_degree_node node is
+    # otherwise silent dead time (a single MCP subagent round trip alone can
+    # take 10-40s, see bugs_to_fix.md #28).
+    #
+    # Each status maps to three phrasings (English msgids, translated
+    # through the same gettext catalog as the rest of this page --
+    # locale/de/LC_MESSAGES/base.po -- add a msgid/msgstr pair there for any
+    # new code/phrasing added here), picked at random each time one is shown
+    # (see generate_response_async below) so a user doesn't see the exact
+    # same line on every turn. "consulting_specialist" is deliberately
+    # generic (not "documents"/"regulations") because it covers the "task"
+    # tool, which can dispatch to *any* admin-configured MCP subagent
+    # (mcp_agents in backend_config.yaml) -- not just RAGFlow-style document
+    # retrieval.
+    STATUS_MESSAGES = {
+        "searching_web": [
+            "Let me search the university website for that...",
+            "I'll take a look online for the latest information...",
+            "One moment, checking the web for up-to-date details...",
+        ],
+        "searching_documents": [
+            "Let me check our knowledge base for that...",
+            "I'll look through our documentation for an answer...",
+            "One moment, searching our records for relevant details...",
+        ],
+        "consulting_specialist": [
+            "Let me consult a specialized source for more information...",
+            "I'll check with an additional resource for you...",
+            "One moment, reaching out to a specialized tool for details...",
+        ],
+        "checking_response": [
+            "Let me double-check whether I should look something up first...",
+            "I'll make sure I don't need to search for more information...",
+            "One moment, verifying my answer is complete...",
+        ],
+        "checking_documents": [
+            "Let me check if what I found actually answers your question...",
+            "I'll make sure the information I gathered is relevant...",
+            "One moment, reviewing what I found before answering...",
+        ],
+        "refining_search": [
+            "Let me search again with different terms...",
+            "I'll try a new search to find the right information...",
+            "One moment, adjusting my search to find a better answer...",
+        ],
+    }
+
     async def generate_response_async(self, prompt: str):
         """Generate a response from the assistant based on user prompt, using astream."""
 
@@ -269,12 +331,10 @@ class ChatApp:
         user_id = self.get_user_id()
         language = session_state.get("selected_language", "Deutsch")
 
-        with st.chat_message(ROLES[0], avatar="/app/ui/static/icons/Icon-chatbot.svg"):
+        with st.chat_message(ROLES[0], avatar=ASSISTANT_AVATAR):
             with st.spinner(session_state["_"]("Generating response...")):
                 message_placeholder = st.empty()
                 response = ""
-                start_time = time.time()
-                app_settings.time_request_sent = start_time
 
                 try:
                     stream = await client.chat.completions.create(
@@ -290,6 +350,20 @@ class ChatApp:
 
                     async for chunk in stream:
                         delta = chunk.choices[0].delta
+                        # Non-standard field the backend adds to an
+                        # otherwise-empty delta -- the openai SDK's pydantic
+                        # models allow unknown extra fields (ConfigDict
+                        # extra="allow"), so this is present and readable via
+                        # getattr even though it's not in the SDK's own type
+                        # stubs.
+                        status = getattr(delta, "status", None)
+                        if status and not response:
+                            variants = self.STATUS_MESSAGES.get(status)
+                            if variants:
+                                status_text = random.choice(variants)
+                                message_placeholder.markdown(
+                                    f"*{session_state['_'](status_text)}*"
+                                )
                         if delta.content:
                             response += delta.content
                             message_placeholder.markdown(response)
@@ -302,11 +376,6 @@ class ChatApp:
                         )
                         message_placeholder.markdown(response)
 
-                end_time = time.time()
-                time_taken = end_time - start_time
-                session_state["time_taken"] = time_taken
-                logger.info(f"[METRICS] Response time: {time_taken:.2f}s")
-
                 self.store_response(response, prompt)
 
     def store_response(
@@ -315,10 +384,6 @@ class ChatApp:
         prompt: str,
     ):
         """Store the assistant's response and prompt in session state."""
-
-        # Log user query and bot answer
-        logger.info(f"[USERQUERY] User's query: {prompt}")
-        logger.info(f"[BOTANSWER] Assistant's response: {output}")
 
         st.session_state.user_query = prompt
         st.session_state.response = output
@@ -394,9 +459,10 @@ class ChatApp:
 
                 feedback["user_query"] = session_state.user_query
                 feedback["response"] = st.session_state.response
-                feedback["time_taken"] = session_state.time_taken
+                feedback["thread_id"] = st.session_state["ask_uos_user_id"]
 
-                logger.info(f"[FEEDBACK] Feedback= {feedback}")
+                log_event("FEEDBACK", "User Feedback", **feedback)
+                # logger.info(f"[FEEDBACK] Feedback= {feedback}")
                 session_state.feedback_saved = True
 
     @st.dialog(app_settings.ui.page_title)
@@ -405,14 +471,18 @@ class ChatApp:
 
         if "delete" in st.query_params:
             st.query_params.delete = "false"
-        message = session_state["_"](
-            "Are you sure you want to delete the chat history? This action cannot be undone."
+        # Config-driven (ChatPageConfig.delete_message_dialog_box_*) instead
+        # of the gettext locale catalog, so a university can customize this
+        # text the same way it already customizes the welcome/greeting
+        # messages. Uses the per-session selected_language (not the shared
+        # app_settings.language global) so concurrent users on different
+        # languages each see their own session's text.
+        message = (
+            app_settings.chat_page.delete_message_dialog_box_german
+            if session_state.get("selected_language", app_settings.language)
+            == "Deutsch"
+            else app_settings.chat_page.delete_message_dialog_box_english
         )
-        # message = (
-        #     app_settings.chat_page.delete_message_dialog_box_german
-        #     if app_settings.language == "Deutsch"
-        #     else app_settings.chat_page.delete_message_dialog_box_english
-        # )
         st.markdown(message)
         if st.button(
             session_state["_"]("Delete"),
