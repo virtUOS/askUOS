@@ -238,9 +238,7 @@ If you prefer Nginx, Traefik, or another reverse proxy, configure it to:
 
 3. **Generate secure authentication keys**: Set `API_KEYS` and `STREAMLIT_API_KEY` in `.env.prod`.
 
-4. **Customize prompts for your university** (see [Prompts Configuration](#Prompts Configuration)):
-   - Edit `prompt_text.py` with your university's name and processes
-   - Mount the file in `docker-compose.yml` as shown in the Prompts section
+4. **Customize prompts for your university** 
 
 5. **Configure your reverse proxy**:
    - If using Caddy, update the `Caddyfile` with your domain name
