@@ -58,7 +58,7 @@ The following files and directories should be placed in `/opt/chatbot/`:
 
 ## Environment Variables (`.env.prod`)
 
-Create `.env.prod`. Take a look at [`docs/env.prod.example`](docs/env.prod.example)
+Create `.env.prod`. Take a look at [`.env.prod.example`](.env.prod.example)
 
 
 ### Required Google API Permissions
@@ -210,7 +210,7 @@ cp docs/docker-compose.prod.example.yml ./docker-compose.yml
 
 ## Caddy Configuration (`Caddyfile`) - Optional
 
-If using Caddy as your reverse proxy, follow this example: [`Caddy.example`](Caddy.example).
+If using Caddy as your reverse proxy, follow this example: [`Caddy.example.j2`](Caddy.example.j2).
 
 To use the example configuration:
 
