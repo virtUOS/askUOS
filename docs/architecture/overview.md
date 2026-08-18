@@ -33,7 +33,7 @@ The Streamlit frontend never talks to the AI agent directly — every request go
 
 ## Service Architecture
 
-- `app`: Streamlit UI + FastAPI backend (same container)
+- `app_streamlit` / `app_worker`: Streamlit UI and FastAPI backend as separate services in production (`docs/docker-compose.prod.example.yml`), the latter run with multiple replicas behind a `caddy` reverse proxy; the dev `docker-compose.yml` still runs both in one `app` container
 - `redis`: Caching and sessions
 - `crawl4ai`: Web scraping service
 - RAGFlow/Infinity (or Milvus, if configured): run separately, not part of this app's compose file

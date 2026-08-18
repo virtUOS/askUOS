@@ -37,6 +37,7 @@ The Streamlit app is a thin HTTP client: it calls the FastAPI backend's `/v1/cha
 ## Response Generation
 
 - Streaming responses for real-time display
+- Progress narration: while a turn is still generating, randomized status text (e.g. "searching the web") is shown based on status codes the backend emits mid-stream
 - Source attribution for document and link references
 
 

@@ -64,4 +64,3 @@ ask.UOS supports both German and English, allowing users to switch languages sea
 
 [MIT](LICENSE)
 
-

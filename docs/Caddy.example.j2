@@ -1,0 +1,69 @@
+# Enable OpenMetrics for Prometheus (optional, for monitoring)
+{
+    servers {
+        metrics
+    }
+}
+
+# Replace variables accorndingly 
+
+# This enpoint is configured in ui_example_config.yml (api_url)
+http://caddy {
+
+    handle /v1/* {
+         reverse_proxy {
+
+        {% for i in range(1, replicas + 1) %} 
+        to {{ project_name }}-{{ service_worker_name }}-{{ i }}:8000
+        {% endfor %}
+         
+        lb_policy round_robin
+        health_uri /health
+        health_interval 10s
+        health_timeout 5s
+
+        } 
+    }
+    
+}
+
+# Redirect alternative hostnames to main domain
+# Uncomment and add your alternative hostnames here
+# example.com {
+#     redir https://your-domain.de{uri}
+# }
+
+# Replace 'your-domain.de' with your actual domain name
+# The Caddyfile will auto-provision SSL certificates via Let's Encrypt
+your-domain.de {
+    # Serve static pages for privacy policy and imprint
+    handle_path /datenschutz.html {
+        root * /var/www/html/datenschutz.html
+        file_server
+    }
+    handle_path /impressum.html {
+        root * /var/www/html/impressum.html
+        file_server
+    }
+
+     # API
+    handle /v1/* {
+         reverse_proxy {
+
+        {% for i in range(1, replicas + 1) %}
+        to {{ project_name }}-{{ service_worker_name }}-{{ i }}:8000
+        {% endfor %}
+         
+        lb_policy round_robin
+       
+
+        } 
+    }
+    # API
+    handle /health {
+        reverse_proxy app:8000
+    }
+
+    # direct requests to chatbot app (streamlit)
+    reverse_proxy app_streamlit:{{ cm_chatbot_port }}
+}

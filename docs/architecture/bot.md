@@ -33,7 +33,13 @@ The ask.UOS chatbot uses a **state-based graph architecture** implemented with L
 
 **Process**: Parse tool calls → Execute with error handling (concurrently, via `asyncio.gather`) → Format results → Update state
 
-### 3. Judge Node
+### 3. Document Relevance Grading
+
+**Purpose**: Decide whether tool results are relevant enough to answer from, or need a rewritten query
+
+**Process**: A cosine-similarity pre-filter compares the query against tool output first — high similarity skips straight to generation, low similarity skips straight to rewrite. Borderline cases fall through to an LLM-based grader. Trusted sources (e.g. RAGFlow FAQ hits) skip grading entirely. Thresholds are configured via `graph.embedding_prefilter_*` in `backend_config.yaml`.
+
+### 4. Judge Node
 
 **Purpose**: Quality control and decision validation
 
@@ -42,7 +48,7 @@ The ask.UOS chatbot uses a **state-based graph architecture** implemented with L
 
 **Output**: Binary scoring with justification for routing decisions
 
-### 4. Generate Nodes
+### 5. Generate Nodes
 
 ```mermaid
 graph LR
@@ -71,13 +77,13 @@ graph LR
 - Input: Tool results and conversation context
 - Specialization: Application deadlines, requirements, procedures
 
-### 5. Rewrite Node
+### 6. Rewrite Node
 
 **Purpose**: Query optimization and reformulation
 
-**Triggers**: Poor document relevance, insufficient results
+**Triggers**: Low-relevance grading result (see Document Relevance Grading above)
 
-**Process**: If documents are irrelevant to the user's query; instruct the agent to generate a new query and evaluate its previous tool usage. 
+**Process**: Instruct the agent to generate a new query and evaluate its previous tool usage.
 
 ## State Management
 
@@ -127,6 +133,11 @@ graph LR
 
 - Session state: In-memory conversation data
 - Redis cache: Web scraping results and processed content
+
+### Progress Narration
+
+- During tool calls, judging, grading, and rewriting, the graph emits status events (e.g. `searching_web`, `checking_documents`) over a custom LangGraph stream
+- The UI surfaces these as narration text so long turns feel responsive instead of silent
 
 
 ---

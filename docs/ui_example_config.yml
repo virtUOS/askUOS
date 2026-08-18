@@ -11,9 +11,21 @@ legal:
   data_protection: "https://my_example.de/datenschutz/"
   imprint: "https://my_example.de/impressum/"
 
+api:
+  api_url: "http://caddy/v1" # endpoint to askUOS agent. The api key is in .env.prod STREAMLIT_API_KEY. See Caddy file example.
+
+
 # UI settings
 ui:
   page_title: "ask.UOS"  # Application name displayed in browser tab
+  # Optional. Defaults shown below — either mount your own icon files over
+  # these exact paths with the same filenames (see note further down), or
+  # point these at wherever you've actually placed your custom icons.
+  # human_avatar_path: "/app/ui/static/icons/Icon-User.svg"
+  # assistant_avatar_path: "/app/ui/static/icons/Icon-chatbot.svg"
+  # favicon_path: "/app/ui/static/icons/Icon-chatbot.png"
+
+
 
 # Start page messages
 start_page:

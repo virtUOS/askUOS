@@ -3,37 +3,52 @@
 #     name: botnet
 
 services:
-  app:
-    container_name: ask_uos
-    image: ghcr.io/virtuos/askuos:1.0.1
-    # Replace with your desired image tag (e.g., latest, a specific version)
-    # image: ghcr.io/virtuos/askuos:latest
+  app_streamlit:
+    image: ghcr.io/virtuos/askuos # Provide the version you want to deploy
     command: >
       bash -c "
-        uvicorn src.api.main:app --host 0.0.0.0 --port 8000 &
         streamlit run ./ui/start.py --server.port 8501
       "
     env_file:
       - .env.prod
-    ports:
-      - "8501:8501"
-      - "8000:8000"
+
     depends_on:
       - redis
+    
     restart: always
+
     volumes:
       - logs:/app/logs
-      #- ./prompt_text.py:/app/src/chatbot/prompt/prompt_text.py
       - ./config.toml:/app/ui/.streamlit/config.toml
       - ./backend_config.yaml:/app/src/backend_config.yaml
       - ./ui_config.yml:/app/ui/ui_config.yml
-      - fastembed:/tmp/fastembed_cache/
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8501/_stcore/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+  
+    
+
+  
+  app_worker:
+    image: ghcr.io/virtuos/askuos # Provide the version you want to deploy
+
+    command: >
+      bash -c "
+        uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+      "
+    
+    deploy:
+      replicas: 3 # Depends on expected traffic and resources available.
+
+    env_file:
+      - .env.prod
+ 
+    depends_on:
+      - redis
+    
+    restart: always
+
+    volumes:
+      - logs:/app/logs
+      - ./backend_config.yaml:/app/src/backend_config.yaml
+
 
   redis:
     container_name: ask_uos_redis
@@ -138,6 +153,4 @@ volumes:
   caddy_data:
   caddy_config:
   logs:
-  sqlite-data:
-  fastembed:
   redis-data:

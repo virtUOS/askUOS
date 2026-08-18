@@ -5,7 +5,7 @@ ask.UOS uses YAML files, environment variables, and runtime settings managed thr
 ## Configuration Files
 
 - `src/backend_config.yaml` (copy from `src/backend_config_example.yaml`): model, language, legal, application, embedding, database, MCP agents (`mcp_agents`), and logging settings
-- `prompts/` (copy from `prompts_example/`): system prompts and tool wording, plain text — not part of `backend_config.yaml`. See [Prompt Configuration](PROMPT_CONFIGURATION.md).
+- `prompts/` (copy from `prompts_example/`): system prompts and tool wording, plain text — not part of `backend_config.yaml`.
 - `.env`: Environment variables for API keys, endpoints, and security
 
 ## Configuration Models
