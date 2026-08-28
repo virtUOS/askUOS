@@ -26,7 +26,7 @@ dependencies = [
     "pypdf2",
     "python-frontmatter",
     "redis",
-    "streamlit===1.47.0",
+    "streamlit===1.62.0",
     "streamlit-cookies-controller===0.0.4",
     "tqdm",
     "uvicorn>=0.41.0",

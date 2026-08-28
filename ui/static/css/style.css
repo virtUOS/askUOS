@@ -101,8 +101,19 @@ background-color: #8f2133; /* Dunkelrot background color on hover */
 }
 
 
-/* Allow Material Icons and Material Symbols to use their own font */
-.material-icons, .st-emotion-cache-1w33g9o, [class*="material-icons"], .material-symbols-outlined {
+/* Allow Material Icons and Material Symbols to use their own font.
+   [data-testid="stIconMaterial"] is Streamlit's own stable hook for this
+   (set directly on the icon's <span>, e.g. DynamicIcon.*.js) -- unlike the
+   .st-emotion-cache-* class below, which is an auto-generated Emotion
+   (CSS-in-JS) hash that's recomputed on every Streamlit build and breaks
+   on every upgrade (confirmed: this exact rule stopped matching anything
+   after upgrading from 1.47.0, so nothing was left to out-rank the
+   `body * { font-family: ... !important }` rule above, which otherwise
+   always wins over Streamlit's own non-!important icon-font styling
+   regardless of that rule's lower specificity).
+   Kept the old class alongside it rather than replacing it, in case an
+   older Streamlit build (e.g. this repo's pinned 1.47.0) still relies on it. */
+[data-testid="stIconMaterial"], .material-icons, .st-emotion-cache-1w33g9o, [class*="material-icons"], .material-symbols-outlined {
     font-family: 'Material Symbols Outlined', 'Material Icons', sans-serif !important;
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 48;
     font-style: normal !important;
@@ -209,6 +220,7 @@ span[data-testid="stHeaderActionElements"] a {
 
 /* Make feedback faces (icons/buttons) look like Material UI Sentiment faces */
 .st-key-user_feedback_faces button,
+.st-key-user_feedback_faces [data-testid="stIconMaterial"],
 .st-key-user_feedback_faces .st-emotion-cache-1w33g9o {
     font-size: 1.7rem !important;           /* 30% smaller than 2.4rem */
     width: 2.2rem !important;
