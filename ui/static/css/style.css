@@ -1,9 +1,25 @@
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined');
 @import url('https://fonts.googleapis.com/css2?family=Signika:wght@300..700&display=swap');
 
+/* Colors for the few custom (non-Streamlit-themed) surfaces below -- the
+   delete button and the feedback-face icons -- via the CSS light-dark()
+   function instead of Python-computed values. Toggling the theme in
+   Streamlit's Settings menu is purely client-side (it never triggers a
+   script rerun), so anything keyed off st.context.theme.type would stay
+   stale until the next rerun; Streamlit itself already sets the CSS
+   `color-scheme` property on its app wrapper the instant the theme
+   changes (see colorScheme in its frontend bundle), which is exactly what
+   light-dark() resolves against, so this updates live with no rerun
+   needed. Requires a browser with light-dark() support (Chrome 123+,
+   Firefox 120+, Safari 17.5+). Regular Streamlit widgets need none of
+   this -- they already pick up light/dark colors from
+   ui/.streamlit/config.toml's [theme.light]/[theme.dark] on their own. */
+:root {
+    color-scheme: light dark;
+}
+
 body * {
     font-family: "Signika", sans-serif !important;
-    color: #3e3e3f;
 }
 
 /* Remove excessive space at the top for mobile view */
@@ -229,7 +245,7 @@ span[data-testid="stHeaderActionElements"] a {
     min-height: 2.2rem !important;
     line-height: 2.2rem !important;
     padding: 0 !important;
-    color: #555 !important;
+    color: light-dark(#555, #b0b0b8) !important;
     background: none !important;
     border-radius: 50% !important;
     transition: background 0.2s, color 0.2s;
@@ -258,8 +274,8 @@ span[data-testid="stHeaderActionElements"] a {
 
 .st-key-delete_chat button {
     margin: 0 !important;
-    background-color: #f8f8f8 !important;
-    border: 1px solid #e0e0e0 !important;
+    background-color: light-dark(#f8f8f8, #262730) !important;
+    border: 1px solid light-dark(#e0e0e0, #41424c) !important;
     border-radius: 6px !important; /* normal button */
     width: auto !important;
     min-width: 160px !important;
@@ -274,7 +290,7 @@ span[data-testid="stHeaderActionElements"] a {
 }
 
 .st-key-delete_chat button:hover {
-    background-color: #f0f0f0 !important;
+    background-color: light-dark(#f0f0f0, #31323c) !important;
     box-shadow: 0 3px 6px rgba(0, 0, 0, 0.10) !important;
 }
 

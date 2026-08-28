@@ -1,7 +1,16 @@
 [server]
 enableStaticServing = true
 
-[theme]
+# Defining [theme.light] and [theme.dark] separately (rather than a single
+# unqualified [theme]) is what makes Streamlit offer the Light/Dark/"Use
+# system setting" choice in the app's Settings menu at all -- a bare
+# [theme] section locks the app to one mode. Only primaryColor is set here;
+# every other slot (background/secondary background/text/etc.) is left
+# unset so each mode falls back to Streamlit's own built-in light/dark
+# defaults, which are already contrast-checked for their own background.
+[theme.light]
+primaryColor = "#ad1034"
 
+[theme.dark]
 primaryColor = "#ad1034"
 
