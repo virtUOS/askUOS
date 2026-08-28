@@ -18,6 +18,10 @@ class Message(BaseModel):
     content: str
 
 
+class CancelRequest(BaseModel):
+    thread_id: str
+
+
 class ChatCompletionRequest(BaseModel):
     model: str = "askUOS-agent"
     messages: List[Message]

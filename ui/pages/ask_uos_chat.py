@@ -301,6 +301,26 @@ class ChatApp:
         ],
     }
 
+    def _request_cancel(self, thread_id: str) -> None:
+        """Tell the backend to interrupt the in-flight graph run for
+        `thread_id` (POST /v1/chat/completions/cancel). Called synchronously
+        from generate_response's `finally` block whenever that run is
+        interrupted mid-generation -- Stop button click, a new chat_input
+        submission, or any other widget interaction -- instead of completing
+        normally, and defensively from run() in case that didn't get a
+        chance to fire. Uses the completions-scope key (askUOS_API_KEY), not
+        the history key, matching the endpoint's own auth gate.
+        """
+        try:
+            requests.post(
+                f"{API_URL}/chat/completions/cancel",
+                json={"thread_id": thread_id},
+                headers={"Authorization": f"Bearer {askUOS_API_KEY}"},
+                timeout=5,
+            )
+        except Exception as e:
+            logger.error(f"[STREAMLIT] Error requesting turn cancellation: {e}")
+
     def generate_response(self, prompt: str):
         """Generate a response from the assistant based on user prompt, using stream."""
 
@@ -308,52 +328,68 @@ class ChatApp:
         user_id = self.get_user_id()
         language = session_state.get("selected_language", "Deutsch")
 
-        with st.chat_message(ROLES[0], avatar=ASSISTANT_AVATAR):
-            with st.spinner(session_state["_"]("Generating response...")):
-                message_placeholder = st.empty()
-                response = ""
+        st.session_state.is_generating = True
+        completed = False
+        try:
+            with st.chat_message(ROLES[0], avatar=ASSISTANT_AVATAR):
+                stop_placeholder = st.empty()
+                stop_placeholder.button(
+                    "⏹️",
+                    key="stop_generation_button",
+                    help=session_state["_"]("Stop generating this response"),
+                )
 
-                try:
-                    stream = client.chat.completions.create(
-                        model="askUOS-agent",
-                        messages=[{"role": "user", "content": prompt}],
-                        stream=True,
-                        extra_body={
-                            "thread_id": user_id,
-                            "language": language,
-                            "keep_user_message_history": True,
-                        },
-                    )
+                with st.spinner(session_state["_"]("Generating response...")):
+                    message_placeholder = st.empty()
+                    response = ""
 
-                    for chunk in stream:
-                        delta = chunk.choices[0].delta
-                        # Non-standard field the backend adds to an
-                        # otherwise-empty delta -- the openai SDK's pydantic
-                        # models allow unknown extra fields (ConfigDict
-                        # extra="allow"), so this is present and readable via
-                        # getattr even though it's not in the SDK's own type
-                        # stubs.
-                        status = getattr(delta, "status", None)
-                        if status and not response:
-                            variants = self.STATUS_MESSAGES.get(status)
-                            if variants:
-                                status_text = random.choice(variants)
-                                message_placeholder.markdown(
-                                    f"*{session_state['_'](status_text)}*"
-                                )
-                        if delta.content:
-                            response += delta.content
+                    try:
+                        stream = client.chat.completions.create(
+                            model="askUOS-agent",
+                            messages=[{"role": "user", "content": prompt}],
+                            stream=True,
+                            extra_body={
+                                "thread_id": user_id,
+                                "language": language,
+                                "keep_user_message_history": True,
+                            },
+                        )
+
+                        for chunk in stream:
+                            delta = chunk.choices[0].delta
+                            # Non-standard field the backend adds to an
+                            # otherwise-empty delta -- the openai SDK's pydantic
+                            # models allow unknown extra fields (ConfigDict
+                            # extra="allow"), so this is present and readable via
+                            # getattr even though it's not in the SDK's own type
+                            # stubs.
+                            status = getattr(delta, "status", None)
+                            if status and not response:
+                                variants = self.STATUS_MESSAGES.get(status)
+                                if variants:
+                                    status_text = random.choice(variants)
+                                    message_placeholder.markdown(
+                                        f"*{session_state['_'](status_text)}*"
+                                    )
+                            if delta.content:
+                                response += delta.content
+                                message_placeholder.markdown(response)
+
+                    except Exception as e:
+                        logger.error(f"[STREAMLIT] Error in streaming: {e}")
+                        if not response:
+                            response = session_state["_"](
+                                "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
+                            )
                             message_placeholder.markdown(response)
 
-                except Exception as e:
-                    logger.error(f"[STREAMLIT] Error in streaming: {e}")
-                    if not response:
-                        response = session_state["_"](
-                            "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
-                        )
-                        message_placeholder.markdown(response)
-
+                stop_placeholder.empty()
                 self.store_response(response, prompt)
+            completed = True
+        finally:
+            st.session_state.is_generating = False
+            if not completed:
+                self._request_cancel(user_id)
 
     def store_response(
         self,
@@ -500,6 +536,15 @@ class ChatApp:
         with st.container(key="page-header-container"):
             st.title(app_settings.ui.page_title)
         initialize_session_sate()
+
+        # Defensive fallback: generate_response's own `finally` block
+        # clears this and fires the backend cancel synchronously whenever a
+        # run is interrupted mid-generation. Only still True here if that
+        # didn't get a chance to run -- make sure the backend isn't left
+        # thinking a turn is still in flight.
+        if st.session_state.get("is_generating"):
+            self._request_cancel(self.get_user_id())
+            st.session_state.is_generating = False
 
         # page from which the bot was called
         # TODO: Append this information to the llm context

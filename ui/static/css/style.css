@@ -294,6 +294,29 @@ span[data-testid="stHeaderActionElements"] a {
     }
 }
 
+/* Stop-generation button: sized to match the chat message avatar exactly
+   (Streamlit's own chat avatar is theme.sizes.chatAvatarSize = 2rem square
+   with a theme.radii.default = 0.5rem corner radius -- see
+   StyledAvatarIcon/StyledAvatarImage in Streamlit's frontend bundle). */
+.st-key-stop_generation_button button {
+    width: 2rem !important;
+    height: 2rem !important;
+    min-width: 2rem !important;
+    min-height: 2rem !important;
+    padding: 0 !important;
+    border-radius: 0.5rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 1 !important;
+}
+
+.st-key-stop_generation_button button p {
+    font-size: 1rem !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+}
+
 /* Delete confirmation button styling */
 .st-key-confirm_delete_chat button {
     background-color: #ad1034 !important;

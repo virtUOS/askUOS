@@ -31,6 +31,11 @@ internal_strings_english = {
         "tools at your disposal to obtain the information needed to answer "
         "the user's query."
     ),
+    "interrupted_response": (
+        "[This response was interrupted before completion. The user has "
+        "moved on to a new message -- do not continue or reference this "
+        "unless they bring it up again.]"
+    ),
 }
 
 internal_strings_deutsch = {
@@ -48,10 +53,20 @@ internal_strings_deutsch = {
         "Informationen zu erhalten, die Sie zur Beantwortung der "
         "Benutzeranfrage benötigen."
     ),
+    "interrupted_response": (
+        "[Diese Antwort wurde vor der Fertigstellung unterbrochen. Der "
+        "Nutzer ist zu einer neuen Nachricht übergegangen -- führe dies "
+        "nicht fort und erwähne es nicht, es sei denn, der Nutzer spricht "
+        "es erneut an.]"
+    ),
 }
 
 
-def translate_internal_string(key: str, language: Literal["Deutsch", "English"] = "Deutsch") -> str:
+def translate_internal_string(
+    key: str, language: Literal["Deutsch", "English"] = "Deutsch"
+) -> str:
     """Look up an internal (non-admin-configurable) prompt string by language."""
-    table = internal_strings_english if language == "English" else internal_strings_deutsch
+    table = (
+        internal_strings_english if language == "English" else internal_strings_deutsch
+    )
     return table[key]

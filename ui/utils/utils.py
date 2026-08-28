@@ -34,6 +34,15 @@ def initialize_session_sate() -> None:
         "visited_docs": None,
         "visited_links": None,
         "bot_called_from": None,
+        # Set True right before generate_response starts streaming,
+        # cleared in its own `finally` block -- which also fires the
+        # backend cancel immediately, synchronously, if that block finds
+        # the run was interrupted mid-generation (native chat_input stop
+        # button, or any other widget click) rather than completed
+        # normally. run() also checks this flag at the top of every script
+        # run as a defensive fallback. See ChatApp.run()/generate_response
+        # in ask_uos_chat.py.
+        "is_generating": False,
     }
 
     for key, value in defaults.items():

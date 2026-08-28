@@ -178,3 +178,9 @@ msgstr "Ich versuche eine neue Suche, um die richtigen Informationen zu finden..
 
 msgid "One moment, adjusting my search to find a better answer..."
 msgstr "Einen Moment, ich passe meine Suche an, um eine bessere Antwort zu finden..."
+
+msgid "Stop"
+msgstr "Stoppen"
+
+msgid "Stop generating this response"
+msgstr "Antwort-Generierung stoppen"
