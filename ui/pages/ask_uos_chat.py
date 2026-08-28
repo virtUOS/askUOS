@@ -1,4 +1,3 @@
-import asyncio
 import os
 import random
 import sys
@@ -6,10 +5,9 @@ import uuid
 from typing import Optional
 
 sys.path.insert(0, "/app")
-import nest_asyncio
 import requests
 import streamlit as st
-from openai import AsyncOpenAI
+from openai import OpenAI
 from streamlit import session_state
 from streamlit_cookies_controller import CookieController, RemoveEmptyElementContainer
 
@@ -39,10 +37,6 @@ askUOS_API_KEY = os.getenv("STREAMLIT_API_KEY", "")
 askUOS_HISTORY_API_KEY = os.getenv("STREAMLIT_HISTORY_API_KEY", "")
 
 
-# Apply nest_asyncio to allow nested event loops (Streamlit compatibility)
-nest_asyncio.apply()
-
-
 # TODO : Remove all the display references logic once streamlit integrates pull request  Fix st.chat_input collapse after submit #12081
 
 
@@ -68,10 +62,10 @@ class ChatApp:
             self.controller = CookieController()
             load_css()
 
-    def get_client(self) -> AsyncOpenAI:
-        """Returns a reusable OpenAI client pointing at your backend."""
+    def get_client(self) -> OpenAI:
+        """Returns a reusable OpenAI client pointing at the backend."""
         if "openai_client" not in st.session_state:
-            st.session_state["openai_client"] = AsyncOpenAI(
+            st.session_state["openai_client"] = OpenAI(
                 base_url=API_URL,
                 api_key=askUOS_API_KEY,  # your API key
             )
@@ -93,23 +87,6 @@ class ChatApp:
             )
             st.session_state.api_session = session
         return st.session_state.api_session
-
-    def _run_async(self, coro):
-        """
-        Safely run an async coroutine in Streamlit's environment.
-        Streamlit may already have a running event loop, so we handle both cases.
-        """
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            # nest_asyncio allows us to call run_until_complete
-            # even if a loop is already running
-            return loop.run_until_complete(coro)
-        else:
-            return asyncio.run(coro)
 
     def _validate_user_id(self, user_id: str) -> Optional[str]:
         """Validate that the user_id is a valid UUID string."""
@@ -246,7 +223,7 @@ class ChatApp:
                 )
 
     def handle_user_input(self):
-        """Handle user input and generate a response using async astream."""
+        """Handle user input and generate a response using stream."""
 
         # user_id = self.get_user_id()
         # history = self.get_history(user_id)
@@ -267,7 +244,7 @@ class ChatApp:
             with st.chat_message(ROLES[1], avatar=HUMAN_AVATAR):
                 st.write(prompt)
                 # if history.messages[-1].type != ROLES[0]:  # "ai"
-            self._run_async(self.generate_response_async(prompt))
+            self.generate_response(prompt)
 
             # TODO: DELETE ?
             st.session_state.input_key_counter += 1
@@ -285,7 +262,7 @@ class ChatApp:
     # through the same gettext catalog as the rest of this page --
     # locale/de/LC_MESSAGES/base.po -- add a msgid/msgstr pair there for any
     # new code/phrasing added here), picked at random each time one is shown
-    # (see generate_response_async below) so a user doesn't see the exact
+    # (see generate_response below) so a user doesn't see the exact
     # same line on every turn. "consulting_specialist" is deliberately
     # generic (not "documents"/"regulations") because it covers the "task"
     # tool, which can dispatch to *any* admin-configured MCP subagent
@@ -324,8 +301,8 @@ class ChatApp:
         ],
     }
 
-    async def generate_response_async(self, prompt: str):
-        """Generate a response from the assistant based on user prompt, using astream."""
+    def generate_response(self, prompt: str):
+        """Generate a response from the assistant based on user prompt, using stream."""
 
         client = self.get_client()
         user_id = self.get_user_id()
@@ -337,7 +314,7 @@ class ChatApp:
                 response = ""
 
                 try:
-                    stream = await client.chat.completions.create(
+                    stream = client.chat.completions.create(
                         model="askUOS-agent",
                         messages=[{"role": "user", "content": prompt}],
                         stream=True,
@@ -348,7 +325,7 @@ class ChatApp:
                         },
                     )
 
-                    async for chunk in stream:
+                    for chunk in stream:
                         delta = chunk.choices[0].delta
                         # Non-standard field the backend adds to an
                         # otherwise-empty delta -- the openai SDK's pydantic
