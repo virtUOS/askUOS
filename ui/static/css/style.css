@@ -310,20 +310,24 @@ span[data-testid="stHeaderActionElements"] a {
     }
 }
 
-/* Stop-generation button: sized to match the chat message avatar exactly
+/* Stop-generation button: height matched to the chat message avatar
    (Streamlit's own chat avatar is theme.sizes.chatAvatarSize = 2rem square
    with a theme.radii.default = 0.5rem corner radius -- see
-   StyledAvatarIcon/StyledAvatarImage in Streamlit's frontend bundle). */
+   StyledAvatarIcon/StyledAvatarImage in Streamlit's frontend bundle).
+   Width is intentionally left to grow with its "Stop" text label rather
+   than pinned to the same 2rem square as the icon-only version -- a
+   text label makes the affordance easier to notice during the long tail
+   of slow turns (production logs show waits well past 100s). */
 .st-key-stop_generation_button button {
-    width: 2rem !important;
     height: 2rem !important;
-    min-width: 2rem !important;
     min-height: 2rem !important;
-    padding: 0 !important;
+    min-width: 2rem !important;
+    padding: 0 0.75rem !important;
     border-radius: 0.5rem !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
+    gap: 0.35rem !important;
     line-height: 1 !important;
 }
 

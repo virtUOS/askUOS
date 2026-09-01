@@ -1,6 +1,7 @@
 import os
 import random
 import sys
+import time
 import uuid
 from typing import Optional
 
@@ -301,6 +302,19 @@ class ChatApp:
         ],
     }
 
+    # After this many seconds with no real answer content yet, the status
+    # narration above switches to an explicit "still working" message --
+    # production logs show response times with a median around 14s but a
+    # long tail past 140s (a single MCP subagent round trip alone can take
+    # 10-40s, see the comment on STATUS_MESSAGES above), and without this a
+    # 100s+ wait is indistinguishable from the UI being stuck.
+    LONG_WAIT_THRESHOLD_SECONDS = 25
+    LONG_WAIT_MESSAGES = [
+        "This is taking longer than usual, but I'm still working on it...",
+        "Still on it -- this one just needs a bit more time...",
+        "Thanks for your patience, I'm still gathering the details...",
+    ]
+
     def _request_cancel(self, thread_id: str) -> None:
         """Tell the backend to interrupt the in-flight graph run for
         `thread_id` (POST /v1/chat/completions/cancel). Called synchronously
@@ -330,11 +344,12 @@ class ChatApp:
 
         st.session_state.is_generating = True
         completed = False
+        turn_started_at = time.monotonic()
         try:
             with st.chat_message(ROLES[0], avatar=ASSISTANT_AVATAR):
                 stop_placeholder = st.empty()
                 stop_placeholder.button(
-                    "⏹️",
+                    f"⏹️ {session_state['_']('Stop')}",
                     key="stop_generation_button",
                     help=session_state["_"]("Stop generating this response"),
                 )
@@ -364,13 +379,20 @@ class ChatApp:
                             # getattr even though it's not in the SDK's own type
                             # stubs.
                             status = getattr(delta, "status", None)
-                            if status and not response:
-                                variants = self.STATUS_MESSAGES.get(status)
-                                if variants:
-                                    status_text = random.choice(variants)
+                            if not response:
+                                elapsed = time.monotonic() - turn_started_at
+                                if elapsed >= self.LONG_WAIT_THRESHOLD_SECONDS:
+                                    status_text = random.choice(self.LONG_WAIT_MESSAGES)
                                     message_placeholder.markdown(
                                         f"*{session_state['_'](status_text)}*"
                                     )
+                                elif status:
+                                    variants = self.STATUS_MESSAGES.get(status)
+                                    if variants:
+                                        status_text = random.choice(variants)
+                                        message_placeholder.markdown(
+                                            f"*{session_state['_'](status_text)}*"
+                                        )
                             if delta.content:
                                 response += delta.content
                                 message_placeholder.markdown(response)

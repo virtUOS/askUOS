@@ -184,3 +184,12 @@ msgstr "Stoppen"
 
 msgid "Stop generating this response"
 msgstr "Antwort-Generierung stoppen"
+
+msgid "This is taking longer than usual, but I'm still working on it..."
+msgstr "Das dauert etwas länger als sonst, aber ich arbeite noch daran..."
+
+msgid "Still on it -- this one just needs a bit more time..."
+msgstr "Ich bin noch dabei -- das braucht nur etwas mehr Zeit..."
+
+msgid "Thanks for your patience, I'm still gathering the details..."
+msgstr "Danke für Ihre Geduld, ich sammle noch die Details..."
