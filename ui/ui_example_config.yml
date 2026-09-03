@@ -30,4 +30,46 @@ chat_page:
   greeting_message_german: |
     Hallo! Ich unterstütze Sie gerne bei Fragen zur Universität Osnabrück, einschließlich Informationen zu Studiengängen, Bewerbungsprozessen und Zulassungsvoraussetzungen.\n Wie kann ich Ihnen heute helfen?
 
+  # Optional. Off by default. When enabled, a small rotating "while you
+  # wait" tip card is shown during answer generation (deadlines, events,
+  # capability hints, etc.) instead of only the generic status narration.
+  # Two content sources, freely combinable into one rotation:
+  #   - `tips`: hand-typed entries you maintain here directly. Keep them
+  #     current -- a stale deadline shown to a waiting student is worse
+  #     than no tip at all. `link` is optional (e.g. "if you want to
+  #     apply, take a look here") and shown as a "Read more" CTA.
+  #   - `rss_feeds`: one or more RSS/Atom feed URLs (e.g. your university's
+  #     existing news/events feed) -- items are pulled live, refreshed
+  #     every rss_cache_seconds (default one hour), and shown regardless of
+  #     the visitor's selected language (feed content is never machine-
+  #     translated). A feed that's down or unreachable is simply skipped,
+  #     never breaks the chat.
+  # waiting_tips:
+  #   enabled: true
+  #   tips:
+  #     - title_english: "Application deadline"
+  #       title_german: "Bewerbungsschluss"
+  #       body_english: "The deadline for Winter Semester applications is October 15. Submit all required documents through the application portal before then."
+  #       body_german: "Der Bewerbungsschluss für das Wintersemester ist der 15. Oktober. Reichen Sie alle erforderlichen Unterlagen rechtzeitig über das Bewerbungsportal ein."
+  #       link: "https://my_example.de/bewerbung/"
+  #   rss_feeds:
+  #     - url: "https://example.edu/news/rss.xml"
+  #       max_items: 5  # Optional, defaults to 5 -- most recent N entries taken from this feed
+  #   # Optional. Sent as the User-Agent header on every RSS fetch above.
+  #   # Self-identifying is a courtesy to the feed's site operator (the
+  #   # same convention Googlebot/Feedly's fetcher use), not a technical
+  #   # requirement -- identify your own deployment however you'd like.
+  #   rss_user_agent: "UniBot/1.0 (RSS feed reader)"
+  #   # Optional, defaults to 3600 (one hour) -- how long a fetched feed's
+  #   # items are cached before being re-fetched. Shared across every
+  #   # visitor (not per-session), so this is "how often the deployment as
+  #   # a whole re-polls each feed," balanced against not hammering it.
+  #   rss_cache_seconds: 3600
+  #   # Optional timing, defaults shown below. A tip only ever appears once
+  #   # the bot signals it's actually consulting a tool (searching, checking
+  #   # documents, etc.) -- there's no separate startup delay to configure.
+  #   rotate_seconds: 6.0        # how often the tip rotates to the next one
+  #   min_display_seconds: 9.0   # a tip is never rotated away or cleared for the real answer before this long -- wins over rotate_seconds if larger
+  #   max_tips_per_turn: 2       # after this many distinct tips, rotation freezes on the last one shown
+
 # Note: For the icons, mount (to the container) your own custom icons to the /app/ui/static/icons/ directory with the same filenames (Icon-User.svg, Icon-chatbot.svg, Icon-chatbot.png). 

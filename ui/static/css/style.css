@@ -354,6 +354,125 @@ span[data-testid="stHeaderActionElements"] a {
     color: white !important;
 }
 
+/* "While you wait" tip card shown during generation (config-driven via
+   ChatPageConfig.waiting_tips in ui_config.yml, rendered by
+   _render_waiting_tip in ask_uos_chat.py) -- a plain custom class, not
+   Streamlit's key mechanism (a keyed container throws
+   StreamlitDuplicateElementKey the moment it's redrawn a second time in one
+   script run, which happens every time the tip rotates), applied via raw
+   HTML through st.markdown(..., unsafe_allow_html=True). Left border reuses
+   the same brand accent color as the primary/delete-confirm buttons above
+   (#ad1034) so it reads as an intentional, branded piece of UI rather than
+   a stray line of text -- the whole point is to make it obviously separate
+   from the bot's own answer/status narration above it.
+
+   The fade/slide-in animation below is what makes each rotation read as a
+   carousel switching slides instead of text silently changing underneath
+   you. It replays on every rotation because Streamlit renders this raw-HTML
+   markdown via dangerouslySetInnerHTML -- each update fully replaces the
+   DOM subtree (not a React vdom patch), so the browser treats every
+   redrawn card as a freshly-inserted element and re-runs the animation. */
+@keyframes waitingTipFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.waiting-tip-card {
+    display: block;
+    background-color: light-dark(#fdf3f5, #2a2226);
+    border-left: 4px solid #ad1034;
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    margin: 0.35rem 0 0.25rem;
+    max-width: 100%;
+    box-sizing: border-box;
+    animation: waitingTipFadeIn 0.4s ease-out;
+}
+
+/* Applies to the card and every line inside it, not just under the
+   max-width: 600px breakpoint below -- the bot is also embedded in a
+   narrow website iframe, whose own rendered width can be well under 600px
+   regardless of the visiting device, so a long placeholder word/URL must
+   never be allowed to force horizontal scrolling. */
+.waiting-tip-card,
+.waiting-tip-card .waiting-tip-label,
+.waiting-tip-card .waiting-tip-title,
+.waiting-tip-card .waiting-tip-text,
+.waiting-tip-card .waiting-tip-link {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.waiting-tip-card .waiting-tip-label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.92rem;
+    color: light-dark(#ad1034, #e8a4b3);
+    margin-bottom: 0.2rem;
+}
+
+.waiting-tip-card .waiting-tip-title {
+    display: block;
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 0.15rem;
+}
+
+.waiting-tip-card .waiting-tip-text {
+    display: block;
+    font-size: 0.92rem;
+    line-height: 1.35;
+}
+
+/* Optional "Read more" CTA -- see WaitingTip.link / RssFeedConfig-derived
+   items in ui/pages/ask_uos_chat.py::_render_waiting_tip. Reuses the same
+   brand accent as the label above so it reads as part of the same card,
+   not a generic link. */
+.waiting-tip-card .waiting-tip-link {
+    display: inline-block;
+    margin-top: 0.3rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: light-dark(#ad1034, #e8a4b3);
+    text-decoration: none;
+}
+
+.waiting-tip-card .waiting-tip-link:hover {
+    text-decoration: underline;
+}
+
+/* Tighter card on small/iframe-embedded widths, matching this file's
+   existing 600px breakpoint convention. */
+@media (max-width: 600px) {
+    .waiting-tip-card {
+        padding: 0.5rem 0.75rem;
+        margin: 0.25rem 0 0.2rem;
+    }
+
+    .waiting-tip-card .waiting-tip-label {
+        font-size: 0.82rem;
+    }
+
+    .waiting-tip-card .waiting-tip-title {
+        font-size: 0.86rem;
+    }
+
+    .waiting-tip-card .waiting-tip-text {
+        font-size: 0.84rem;
+        line-height: 1.3;
+    }
+
+    .waiting-tip-card .waiting-tip-link {
+        font-size: 0.8rem;
+    }
+}
+
 /* Remove the fixed positioning styles that were causing issues */
 .stChatInput {
     position: relative !important;

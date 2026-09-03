@@ -193,3 +193,9 @@ msgstr "Ich bin noch dabei -- das braucht nur etwas mehr Zeit..."
 
 msgid "Thanks for your patience, I'm still gathering the details..."
 msgstr "Danke für Ihre Geduld, ich sammle noch die Details..."
+
+msgid "While you wait"
+msgstr "Während Sie warten"
+
+msgid "Read more"
+msgstr "Mehr erfahren"

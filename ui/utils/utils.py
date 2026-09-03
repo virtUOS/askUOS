@@ -1,9 +1,15 @@
+import html
+import re
+from urllib.parse import urlparse
+
+import feedparser
+import requests
 import streamlit as st
 from streamlit import session_state
 
 from src.chatbot_log.chatbot_logger import logger
 from ui.config.app_config import app_settings
-from ui.config.models import IframePageInfo
+from ui.config.models import IframePageInfo, RssFeedConfig
 from ui.utils.language import get_translator
 
 
@@ -85,3 +91,129 @@ def bot_called_from() -> IframePageInfo | None:
         )
 
     return None
+
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_WHITESPACE_RE = re.compile(r"\s+")
+# Keeps a feed-derived tip body roughly the same size as a hand-typed one --
+# the card is designed for a short blurb, not a full article excerpt.
+RSS_TIP_BODY_MAX_CHARS = 220
+
+
+def _clean_rss_text(raw: str) -> str:
+    """Strip HTML tags/entities out of a raw RSS/Atom title or summary field
+    and collapse whitespace, so it renders as plain text the same way a
+    hand-typed WaitingTip body does. Real-world feeds routinely embed HTML
+    (<p>, <a>, entities) in their description/summary -- left as-is, the tip
+    card's html.escape() step (see ask_uos_chat.py::_render_waiting_tip)
+    would show literal "&lt;p&gt;" tags to the user instead of clean text.
+    """
+    if not raw:
+        return ""
+    text = _HTML_TAG_RE.sub(" ", raw)
+    text = html.unescape(text)
+    text = _WHITESPACE_RE.sub(" ", text).strip()
+    if len(text) > RSS_TIP_BODY_MAX_CHARS:
+        text = text[: RSS_TIP_BODY_MAX_CHARS - 1].rstrip() + "…"
+    return text
+
+
+def _safe_rss_link(raw) -> str | None:
+    """Only keep an RSS entry's link if it's an ordinary http(s) URL. Feed
+    content is a lower-trust input than admin-typed config -- a malicious
+    or compromised feed could otherwise smuggle a `javascript:` (or other
+    exotic-scheme) URL into a rendered href. Drops just the link, not the
+    whole tip, when it doesn't pass."""
+    if not raw:
+        return None
+    try:
+        scheme = urlparse(raw).scheme.lower()
+    except ValueError:
+        return None
+    return raw if scheme in ("http", "https") else None
+
+
+# Not configurable -- purely a technical content-type negotiation, unlike
+# the User-Agent (see WaitingTipsConfig.rss_user_agent), which is about how
+# a deployment identifies itself and is an admin's call, not a fixed
+# implementation detail.
+_RSS_ACCEPT_HEADER = "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
+
+
+# Evaluated once at import time, same as every other config value in this
+# app (there's no mechanism, or need, to change it without a restart).
+@st.cache_data(ttl=app_settings.chat_page.waiting_tips.rss_cache_seconds)
+def _fetch_single_rss_feed(url: str, max_items: int, user_agent: str) -> list[dict]:
+    """Fetch and parse one RSS/Atom feed into
+    [{"title": ..., "body": ..., "link": ...}, ...], newest first where the
+    feed provides dates (Python's sort is stable, so entries without a date
+    keep their original feed-order among themselves), capped at
+    `max_items`. Never raises -- any network/parse failure is logged and
+    treated as "this feed has no items right now" (see
+    fetch_rss_waiting_tips), the same graceful-degradation approach this
+    codebase's backend already uses for MCP subagent failures.
+
+    `user_agent` (WaitingTipsConfig.rss_user_agent) is sent as-is. Plain
+    requests.get() with no headers at all uses python-requests' own
+    default User-Agent ("python-requests/X.Y") and no Accept header --
+    several real CMS platforms (TYPO3 in particular, common at German
+    universities) and WAFs/CDNs reject that with a 403 or, less
+    intuitively, a bare 404, even though the identical URL opens fine in a
+    real browser. Moving off that default signature is what actually
+    avoids the block; self-identifying with a descriptive UA beyond that
+    is a courtesy for the site operator (the Googlebot/Feedly-fetcher
+    convention), not itself a technical requirement -- left entirely up to
+    each deployment's admin rather than fixed in code.
+    """
+    try:
+        headers = {"User-Agent": user_agent, "Accept": _RSS_ACCEPT_HEADER}
+        response = requests.get(url, timeout=4, headers=headers)
+        response.raise_for_status()
+        parsed = feedparser.parse(response.content)
+    except Exception as e:
+        logger.warning(f"[WAITING-TIPS] Could not fetch/parse RSS feed {url}: {e}")
+        return []
+
+    entries = list(parsed.entries or [])
+    entries.sort(
+        key=lambda entry: entry.get("published_parsed")
+        or entry.get("updated_parsed")
+        or (),
+        reverse=True,
+    )
+
+    tips = []
+    for entry in entries[:max_items]:
+        title = _clean_rss_text(entry.get("title", ""))
+        if not title:
+            continue
+        tips.append(
+            {
+                "title": title,
+                "body": _clean_rss_text(entry.get("summary", "")),
+                "link": _safe_rss_link(entry.get("link")),
+            }
+        )
+    return tips
+
+
+def fetch_rss_waiting_tips(feeds: list[RssFeedConfig], user_agent: str) -> list[dict]:
+    """Fetch waiting tips from every configured RSS feed, combined into one
+    list (see WaitingTipsConfig.rss_feeds). Items show regardless of the
+    session's selected language -- no per-feed language filtering, no
+    translation attempted (see RssFeedConfig's docstring for why). Feeds
+    are fetched sequentially, not in parallel: a cache-cold fetch only
+    happens once per feed per rss_cache_seconds window process-wide (see
+    _fetch_single_rss_feed), so the added worst-case latency from a slow
+    feed is bounded and rare, not worth the complexity of parallelizing for
+    a first version. Each feed is independently guarded against failure by
+    _fetch_single_rss_feed -- one broken/slow feed never drops the others.
+
+    `user_agent` is WaitingTipsConfig.rss_user_agent, sent identically to
+    every configured feed -- one deployment identifies itself the same way
+    to all the feeds it reads, rather than per-feed.
+    """
+    tips = []
+    for feed in feeds:
+        tips.extend(_fetch_single_rss_feed(feed.url, feed.max_items, user_agent))
+    return tips

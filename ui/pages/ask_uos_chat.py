@@ -1,3 +1,4 @@
+import html
 import os
 import random
 import sys
@@ -17,6 +18,7 @@ from ui.config.app_config import app_settings
 from ui.config.models import IframePageInfo
 from ui.utils.utils import (
     bot_called_from,
+    fetch_rss_waiting_tips,
     initialize_session_sate,
     load_css,
     setup_page,
@@ -315,6 +317,121 @@ class ChatApp:
         "Thanks for your patience, I'm still gathering the details...",
     ]
 
+    # Subset of STATUS_MESSAGES keys that actually indicate the agent is
+    # consulting some external tool (web search, document retrieval, an MCP
+    # subagent, etc.) -- used to gate the waiting tip (see
+    # generate_response). Deliberately excludes "checking_response": that
+    # status fires when the agent decided *not* to consult a tool and an
+    # LLM-as-judge step is verifying that decision was correct -- the
+    # opposite of tool consultation, so a waiting tip must not appear for
+    # it, even though the status narration text is still shown as usual.
+
+    # THESE (BELOW) KEYS ARE ALSO USED IN THE BACKEND
+    # C(src/chatbot/agents/graph_node_edges.py:120-133) is the single emission point, and it
+    # Cpasses its string argument straight through unmodified to get_stream_writer(), then
+    # Cthrough src/api/main.py's stream_generator and _make_chunk in src/api/helpers.py to the
+    # CSSE chunk's delta.status
+    TOOL_CONSULTING_STATUSES = frozenset(
+        {
+            "searching_web",
+            "searching_documents",
+            "consulting_specialist",
+            "checking_documents",
+            "refining_search",
+        }
+    )
+
+    def _get_active_waiting_tips(self, language: str) -> list[dict]:
+        """Return this turn's tips as [{"title", "body", "link"}, ...] --
+        static config tips (per session language) plus every RSS feed's
+        items (language-agnostic, see fetch_rss_waiting_tips) combined into
+        one pool. [] if the feature is disabled or nothing is configured at
+        all -- callers should treat that as "don't show a tip this turn."
+        """
+        config = app_settings.chat_page.waiting_tips
+        if not config.enabled or (not config.tips and not config.rss_feeds):
+            return []
+        if language == "Deutsch":
+            tips = [
+                {"title": tip.title_german, "body": tip.body_german, "link": tip.link}
+                for tip in config.tips
+            ]
+        else:
+            tips = [
+                {
+                    "title": tip.title_english,
+                    "body": tip.body_english,
+                    "link": tip.link,
+                }
+                for tip in config.tips
+            ]
+        if config.rss_feeds:
+            tips.extend(fetch_rss_waiting_tips(config.rss_feeds, config.rss_user_agent))
+        return tips
+
+    def _render_waiting_tip(self, placeholder, tip: dict) -> None:
+        """Render one waiting tip as a labeled card, clearly set apart from
+        the bot's own status narration/answer -- plain `st.caption` text
+        here previously looked like a stray, unexplained line. Raw HTML via
+        `unsafe_allow_html` (same escape hatch already used once in
+        ask_further_feedback) instead of `st.container(key=...)`: a keyed
+        container throws StreamlitDuplicateElementKey the moment it's
+        redrawn a second time in one script run, which happens every time
+        this rotates. `tip["title"]`/`tip["body"]` come from either an
+        admin-edited YAML file or an RSS feed rather than fully-controlled
+        Python source, so they're html-escaped before interpolation --
+        for the config case this is just a guard against a stray `<`/`&`
+        accidentally breaking the card's markup (only trusted admins edit
+        that file); for RSS content it's a real safety measure, since a
+        feed is a lower-trust, third-party input (its own scheme has
+        already been validated in _safe_rss_link before this ever sees it).
+        The static label is our own string, not escaped.
+        """
+        label = session_state["_"]("While you wait")
+        title = html.escape(tip["title"])
+        body = html.escape(tip["body"])
+        link_html = ""
+        if tip.get("link"):
+            read_more = session_state["_"]("Read more")
+            href = html.escape(tip["link"], quote=True)
+            link_html = (
+                f'<a class="waiting-tip-link" href="{href}" target="_blank" '
+                f'rel="noopener noreferrer">{read_more} →</a>'
+            )
+        placeholder.markdown(
+            f'<div class="waiting-tip-card">'
+            f'<span class="waiting-tip-label">💡 {label}</span>'
+            f'<span class="waiting-tip-title">{title}</span>'
+            f'<span class="waiting-tip-text">{body}</span>'
+            f"{link_html}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    def _await_min_tip_display(
+        self, current_tip_shown_at: Optional[float], min_display_seconds: float
+    ) -> None:
+        """Block briefly if the *currently displayed* waiting tip is about
+        to be cleared for the real answer before it's had
+        `min_display_seconds` on screen -- a real answer arriving right
+        after a tip pops in is rare (production median response time is
+        ~14s) but was frustrating when it happened. No-op if no tip is
+        currently shown. Bounded: never sleeps longer than
+        `min_display_seconds` itself.
+
+        `current_tip_shown_at` must be the timestamp of when the tip
+        *currently on screen* was shown, not when the turn's first tip
+        ever appeared -- generate_response's rotation logic already
+        guarantees the same `min_display_seconds` floor before rotating to
+        a different tip, so by construction whatever tip is on screen when
+        this is called has never been up for less than that floor allows.
+        """
+        if current_tip_shown_at is None:
+            return
+        remaining = min_display_seconds - (time.monotonic() - current_tip_shown_at)
+        if remaining > 0:
+            time.sleep(remaining)
+
     def _request_cancel(self, thread_id: str) -> None:
         """Tell the backend to interrupt the in-flight graph run for
         `thread_id` (POST /v1/chat/completions/cancel). Called synchronously
@@ -345,6 +462,23 @@ class ChatApp:
         st.session_state.is_generating = True
         completed = False
         turn_started_at = time.monotonic()
+        active_tips = self._get_active_waiting_tips(language)
+        tips_config = app_settings.chat_page.waiting_tips
+        # A tip never rotates away (or gets cleared for the real answer)
+        # before it's had at least min_display_seconds on screen --
+        # rotate_seconds only matters if an admin sets it *larger* than
+        # that, to pace rotation more slowly than the readability floor
+        # requires. Computed once per turn since both are static config.
+        tip_display_seconds = max(
+            tips_config.rotate_seconds, tips_config.min_display_seconds
+        )
+        # Randomized per turn so consecutive turns don't always open on the
+        # same first tip -- rotation itself still proceeds in list order
+        # from this starting point.
+        tip_start_index = random.randrange(len(active_tips)) if active_tips else 0
+        current_tip_index: Optional[int] = None  # None until a tip is shown
+        current_tip_shown_at: Optional[float] = None
+        distinct_tips_shown = 0
         try:
             with st.chat_message(ROLES[0], avatar=ASSISTANT_AVATAR):
                 stop_placeholder = st.empty()
@@ -356,6 +490,7 @@ class ChatApp:
 
                 with st.spinner(session_state["_"]("Generating response...")):
                     message_placeholder = st.empty()
+                    tip_placeholder = st.empty()
                     response = ""
 
                     try:
@@ -393,8 +528,66 @@ class ChatApp:
                                         message_placeholder.markdown(
                                             f"*{session_state['_'](status_text)}*"
                                         )
+                                # Gated on TOOL_CONSULTING_STATUSES, not on
+                                # `status` alone: a tip should only appear
+                                # while the agent is actually consulting a
+                                # tool, not merely because some wall-clock
+                                # time has passed (e.g. a fast direct-answer
+                                # turn with no tool calls) -- and not on
+                                # "checking_response" either, which fires
+                                # for the opposite case (the agent decided
+                                # *not* to consult a tool, and an
+                                # LLM-as-judge step is confirming that was
+                                # right). A status event never fires
+                                # instantly at turn start, so no separate
+                                # startup delay is needed either.
+                                now = time.monotonic()
+                                if (
+                                    active_tips
+                                    and status in self.TOOL_CONSULTING_STATUSES
+                                ):
+                                    if current_tip_index is None:
+                                        # First tip of this turn.
+                                        current_tip_index = tip_start_index
+                                        current_tip_shown_at = now
+                                        distinct_tips_shown = 1
+                                        self._render_waiting_tip(
+                                            tip_placeholder,
+                                            active_tips[current_tip_index],
+                                        )
+                                    elif (
+                                        now - current_tip_shown_at
+                                        >= tip_display_seconds
+                                        and distinct_tips_shown
+                                        < tips_config.max_tips_per_turn
+                                    ):
+                                        # The currently-shown tip has had its
+                                        # full guaranteed display time --
+                                        # only now is it eligible to rotate
+                                        # to the next one (never sooner, so
+                                        # a tip can never be swapped out
+                                        # before it's had at least
+                                        # min_display_seconds on screen).
+                                        current_tip_index = (
+                                            current_tip_index + 1
+                                        ) % len(active_tips)
+                                        current_tip_shown_at = now
+                                        distinct_tips_shown += 1
+                                        self._render_waiting_tip(
+                                            tip_placeholder,
+                                            active_tips[current_tip_index],
+                                        )
+                                    # else: currently-shown tip hasn't hit
+                                    # its guaranteed display time yet (or
+                                    # the per-turn cap is reached) -- leave
+                                    # it exactly as-is.
                             if delta.content:
                                 response += delta.content
+                                self._await_min_tip_display(
+                                    current_tip_shown_at,
+                                    tips_config.min_display_seconds,
+                                )
+                                tip_placeholder.empty()
                                 message_placeholder.markdown(response)
 
                     except Exception as e:
@@ -403,9 +596,14 @@ class ChatApp:
                             response = session_state["_"](
                                 "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
                             )
+                            self._await_min_tip_display(
+                                current_tip_shown_at, tips_config.min_display_seconds
+                            )
+                            tip_placeholder.empty()
                             message_placeholder.markdown(response)
 
                 stop_placeholder.empty()
+                tip_placeholder.empty()
                 self.store_response(response, prompt)
             completed = True
         finally:

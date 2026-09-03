@@ -5,6 +5,7 @@ description = "AI chatbot for applicants and students – get instant answers ab
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.135.1",
+    "feedparser>=6.0.14",
     "google-genai>=1.63.0",
     "ipython",
     "langchain",
