@@ -408,30 +408,6 @@ class ChatApp:
             unsafe_allow_html=True,
         )
 
-    def _await_min_tip_display(
-        self, current_tip_shown_at: Optional[float], min_display_seconds: float
-    ) -> None:
-        """Block briefly if the *currently displayed* waiting tip is about
-        to be cleared for the real answer before it's had
-        `min_display_seconds` on screen -- a real answer arriving right
-        after a tip pops in is rare (production median response time is
-        ~14s) but was frustrating when it happened. No-op if no tip is
-        currently shown. Bounded: never sleeps longer than
-        `min_display_seconds` itself.
-
-        `current_tip_shown_at` must be the timestamp of when the tip
-        *currently on screen* was shown, not when the turn's first tip
-        ever appeared -- generate_response's rotation logic already
-        guarantees the same `min_display_seconds` floor before rotating to
-        a different tip, so by construction whatever tip is on screen when
-        this is called has never been up for less than that floor allows.
-        """
-        if current_tip_shown_at is None:
-            return
-        remaining = min_display_seconds - (time.monotonic() - current_tip_shown_at)
-        if remaining > 0:
-            time.sleep(remaining)
-
     def _request_cancel(self, thread_id: str) -> None:
         """Tell the backend to interrupt the in-flight graph run for
         `thread_id` (POST /v1/chat/completions/cancel). Called synchronously
@@ -581,13 +557,34 @@ class ChatApp:
                                     # its guaranteed display time yet (or
                                     # the per-turn cap is reached) -- leave
                                     # it exactly as-is.
+
+                            # Clears the tip once it's had its guaranteed
+                            # min_display_seconds -- checked on *every*
+                            # chunk (content or status), independent of
+                            # whether the real answer has started
+                            # streaming. This never blocks or delays
+                            # showing new content: a token is rendered the
+                            # instant it arrives regardless of the tip's
+                            # state, and the tip just quietly disappears on
+                            # its own schedule, coexisting on screen with
+                            # the streaming answer for however long is left
+                            # of its guarantee. (Previously this was
+                            # enforced with a blocking time.sleep() before
+                            # the first content render -- that starved the
+                            # stream iterator while the backend kept
+                            # sending, so whatever had piled up got flushed
+                            # in one burst the moment the sleep ended,
+                            # destroying the live-streaming feel entirely.)
+                            if (
+                                current_tip_shown_at is not None
+                                and time.monotonic() - current_tip_shown_at
+                                >= tips_config.min_display_seconds
+                            ):
+                                tip_placeholder.empty()
+                                current_tip_shown_at = None
+
                             if delta.content:
                                 response += delta.content
-                                self._await_min_tip_display(
-                                    current_tip_shown_at,
-                                    tips_config.min_display_seconds,
-                                )
-                                tip_placeholder.empty()
                                 message_placeholder.markdown(response)
 
                     except Exception as e:
@@ -595,9 +592,6 @@ class ChatApp:
                         if not response:
                             response = session_state["_"](
                                 "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
-                            )
-                            self._await_min_tip_display(
-                                current_tip_shown_at, tips_config.min_display_seconds
                             )
                             tip_placeholder.empty()
                             message_placeholder.markdown(response)
