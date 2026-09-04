@@ -588,7 +588,7 @@ class ChatApp:
                                 message_placeholder.markdown(response)
 
                     except Exception as e:
-                        logger.error(f"[STREAMLIT] Error in streaming: {e}")
+                        logger.error(f"[STREAMLIT] Error while streaming: {e}")
                         if not response:
                             response = session_state["_"](
                                 "I'm sorry, but I am unable to process your request right now. Please try again later or consider rephrasing your question."
