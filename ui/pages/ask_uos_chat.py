@@ -558,32 +558,20 @@ class ChatApp:
                                     # the per-turn cap is reached) -- leave
                                     # it exactly as-is.
 
-                            # Clears the tip once it's had its guaranteed
-                            # min_display_seconds -- checked on *every*
-                            # chunk (content or status), independent of
-                            # whether the real answer has started
-                            # streaming. This never blocks or delays
-                            # showing new content: a token is rendered the
-                            # instant it arrives regardless of the tip's
-                            # state, and the tip just quietly disappears on
-                            # its own schedule, coexisting on screen with
-                            # the streaming answer for however long is left
-                            # of its guarantee. (Previously this was
-                            # enforced with a blocking time.sleep() before
-                            # the first content render -- that starved the
-                            # stream iterator while the backend kept
-                            # sending, so whatever had piled up got flushed
-                            # in one burst the moment the sleep ended,
-                            # destroying the live-streaming feel entirely.)
-                            if (
-                                current_tip_shown_at is not None
-                                and time.monotonic() - current_tip_shown_at
-                                >= tips_config.min_display_seconds
-                            ):
-                                tip_placeholder.empty()
-                                current_tip_shown_at = None
-
                             if delta.content:
+                                # The tip disappears the instant the real
+                                # answer starts, full stop -- no minimum
+                                # display guarantee against this, and no
+                                # coexisting on screen with the streaming
+                                # answer (tried that; it looked worse, not
+                                # better). min_display_seconds still only
+                                # governs how fast tips rotate *among
+                                # themselves* while waiting (see
+                                # tip_display_seconds above) -- it has no
+                                # say once content has begun. Cheap to call
+                                # unconditionally on every token; a no-op
+                                # once the placeholder is already empty.
+                                tip_placeholder.empty()
                                 response += delta.content
                                 message_placeholder.markdown(response)
 
