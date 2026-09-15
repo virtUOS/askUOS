@@ -341,6 +341,7 @@ class ChatApp:
         client = self.get_client()
         user_id = self.get_user_id()
         language = session_state.get("selected_language", "Deutsch")
+        page_info = session_state.get("bot_called_from")
 
         st.session_state.is_generating = True
         completed = False
@@ -367,6 +368,10 @@ class ChatApp:
                                 "thread_id": user_id,
                                 "language": language,
                                 "keep_user_message_history": True,
+                                "page": page_info.page if page_info else None,
+                                "page_title": (
+                                    page_info.page_title if page_info else None
+                                ),
                             },
                         )
 
@@ -568,8 +573,8 @@ class ChatApp:
             self._request_cancel(self.get_user_id())
             st.session_state.is_generating = False
 
-        # page from which the bot was called
-        # TODO: Append this information to the llm context
+        # page from which the bot was called -- forwarded to the backend in
+        # generate_response()'s extra_body, above.
         st.session_state["bot_called_from"] = bot_called_from()
 
         RemoveEmptyElementContainer()

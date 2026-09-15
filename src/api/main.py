@@ -4,6 +4,7 @@ sys.path.append("/app")
 import asyncio
 import contextlib
 import os
+import re
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -317,6 +318,22 @@ async def verify_history_api_key(
     return credentials.credentials
 
 
+_PAGE_CONTEXT_MAX_LEN = 150
+
+
+def _sanitize_page_text(text: str | None) -> str:
+    """Collapse whitespace and bound the length of a page/title string coming
+    from a client-controlled query param (see bot_called_from() in
+    ui/utils/utils.py) before it can reach a prompt or a log line. Same trust
+    level as user_query, which is already interpolated into the system
+    prompt today -- this just keeps it clean and bounded, not a new class of
+    defense."""
+    if not text:
+        return ""
+    collapsed = re.sub(r"\s+", " ", text).strip()
+    return collapsed[:_PAGE_CONTEXT_MAX_LEN]
+
+
 app = FastAPI(lifespan=lifespan, title="askUOS API")
 
 # CORS is only relevant for browser-based clients calling this API
@@ -433,6 +450,21 @@ async def chat_completions(
     else:
         prev_links_count = 0
         prev_refs_count = 0
+
+    # Page the widget was embedded on (see bot_called_from() in
+    # ui/utils/utils.py) -- only surfaced to the LLM on the turn it changes
+    # (including the first turn of a thread, where "changed" is trivially
+    # true), so a persistent cross-page widget doesn't keep re-asserting an
+    # increasingly stale location on every later, possibly unrelated turn.
+    page_signal = _sanitize_page_text(request.page_title) or _sanitize_page_text(
+        request.page
+    )
+    prev_page_signal = (
+        prev_state.values.get("last_page_signal") if prev_state.values else None
+    )
+    page_changed = bool(page_signal) and page_signal != prev_page_signal
+    input_data["page_label"] = page_signal if page_changed else ""
+    input_data["last_page_signal"] = page_signal or prev_page_signal
 
     # A cancelled turn (explicit Stop click, or the defensive preemption
     # above) can leave a dangling AIMessage(tool_calls=...) anywhere in the
@@ -776,6 +808,9 @@ async def chat_completions(
                 ai_answer=ai_answer,
                 error=error,
                 latency_ms=round((time.monotonic() - turn_start) * 1000, 1),
+                page=request.page,
+                page_title=request.page_title,
+                page_context_shown=page_changed,
             )
 
         return StreamingResponse(
@@ -847,6 +882,9 @@ async def chat_completions(
         ai_answer=content or "",
         error=error,
         latency_ms=round((time.monotonic() - turn_start) * 1000, 1),
+        page=request.page,
+        page_title=request.page_title,
+        page_context_shown=page_changed,
     )
 
     return JSONResponse(

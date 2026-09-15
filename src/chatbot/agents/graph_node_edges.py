@@ -170,6 +170,12 @@ class State(TypedDict):
     visited_links: Annotated[list[str], add_lists]
     doc_references: Annotated[list, add_lists]  # list of doc reference objects
     language: Optional[str]  # Literal["Deutsch", "English"]
+    # Page the widget was embedded on (see bot_called_from() in
+    # ui/utils/utils.py). page_label is only non-empty on the turn where the
+    # page changed -- see agent_node -- while last_page_signal is the raw
+    # value persisted every turn purely so main.py can detect that change.
+    page_label: Optional[str]
+    last_page_signal: Optional[str]
 
 
 class GraphNodesMixin:
@@ -519,7 +525,10 @@ class GraphNodesMixin:
         current_date = state.get("current_date", "")
         user_initial_query = state.get("user_initial_query", "")
         language = state.get("language", "Deutsch")
-        system_prompt = get_system_prompt(user_initial_query, current_date, language)
+        page_label = state.get("page_label", "")
+        system_prompt = get_system_prompt(
+            user_initial_query, current_date, language, page_label
+        )
 
         # the list of messages grows with each graph iteration e.g., useless toolmessages etc. Here the list is shortened
         filtered_messages = self.filter_messages(messages, MESSAGE_HISTORY_LIMIT)

@@ -75,9 +75,6 @@ def bot_called_from() -> IframePageInfo | None:
         page = st.query_params.get("page", "")
         page_title = st.query_params.get("title", "")
         if page or page_title:
-            logger.info(
-                f"[BOT-CALLED] The bot was called from {page}, page title: {page_title}"
-            )
             return IframePageInfo(page=page, page_title=page_title)
     except Exception as e:
         logger.error(

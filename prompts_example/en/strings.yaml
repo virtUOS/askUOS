@@ -7,3 +7,6 @@ description_university_web_search: |
   Useful for when you need to answer questions about the University of Osnabruek. For example questions about
   the application process or studying at the university in general. This tool is also useful to access updated application dates
   and updated dates and contact information. To use this tool successfully, take into account the previous interactions with the user (chat history) and the context of the conversation.
+
+page_context_note: |
+  Current page: "{page_label}" (the user is on this page now, or just started the conversation here).

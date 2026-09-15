@@ -53,7 +53,7 @@ _LANGUAGE_FOLDERS = {"Deutsch": "de", "English": "en"}
 # Long-form templates: one markdown file per key. See module docstring for
 # why the placeholder set is enforced exactly (no more, no fewer).
 _TEMPLATE_PLACEHOLDERS: Dict[str, Set[str]] = {
-    "system_message": {"current_date", "user_query"},
+    "system_message": {"current_date", "user_query", "page_context"},
     "system_message_generate": {"current_date", "user_query", "context"},
     "system_message_generate_application": {
         "current_date",
@@ -87,6 +87,10 @@ _TEMPLATE_PLACEHOLDERS: Dict[str, Set[str]] = {
 #   commented-out code (the old, pre-MCP examination regulations tool).
 _STRING_KEYS: Dict[str, Set[str]] = {
     "description_university_web_search": set(),
+    # Built into system_message's {page_context} slot only on the turn the
+    # widget's embedding page changes -- see get_system_prompt() and
+    # agent_node's page_label. {page_label} is the sanitized page/title text.
+    "page_context_note": {"page_label"},
 }
 
 

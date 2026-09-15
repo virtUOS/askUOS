@@ -31,6 +31,11 @@ class ChatCompletionRequest(BaseModel):
     keep_user_message_history: bool = (
         False  # wather to keep the list of messages shown to the user (sent to the client)
     )
+    # Page the widget was embedded on when this message was sent (see
+    # ui/utils/utils.py's bot_called_from()) -- used to disambiguate vague
+    # queries ("when do the courses start?") with the page the user is on.
+    page: Optional[str] = None
+    page_title: Optional[str] = None
     # Optional OpenAI-compatible fields (ignored but accepted)
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None

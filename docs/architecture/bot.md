@@ -21,6 +21,8 @@ The ask.UOS chatbot uses a **state-based graph architecture** implemented with L
 
 **Flow**: Receives user input → Processes with LLM → Returns decision with tool calls or direct response
 
+**Page context**: if the widget reports which page of the university website it's embedded on (`page`/`page_title`, forwarded by the Streamlit frontend), the Agent Node adds a short disambiguation hint to its system prompt — but only on the turn that page actually changes for the conversation — so a vague query like "when do the courses start?" can be interpreted relative to the page the user is currently viewing, without repeating the same hint every turn.
+
 ### 2. Tool Node
 
 **Purpose**: Execute external tools and gather information

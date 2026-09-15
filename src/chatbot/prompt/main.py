@@ -39,6 +39,7 @@ def get_system_prompt(
     user_input: str,
     current_date: str,
     language: Literal["Deutsch", "English"] = "Deutsch",
+    page_label: str = "",
 ) -> List:
     """
     Generates a chat prompt template based on the provided prompt text.
@@ -46,9 +47,15 @@ def get_system_prompt(
     """
 
     prompt_text = translate_prompt(language)
+    page_context = (
+        prompt_text["page_context_note"].format(page_label=page_label)
+        if page_label
+        else ""
+    )
     system_message_text = prompt_text["system_message"].format(
         current_date=current_date,
         user_query=user_input,
+        page_context=page_context,
     )
     return [SystemMessage(content=system_message_text)]
 
