@@ -452,19 +452,16 @@ async def chat_completions(
         prev_refs_count = 0
 
     # Page the widget was embedded on (see bot_called_from() in
-    # ui/utils/utils.py) -- only surfaced to the LLM on the turn it changes
-    # (including the first turn of a thread, where "changed" is trivially
-    # true), so a persistent cross-page widget doesn't keep re-asserting an
-    # increasingly stale location on every later, possibly unrelated turn.
+    # ui/utils/utils.py).
     page_signal = _sanitize_page_text(request.page_title) or _sanitize_page_text(
         request.page
     )
     prev_page_signal = (
         prev_state.values.get("last_page_signal") if prev_state.values else None
     )
-    page_changed = bool(page_signal) and page_signal != prev_page_signal
-    input_data["page_label"] = page_signal if page_changed else ""
-    input_data["last_page_signal"] = page_signal or prev_page_signal
+    known_page = page_signal or prev_page_signal
+    input_data["page_label"] = known_page or ""
+    input_data["last_page_signal"] = known_page
 
     # A cancelled turn (explicit Stop click, or the defensive preemption
     # above) can leave a dangling AIMessage(tool_calls=...) anywhere in the
@@ -810,7 +807,7 @@ async def chat_completions(
                 latency_ms=round((time.monotonic() - turn_start) * 1000, 1),
                 page=request.page,
                 page_title=request.page_title,
-                page_context_shown=page_changed,
+                page_context_shown=bool(known_page),
             )
 
         return StreamingResponse(
@@ -884,7 +881,7 @@ async def chat_completions(
         latency_ms=round((time.monotonic() - turn_start) * 1000, 1),
         page=request.page,
         page_title=request.page_title,
-        page_context_shown=page_changed,
+        page_context_shown=bool(known_page),
     )
 
     return JSONResponse(
