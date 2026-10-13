@@ -7,14 +7,14 @@ on:
       - dev
       - ragflow
       - agent_async
-    paths:
-      - 'src/**'
-      - 'pages/**'
-      - 'Dockerfile.prod'
-      - 'locale/**'
-      - 'uv.lock'
-      - 'pyproject.toml'
-      - 'ui/**'
+    # paths:
+    #   - 'src/**'
+    #   - 'pages/**'
+    #   - 'Dockerfile.prod'
+    #   - 'locale/**'
+    #   - 'uv.lock'
+    #   - 'pyproject.toml'
+    #   - 'ui/**'
 
 jobs:
   push_to_registries:
