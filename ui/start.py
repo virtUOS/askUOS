@@ -9,7 +9,12 @@ from streamlit import session_state
 
 from ui.config.app_config import app_settings
 from ui.utils.language import initialize_language
-from ui.utils.utils import initialize_session_sate, load_css, setup_page
+from ui.utils.utils import (
+    bot_called_from,
+    initialize_session_sate,
+    load_css,
+    setup_page,
+)
 
 # Load environment variables
 load_dotenv()
@@ -21,6 +26,15 @@ def initialize_app():
     load_css()
     initialize_session_sate()
     initialize_language()
+    # Capture page/title here too (not just on the chat page): a visitor's
+    # very first chat-open lands on this disclaimer page, and st.switch_page
+    # (in start_chat_button, below) drops the URL's query string on the way
+    # to pages/ask_uos_chat.py -- capturing it here, into session_state that
+    # persists across that switch, is what lets ask_uos_chat.py's own
+    # bot_called_from() fallback find it even though its own URL is empty.
+    fresh_page_info = bot_called_from()
+    if fresh_page_info is not None:
+        st.session_state["bot_called_from"] = fresh_page_info
 
 
 def display_welcome_message():

@@ -573,9 +573,18 @@ class ChatApp:
             self._request_cancel(self.get_user_id())
             st.session_state.is_generating = False
 
-        # page from which the bot was called -- forwarded to the backend in
-        # generate_response()'s extra_body, above.
-        st.session_state["bot_called_from"] = bot_called_from()
+        # Page from which the bot was called -- forwarded to the backend in
+        # generate_response()'s extra_body, above. Only overwritten when the
+        # CURRENT page's URL actually carries page/title: a visitor who went
+        # through start.py's disclaimer first reaches this page via
+        # st.switch_page(), which drops the query string, so this page's own
+        # URL has no page/title even though the widget originally sent them.
+        # Falling back to whatever start.py already captured into session
+        # state (instead of unconditionally overwriting with None) is what
+        # lets that value survive the page switch.
+        fresh_page_info = bot_called_from()
+        if fresh_page_info is not None:
+            st.session_state["bot_called_from"] = fresh_page_info
 
         RemoveEmptyElementContainer()
         # Get or create user ID using our method
