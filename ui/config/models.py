@@ -69,6 +69,12 @@ class PageOverride(BaseModel):
     welcome_message_english: Optional[str] = None
     greeting_message_german: Optional[str] = None
     greeting_message_english: Optional[str] = None
+    # Replacement status lines shown while the bot works, keyed by status code
+    # (searching_web, searching_documents, consulting_specialist,
+    # checking_response, checking_documents, refining_search). Codes not listed
+    # keep the default texts.
+    status_messages_german: Optional[dict[str, str]] = None
+    status_messages_english: Optional[dict[str, str]] = None
 
 
 class IframePageInfo(BaseModel):

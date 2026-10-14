@@ -4,6 +4,12 @@ legal:
   data_protection: "https://my_example.de/datenschutz/"
   imprint: "https://my_example.de/impressum/"
 
+# Endpoint of the askUOS backend (required). The api key is set in the env file
+# (STREAMLIT_API_KEY). Behind Caddy (prod) e.g. "http://caddy/v1"; for a local
+# backend e.g. "http://localhost:8000/v1". See docs/Caddy.example.j2.
+api:
+  api_url: "http://caddy/v1"
+
 ui:
   page_title: "ask.UOS" #app name
   # Optional. Defaults shown below — either mount your own icon files over
@@ -45,3 +51,10 @@ chat_page:
 #     welcome_message_english: "Welcome to the university sports assistant! ..."
 #     greeting_message_german: "Hallo! Haben Sie Fragen zum Hochschulsport? Fragen Sie einfach!"
 #     greeting_message_english: "Hello! Do you have questions about university sports? Just ask!"
+#     # Status line shown while the bot works, per status code (searching_web,
+#     # searching_documents, consulting_specialist, checking_response,
+#     # checking_documents, refining_search). Codes left out keep the defaults.
+#     status_messages_german:
+#       searching_web: "Ich suche nach Informationen zum Hochschulsport..."
+#     status_messages_english:
+#       searching_web: "I'm looking up information about university sports..."

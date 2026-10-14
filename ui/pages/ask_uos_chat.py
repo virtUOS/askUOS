@@ -399,8 +399,25 @@ class ChatApp:
                                         f"*{session_state['_'](status_text)}*"
                                     )
                                 elif status:
+                                    # Optional per-host-page replacement text
+                                    # (page_overrides.status_messages_*).
+                                    lang_key = (
+                                        "german"
+                                        if session_state.get(
+                                            "selected_language", app_settings.language
+                                        )
+                                        == "Deutsch"
+                                        else "english"
+                                    )
+                                    override_text = get_page_text(
+                                        f"status_messages_{lang_key}", {}
+                                    ).get(status)
                                     variants = self.STATUS_MESSAGES.get(status)
-                                    if variants:
+                                    if override_text:
+                                        message_placeholder.markdown(
+                                            f"*{override_text}*"
+                                        )
+                                    elif variants:
                                         status_text = random.choice(variants)
                                         message_placeholder.markdown(
                                             f"*{session_state['_'](status_text)}*"

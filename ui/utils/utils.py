@@ -1,4 +1,5 @@
 import re
+from typing import TypeVar
 
 import streamlit as st
 from streamlit import session_state
@@ -7,6 +8,8 @@ from src.chatbot_log.chatbot_logger import logger
 from ui.config.app_config import app_settings
 from ui.config.models import IframePageInfo
 from ui.utils.language import get_translator
+
+T = TypeVar("T")
 
 
 def initialize_session_sate() -> None:
@@ -92,9 +95,9 @@ def _normalize_page(url: str) -> str:
     return re.sub(r"^www\.", "", url).rstrip("/")
 
 
-def get_page_text(field: str, default: str) -> str:
+def get_page_text(field: str, default: T) -> T:
     """
-    Return the text for ``field`` (e.g. "welcome_message_german") taking the
+    Return the value for ``field`` (e.g. "welcome_message_german") taking the
     ``page_overrides`` config into account.
 
     ``page`` (what the client sent) and each override's ``match`` are

@@ -91,13 +91,13 @@ cp src/backend_config_example.yaml src/backend_config.yaml
 
 ## UI Configuration (`ui_config.yml`)
 
-This file, `ui_config.yml`, configures the user interface settings. Follow this example: [`ui_example_config.yml`](ui_example_config.yml).
+This file, `ui_config.yml`, configures the user interface settings. Follow this example: [`ui/ui_example_config.yml`](../ui/ui_example_config.yml).
 
 To use the example configuration:
 
 ```bash
-cp docs/ui_example_config.yml ./ui_config.yml
-# Edit ui_config.yml with your specific settings
+cp ui/ui_example_config.yml ui/ui_config.yml
+# Edit ui/ui_config.yml with your specific settings
 ```
 
 **Note:** For the icons, mount (to the container) your own custom icons to the `/app/ui/static/icons/` directory with the same filenames: `Icon-User.svg`, `Icon-chatbot.svg`, `Icon-chatbot.png`.
