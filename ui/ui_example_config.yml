@@ -31,3 +31,17 @@ chat_page:
     Hallo! Ich unterstütze Sie gerne bei Fragen zur Universität Osnabrück, einschließlich Informationen zu Studiengängen, Bewerbungsprozessen und Zulassungsvoraussetzungen.\n Wie kann ich Ihnen heute helfen?
 
 # Note: For the icons, mount (to the container) your own custom icons to the /app/ui/static/icons/ directory with the same filenames (Icon-User.svg, Icon-chatbot.svg, Icon-chatbot.png). 
+
+# Optional: different texts when the bot is opened from specific pages of the
+# host website. `match` is compared with the `page` query parameter sent by the
+# embed snippet, which can be a path ("/hochschulsport") or include the
+# hostname ("sport.example.de" or "sport.example.de/kurse"). It matches that
+# page and everything below it (case-insensitive, scheme/"www." ignored); the
+# longest match wins. Any field left out falls back to start_page / chat_page
+# above. First remove the leading "#" of the lines below.
+# page_overrides:
+#   - match: "sport.example.de"
+#     welcome_message_german: "Willkommen beim Hochschulsport-Assistenten! ..."
+#     welcome_message_english: "Welcome to the university sports assistant! ..."
+#     greeting_message_german: "Hallo! Haben Sie Fragen zum Hochschulsport? Fragen Sie einfach!"
+#     greeting_message_english: "Hello! Do you have questions about university sports? Just ask!"

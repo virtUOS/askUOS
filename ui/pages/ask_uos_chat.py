@@ -17,6 +17,7 @@ from ui.config.app_config import app_settings
 from ui.config.models import IframePageInfo
 from ui.utils.utils import (
     bot_called_from,
+    get_page_text,
     initialize_session_sate,
     load_css,
     setup_page,
@@ -192,9 +193,15 @@ class ChatApp:
         # use to save user-assistant message to the logs e.g., when user leaves feedback
         # st.session_state["messages"] = []
         greeting_message = (
-            app_settings.chat_page.greeting_message_german
+            get_page_text(
+                "greeting_message_german",
+                app_settings.chat_page.greeting_message_german,
+            )
             if app_settings.language == "Deutsch"
-            else app_settings.chat_page.greeting_message_english
+            else get_page_text(
+                "greeting_message_english",
+                app_settings.chat_page.greeting_message_english,
+            )
         )
         # st.session_state["messages"].append(greeting_message)
         with st.chat_message(ROLES[0], avatar=ASSISTANT_AVATAR):

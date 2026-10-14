@@ -10,7 +10,14 @@ from pydantic_settings import (
 
 from src.chatbot_log.chatbot_logger import logger
 
-from .models import ApiConf, ChatPageConfig, Legal, StartPageConfig, UiConfig
+from .models import (
+    ApiConf,
+    ChatPageConfig,
+    Legal,
+    PageOverride,
+    StartPageConfig,
+    UiConfig,
+)
 
 
 class AppSettings(BaseSettings):
@@ -32,6 +39,8 @@ class AppSettings(BaseSettings):
     legal: Optional[Legal] = (
         None  # Optional legal information (e.g., data protection, imprint)
     )
+    # Optional per-host-page text overrides (see PageOverride)
+    page_overrides: list[PageOverride] = []
     model_config = SettingsConfigDict(yaml_file="/app/ui/ui_config.yml")
     # TODO move this a global object/context
     time_request_sent: Optional[float] = None

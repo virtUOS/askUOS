@@ -1,3 +1,5 @@
+import re
+
 import streamlit as st
 from streamlit import session_state
 
@@ -82,3 +84,44 @@ def bot_called_from() -> IframePageInfo | None:
         )
 
     return None
+
+
+def _normalize_page(url: str) -> str:
+    """Lowercase and drop scheme, leading "www." and trailing slashes."""
+    url = re.sub(r"^https?://", "", url.strip().lower())
+    return re.sub(r"^www\.", "", url).rstrip("/")
+
+
+def get_page_text(field: str, default: str) -> str:
+    """
+    Return the text for ``field`` (e.g. "welcome_message_german") taking the
+    ``page_overrides`` config into account.
+
+    ``page`` (what the client sent) and each override's ``match`` are
+    normalized (case, scheme, "www.", trailing slash). An override applies if
+    its ``match`` equals the page or is a parent of it on a "/" boundary, so
+    "sport.example.de" and "/sport" cover everything below them but "/sport"
+    does not cover "/sportwissenschaft". Among applicable overrides that set
+    ``field`` the longest ``match`` wins; otherwise ``default``.
+    """
+    if not app_settings.page_overrides:
+        return default
+
+    page_info = st.session_state.get("bot_called_from")
+    page = _normalize_page((page_info.page if page_info else None) or "")
+    if not page:
+        return default
+
+    best_len = -1
+    text = default
+    for override in app_settings.page_overrides:
+        override_text = getattr(override, field, None)
+        if not override_text:
+            continue
+        match = _normalize_page(override.match)
+        if not match or (page != match and not page.startswith(match + "/")):
+            continue
+        if len(match) > best_len:
+            best_len = len(match)
+            text = override_text
+    return text

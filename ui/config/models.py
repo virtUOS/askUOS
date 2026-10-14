@@ -53,6 +53,24 @@ class StartPageConfig(BaseModel):
     welcome_message_german: str
 
 
+class PageOverride(BaseModel):
+    """
+    Text overrides applied when the bot is opened from a matching host page.
+
+    ``match`` is compared against the ``page`` query parameter sent by the
+    embedding widget, which may be a path ("/sport/kurse") or contain the
+    hostname ("sport.example.de/sport/kurse"). It matches the page itself and
+    everything below it (see ``get_page_text``). Every text field is optional;
+    unset fields fall back to the regular start_page/chat_page text.
+    """
+
+    match: str
+    welcome_message_german: Optional[str] = None
+    welcome_message_english: Optional[str] = None
+    greeting_message_german: Optional[str] = None
+    greeting_message_english: Optional[str] = None
+
+
 class IframePageInfo(BaseModel):
     page: Optional[str] = None
     page_title: Optional[str] = None

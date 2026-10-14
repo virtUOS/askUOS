@@ -11,6 +11,7 @@ from ui.config.app_config import app_settings
 from ui.utils.language import initialize_language
 from ui.utils.utils import (
     bot_called_from,
+    get_page_text,
     initialize_session_sate,
     load_css,
     setup_page,
@@ -40,9 +41,13 @@ def initialize_app():
 def display_welcome_message():
 
     if st.session_state["chosen_language"] == "Deutsch":
-        start_message = app_settings.start_page.welcome_message_german
+        start_message = get_page_text(
+            "welcome_message_german", app_settings.start_page.welcome_message_german
+        )
     else:
-        start_message = app_settings.start_page.welcome_message_english
+        start_message = get_page_text(
+            "welcome_message_english", app_settings.start_page.welcome_message_english
+        )
 
     st.markdown(
         start_message.format(
