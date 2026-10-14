@@ -233,10 +233,20 @@ class GraphConfig(BaseModel):
     embedding_prefilter_max_context_tokens: int = 8192
 
 
+class MessageOverride(BaseModel):
+    """Replacement text for a Message when the client's `page` matches."""
+
+    match: str  # path or host(+path); see src.page_match.best_page_match
+    english: str
+    german: str
+
+
 class Message(BaseModel):
     msg_name: MsgName
     english: str
     german: str
+    # Optional per-host-page replacements for english/german above.
+    page_overrides: list[MessageOverride] = Field(default_factory=list)
 
 
 class MCPAgentConf(BaseModel):

@@ -78,13 +78,13 @@ The Google API key must have access to:
 
 ## Backend Configuration (`backend_config.yaml`)
 
-This file, `backend_config.yaml`, configures the models and other backend settings. See the example: [`backend_config_example.yaml`](backend_config_example.yaml).
+This file, `backend_config.yaml`, configures the models and other backend settings. See the example: [`src/backend_config_example.yaml`](../src/backend_config_example.yaml).
 
 To use the example configuration:
 
 ```bash
-cp docs/backend_config_example.yaml ./backend_config.yaml
-# Edit backend_config.yaml with your specific settings
+cp src/backend_config_example.yaml src/backend_config.yaml
+# Edit src/backend_config.yaml with your specific settings
 ```
 
 ---

@@ -384,7 +384,7 @@ async def chat_completions(
 
     language = request.language or Languages.GERMAN
     keep_user_message_history = request.keep_user_message_history
-    error_messages = _get_error_messages(language)
+    error_messages = _get_error_messages(language, request.page)
     # Fresh thread_id if non provided (this means that the client sends all chat history e.g., Librechat)
     thread_id = request.thread_id if request.thread_id else str(uuid.uuid4())
 

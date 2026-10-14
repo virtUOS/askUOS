@@ -33,6 +33,15 @@ messages:
       If you need personal assistance regarding studying at the university, you can visit this wesbsite ...  or ... .
     german: |
       Wenn Sie persönliche Unterstützung zum Studium an der Universität benötigen, können Sie die Website des ...  oder ... .
+    # Optional: different text when the client's `page` matches (path or host(+path),
+    # e.g. "/sport" or "sport.example.de"; matches that page and everything below it,
+    # case-insensitive, scheme/"www." ignored; the longest match wins).
+    # page_overrides:
+    #   - match: "sport.example.de"
+    #     english: |
+    #       For personal questions about university sports, please contact ... .
+    #     german: |
+    #       Bei persönlichen Fragen zum Hochschulsport wenden Sie sich bitte an ... .
 
 # the faq collection needs a metadata field. Name it "url", this link will be shwon to the user so that they can double check the information provided by the chatbot. 
 graph:
@@ -42,7 +51,7 @@ graph:
     collection_name: "faq"
   # This tool is a "standalone tool" (not MCP-based), so its description
   # lives here in backend_config.yaml rather than in prompts/ -- it's only
-  # needed at all if activate: True. See docs/PROMPT_CONFIGURATION.md.
+  # needed at all if activate: True. See docs/getting-started.md
   skip_grading_for_high_trust_sources: True
   # Max input context (in tokens) of the embedding model below -- used to
   # size how much of the retrieved documents get embedded for

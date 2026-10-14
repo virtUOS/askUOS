@@ -83,6 +83,7 @@ class Settings(BaseSettings):
                 item.msg_name.further_help.value: {
                     "english": item.english,
                     "german": item.german,
+                    "page_overrides": [o.model_dump() for o in item.page_overrides],
                 }
                 for item in self.messages
             }
