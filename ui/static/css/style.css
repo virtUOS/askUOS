@@ -102,7 +102,8 @@ background-color: #8f2133; /* Dunkelrot background color on hover */
 
 
 /* Allow Material Icons and Material Symbols to use their own font */
-.material-icons, .st-emotion-cache-1w33g9o, [class*="material-icons"], .material-symbols-outlined {
+.material-icons, .st-emotion-cache-1w33g9o, [class*="material-icons"], .material-symbols-outlined,
+[data-testid="stIconMaterial"], [data-testid="stIconMaterial"] * {
     font-family: 'Material Symbols Outlined', 'Material Icons', sans-serif !important;
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 48;
     font-style: normal !important;
