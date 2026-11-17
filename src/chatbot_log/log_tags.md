@@ -8,7 +8,7 @@
 - BOTANSWER
 - FEEDBACK
 - CRAWL
-- SEARCH: e.g., Programmable search engine related logs
+- SEARCH: e.g., web search (Google Agent Search) related logs
 - LLM-OPERATION: e.g., LLM timeout
 - FILEIO: File input/output operations
 - SECURITY: Security-related events

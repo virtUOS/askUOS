@@ -64,8 +64,8 @@ Create `.env.prod`. Take a look at [`.env.prod.example`](.env.prod.example)
 ### Required Google API Permissions
 
 The Google API key must have access to:
-- Custom Search API
-    - You need to configure a Programmable Search Engine and index the sites you want to search (e.g., the Website of your University). The engine endpoint should be configured in the `.env.prod` file as `SEARCH_URL`.
+- Agent Search (Discovery Engine API) — used for the web search tool
+    - Create a "Site search" app in AI Applications with a *Website Content* data store listing the sites you want to search (e.g., the website of your University). Create an API key restricted to `https://discoveryengine.googleapis.com/*` and configure `AGENT_SEARCH_API_KEY`, `AGENT_SEARCH_PROJECT` and `AGENT_SEARCH_ENGINE` (the app ID) in `.env.prod`. See Google's [migration guide](https://docs.cloud.google.com/generative-ai-app-builder/docs/migrate-from-cse).
 - Generative Language API (If using Google as LLM provider)
 - Vertex AI API (If using Google as LLM provider)
 

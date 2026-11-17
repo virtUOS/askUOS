@@ -32,7 +32,7 @@ from src.chatbot.agents.graph import CampusManagementAgent
 from src.chatbot.agents.subagents.main import subagents_registry
 from src.chatbot.db.redis_pool import redis_client
 from src.chatbot.prompt.prompt_date import get_current_date
-from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
+from src.chatbot.tools.utils.exceptions import WebSearchException
 from src.chatbot_log.chatbot_logger import bind_request_context, log_event, logger
 from src.config.core_config import settings
 from src.config.models import Languages
@@ -402,7 +402,7 @@ async def chat_completions(
                 )
                 await _save_to_chat_history(content)
 
-            except ProgrammableSearchException:
+            except WebSearchException:
                 # Same as above — TURN_COMPLETED already records
                 # error="search_error"; no need to log it a second time.
                 error = "search_error"
@@ -489,7 +489,7 @@ async def chat_completions(
         content = error_messages["recursion"]
         refs_text = ""
 
-    except ProgrammableSearchException:
+    except WebSearchException:
         # Same as above — TURN_COMPLETED already records
         # error="search_error"; no need to log it a second time.
         error = "search_error"

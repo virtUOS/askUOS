@@ -194,6 +194,15 @@ class CrawlSettings(BaseModel):
     ttl_redis: int
     # Max number of web pages visited per search_web_tool call.
     max_links: int = 6
+    # Number of candidate results requested from the search backend per query
+    # (Agent Search `pageSize`; Google caps it at 25 for basic website
+    # indexing). Candidates are filtered (PDFs, already-visited links) before
+    # the first `max_links` are crawled, so a value above max_links leaves
+    # headroom.
+    search_page_size: int = Field(default=10, ge=1, le=25)
+    # Base URL of the Agent Search (Discovery Engine) REST API, without a
+    # trailing path after the version.
+    search_base_url: str = "https://discoveryengine.googleapis.com/v1"
 
 
 class ExaminationRegulations(BaseModel):

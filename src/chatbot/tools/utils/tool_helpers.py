@@ -18,9 +18,12 @@ def log_search_query(func):
 
 
 @log_search_query
-def decode_string(query):
+def decode_string(query, space_replacement=QUERY_SPACE_REPLACEMENT):
     """
     Decode the query string to a format that can be used by the university website.
+
+    ``space_replacement`` is what spaces become: "+" (default) for building a
+    URL query string, " " to keep plain text (e.g. for a JSON request body).
     """
 
     utf8_pattern = re.compile(
@@ -35,21 +38,21 @@ def decode_string(query):
             return (
                 query.encode("latin1")
                 .decode("utf-8")
-                .replace(" ", QUERY_SPACE_REPLACEMENT)
+                .replace(" ", space_replacement)
             )
         if url_encoding_pattern.search(query):
-            return urllib.parse.unquote(query).replace(" ", QUERY_SPACE_REPLACEMENT)
+            return urllib.parse.unquote(query).replace(" ", space_replacement)
         if unicode_escape_pattern.search(query):
             return (
                 query.encode("latin1")
                 .decode("unicode-escape")
-                .replace(" ", QUERY_SPACE_REPLACEMENT)
+                .replace(" ", space_replacement)
             )
     except Exception as e:
         logger.error(f"Error decoding query string: {e}")
 
     # return query  # Return the original string if no decoding is needed
-    return query.replace(" ", QUERY_SPACE_REPLACEMENT)
+    return query.replace(" ", space_replacement)
 
 
 def extract_pdf_text(href: str, pdf_bytes: bytes) -> str:

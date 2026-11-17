@@ -99,6 +99,8 @@ crawl_settings:
   base_url: "http://crawl4ai:11235/crawl" # crawl4ai service, as wired in docker-compose.yml
   ttl_redis: 172800 # 48h default TTL (how long a page is cached before it's crawled again)
   max_links: 6 # Optional. Max number of web pages visited per search (default: 6)
+  search_page_size: 10 # Optional. Candidate results requested from Google Agent Search per query, 1-25 (default: 10).
+  search_base_url: "https://discoveryengine.googleapis.com/v1" # Optional. Agent Search API base URL
   crawl_payload: # doc: https://www.postman.com/pixelao/pixel-public-workspace/documentation/c26yn3l/crawl4ai-api
     browser_config:
       type: "BrowserConfig"

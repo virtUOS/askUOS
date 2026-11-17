@@ -1,6 +1,7 @@
 import copy
 import os
 import sys
+import urllib.parse
 
 sys.path.append("/app")
 import asyncio
@@ -14,7 +15,7 @@ import redis.asyncio as redis
 from src.chatbot.agents.models import RetrievalResult, RetrievalToolType, ScrapeResult
 from src.chatbot.agents.utils.agent_helpers import model_registry
 from src.chatbot.db.redis_pool import redis_client
-from src.chatbot.tools.utils.exceptions import ProgrammableSearchException
+from src.chatbot.tools.utils.exceptions import WebSearchException
 from src.chatbot.tools.utils.tool_helpers import decode_string
 from src.chatbot.utils.helpers import compute_search_num_tokens
 from src.chatbot_log.chatbot_logger import log_event, logger
@@ -29,10 +30,14 @@ APPLICATION_CONTEXT_URLS = [
     # "https://www.uni-osnabrueck.de/studieren/bewerbung-und-studienstart/bewerbung-zulassung-und-einschreibung",
 ]
 
-SEARCH_URL = os.getenv("SEARCH_URL")
+# Web search runs on Google Agent Search (Discovery Engine `searchLite`),
+# configured through the AGENT_SEARCH_* env vars (see _agent_search_endpoint).
+AGENT_SEARCH_TIMEOUT_SECONDS = 30
 # Max number of web pages visited per search (crawl_settings.max_links in
 # backend_config.yaml) — previously a hardcoded constant.
 MAX_NUM_LINKS = settings.crawl_settings.max_links
+SEARCH_PAGE_SIZE = settings.crawl_settings.search_page_size
+SEARCH_BASE_URL = settings.crawl_settings.search_base_url.rstrip("/")
 
 # TODO Change cache mechanism to enabled (in config.yml)
 CRAWL_API_URL = settings.crawl_settings.base_url
@@ -155,33 +160,122 @@ async def extract_url_redis(
     return url
 
 
-async def _google_search(session: aiohttp.ClientSession, url: str):
+def _agent_search_endpoint() -> str:
     """
-    Coroutine that runs a Google Programmable Search
+    Build the Agent Search `searchLite` endpoint from AGENT_SEARCH_* env vars.
+
+    Raises WebSearchException if a required variable is missing.
     """
-    async with session.get(url) as response:
-        if response.status != 200:
-            raise RuntimeError(f"Search failed, status={response.status}")
+    engine = os.getenv("AGENT_SEARCH_ENGINE")
+    project = os.getenv("AGENT_SEARCH_PROJECT")
+    api_key = os.getenv("AGENT_SEARCH_API_KEY")
+    missing = [
+        name
+        for name, value in (
+            ("AGENT_SEARCH_ENGINE", engine),
+            ("AGENT_SEARCH_PROJECT", project),
+            ("AGENT_SEARCH_API_KEY", api_key),
+        )
+        if not value
+    ]
+    if missing:
+        raise WebSearchException(
+            f"Web search is not configured; missing env var(s): {', '.join(missing)}"
+        )
 
-        data = await response.json()
-        total = int(data.get("searchInformation", {}).get("totalResults", 0))
+    def q(value: str) -> str:
+        return urllib.parse.quote(value, safe="")
 
-        if total > 0:
-            links = [item["link"] for item in data["items"]]
-            logger.debug("Search returned %d links", len(links))
-            return links
+    location = os.getenv("AGENT_SEARCH_LOCATION", "global")
+    collection = os.getenv("AGENT_SEARCH_COLLECTION", "default_collection")
+    serving_config = os.getenv("AGENT_SEARCH_SERVING_CONFIG", "default_search")
+    return (
+        f"{SEARCH_BASE_URL}"
+        f"/projects/{q(project)}/locations/{q(location)}"
+        f"/collections/{q(collection)}/engines/{q(engine)}"
+        f"/servingConfigs/{q(serving_config)}:searchLite"
+    )
+
+
+async def _agent_search(
+    session: aiohttp.ClientSession, endpoint: str, query: str, page_size: int
+) -> List[str]:
+    """
+    Run a Google Agent Search (`searchLite`) query and return the result URLs,
+    best match first. Raises WebSearchException on any failure.
+    """
+    try:
+        async with session.post(
+            endpoint,
+            # The key goes in `params` (not interpolated into a string) so it
+            # never ends up in a URL we log or use as a cache key.
+            params={"key": os.environ["AGENT_SEARCH_API_KEY"]},
+            json={"query": query, "pageSize": page_size},
+            timeout=aiohttp.ClientTimeout(total=AGENT_SEARCH_TIMEOUT_SECONDS),
+        ) as response:
+            if response.status != 200:
+                # Google's error body explains the cause (bad key, API not
+                # enabled, unknown engine, quota...) and doesn't echo the key.
+                body = (await response.text())[:500]
+                raise WebSearchException(
+                    f"Agent Search returned HTTP {response.status}: {body}"
+                )
+            data = await response.json()
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+        # Type name only: aiohttp messages can embed the request URL.
+        raise WebSearchException(
+            f"Agent Search request failed: {type(e).__name__}"
+        ) from e
+
+    results = data.get("results", [])
+    links = []
+    for result in results:
+        document = result.get("document", {})
+        link = document.get("derivedStructData", {}).get("link") or document.get(
+            "structData", {}
+        ).get("link")
+        if link:
+            links.append(link)
+
+    if not links:
+        if results:
+            # Results came back but not where we expect them: a schema
+            # surprise, not an empty search -- worth being visible.
+            logger.error(
+                "[AGENT-SEARCH] %d results returned but none had a link", len(results)
+            )
         else:
-            logger.warning("[GOOGLE] No search results.")
-            return []
+            logger.warning("[AGENT-SEARCH] No search results.")
+        return []
+
+    logger.debug("Agent Search returned %d links", len(links))
+    return links
+
+
+async def search_links(
+    session: aiohttp.ClientSession, query: str, search_query: Optional[str] = None
+) -> List[str]:
+    """
+    Return ranked result URLs for `query` from Google Agent Search.
+
+    `search_query` is the already-decoded plain-text query (spaces kept); it is
+    computed from `query` when not given.
+    """
+    if search_query is None:
+        search_query = decode_string(query, space_replacement=" ")
+
+    return await _agent_search(
+        session, _agent_search_endpoint(), search_query, SEARCH_PAGE_SIZE
+    )
 
 
 async def visit_urls_extract(
-    url: str,  # search url
     query: str,
     about_application: bool = False,
     max_num_links: int = MAX_NUM_LINKS,
     do_not_visit_links: List = [],
     client: redis.Redis = None,
+    search_query: Optional[str] = None,
 ) -> Tuple[List, List]:
     """Visit URLs and extract content."""
 
@@ -193,7 +287,7 @@ async def visit_urls_extract(
     cache_tasks = []
     async with aiohttp.ClientSession() as session:
 
-        links_search = await _google_search(session, url)
+        links_search = await search_links(session, query, search_query)
         if not links_search:
             return [], []
 
@@ -309,13 +403,12 @@ async def async_search(**kwargs) -> Tuple[str, List]:
 
         client = redis_client.client
         query = kwargs.get("query", "")
-        query_url = decode_string(query)
-        url = SEARCH_URL + query_url
+        search_query = decode_string(query, space_replacement=" ")
         do_not_visit_links = kwargs.get("do_not_visit_links", [])
         about_application = kwargs.get("about_application", False)
 
         # -------------------------- cache lookup --------------------------
-        cache_key = f"{__name__}:async_search:{url}"
+        cache_key = f"{__name__}:async_search:{search_query}"
         cached_content = await client.get(cache_key)
         if cached_content:
             log_event(
@@ -336,11 +429,11 @@ async def async_search(**kwargs) -> Tuple[str, List]:
         )
 
         visited_urls, contents = await visit_urls_extract(
-            url=url,
             query=query,
             about_application=about_application,
             do_not_visit_links=do_not_visit_links,
             client=client,
+            search_query=search_query,
         )
 
         final_output = "\n".join(contents)
@@ -372,10 +465,8 @@ async def async_search(**kwargs) -> Tuple[str, List]:
             f"[REDIS] Connection error. It was not possible to establish a connection: {e}"
         )
         raise redis.ConnectionError("Redis Failed") from e
-    except ProgrammableSearchException as e:
-        raise ProgrammableSearchException(
-            f"Failed: Programmable Search Engine. Status: {e}"
-        )
+    except WebSearchException as e:
+        raise WebSearchException(f"Failed: web search. Status: {e}")
     except Exception as e:
         logger.exception(f"[SEARCH] Error while searching the web: {e}", exc_info=True)
         raise
